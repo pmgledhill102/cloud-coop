@@ -332,7 +332,7 @@ Generate optimized terminal emulator configuration for multi-agent viewing. Woul
 ### Simplicity
 
 - Single binary, no runtime dependencies
-- Configuration via `~/.config/cloudcoop/config.yaml`
+- Configuration via `~/.config/cloudcoop/cloudcoop.toml`
 - Keyboard-driven navigation
 - Clear, minimal UI
 

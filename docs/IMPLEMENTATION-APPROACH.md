@@ -525,7 +525,7 @@ User can connect to agent, interact, detach, and return.
 
 ### Deliverables
 
-- Config file support: `~/.config/cloudcoop/config.yaml`
+- Config file support: `~/.config/cloudcoop/cloudcoop.toml`
 - `cloudcoop config show` displays current configuration
 - `cloudcoop config set <key> <value>` updates configuration
 - First-run detection with setup wizard prompt

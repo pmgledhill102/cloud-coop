@@ -39,7 +39,7 @@ Cloud VM (GCP/AWS/Azure)
 - CLI Framework: Cobra
 - Cloud: Native Go SDKs (not CLI wrappers)
 - Remote execution: Go SSH library for commands, shell out to ssh for interactive
-- Configuration: YAML at ~/.config/cloudcoop/config.yaml
+- Configuration: TOML at ~/.config/cloudcoop/cloudcoop.toml (see ADR-0014)
 
 **Project structure:**
 

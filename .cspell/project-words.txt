@@ -3,10 +3,12 @@
 
 # Project name
 cloudcoop
+toml
 
 # Go ecosystem
 golang
 golangci
+gopkg
 gofmt
 goimports
 goreleaser

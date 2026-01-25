@@ -86,26 +86,27 @@ chmod +x cloudcoop
 
 ## Configuration
 
-```yaml
-# ~/.config/cloudcoop/config.yaml
-cloud:
-  provider: gcp
-  gcp:
-    project: my-project
-    zone: europe-north2-a
+```toml
+# ~/.config/cloudcoop/cloudcoop.toml
 
-vm:
-  name: claude-sandbox
-  machine_type: arm-16cpu-32gb  # Normalized, mapped per cloud
-  disk_size_gb: 50
-  spot: true
+[cloud]
+provider = "gcp"
 
-network:
-  ip_allowlist:
-    mode: auto  # auto | manual | disabled
+[cloud.gcp]
+project = "my-project"
+zone = "europe-north2-a"
 
-agents:
-  default: claude
+[vm]
+name = "claude-sandbox"
+machine_type = "arm-16cpu-32gb"  # Normalized, mapped per cloud
+disk_size_gb = 50
+spot = true
+
+[network]
+ip_allowlist_mode = "auto"  # auto | manual | disabled
+
+[agents]
+default = "claude"
 ```
 
 ## Agent Support

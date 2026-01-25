@@ -228,7 +228,7 @@ After authentication:
 │  • Type: c4a-highcpu-16 (spot)                                 │
 │                                                                 │
 │  Configuration saved to:                                        │
-│  ~/.config/cloudcoop/config.yaml                                │
+│  ~/.config/cloudcoop/cloudcoop.toml                             │
 │                                                                 │
 │  [Start using cloudcoop]                                        │
 │                                                                 │
@@ -253,30 +253,29 @@ After initial setup, cloudcoop starts directly to the main TUI:
 
 ## Configuration File
 
-After setup, configuration is stored in `~/.config/cloudcoop/config.yaml`:
+After setup, configuration is stored in `~/.config/cloudcoop/cloudcoop.toml`:
 
-```yaml
-cloud:
-  provider: gcp
-  gcp:
-    project: cloudcoop-sandbox-abc123
-    zone: europe-north2-a
-    service_account: cloudcoop@cloudcoop-sandbox-abc123.iam.gserviceaccount.com
+```toml
+[cloud]
+provider = "gcp"
 
-vm:
-  name: claude-sandbox
-  machine_type: arm-16cpu-32gb
-  disk_size_gb: 50
-  spot: true
+[cloud.gcp]
+project = "cloudcoop-sandbox-abc123"
+zone = "europe-north2-a"
+service_account = "cloudcoop@cloudcoop-sandbox-abc123.iam.gserviceaccount.com"
 
-network:
-  ip_allowlist:
-    mode: disabled
+[vm]
+name = "claude-sandbox"
+machine_type = "arm-16cpu-32gb"
+disk_size_gb = 50
+spot = true
 
-agents:
-  default: claude
-  installed:
-    - claude
+[network]
+ip_allowlist_mode = "disabled"
+
+[agents]
+default = "claude"
+installed = ["claude"]
 ```
 
 ## Resetting Setup
