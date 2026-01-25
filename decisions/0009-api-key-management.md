@@ -218,33 +218,29 @@ The TUI should handle authentication status:
 
 ### Agent Configuration Extension
 
-```yaml
-# ~/.config/sandbox-manager/agents.yaml
-agents:
-  claude:
-    auth:
-      method: oauth
-      command: "claude auth login"
-      check: "claude auth status"
+```toml
+# ~/.config/cloudcoop/cloudcoop.toml
 
-  aider:
-    auth:
-      method: secret_manager
-      secrets:
-        ANTHROPIC_API_KEY: "anthropic-api-key"
-        # Or for OpenAI backend:
-        # OPENAI_API_KEY: "openai-api-key"
+[agents.claude.auth]
+method = "oauth"
+command = "claude auth login"
+check = "claude auth status"
 
-  gemini:
-    auth:
-      method: workload_identity
-      # Uses VM service account automatically
+[agents.aider.auth]
+method = "secret_manager"
+[agents.aider.auth.secrets]
+ANTHROPIC_API_KEY = "anthropic-api-key"
+# Or for OpenAI backend:
+# OPENAI_API_KEY = "openai-api-key"
 
-  copilot:
-    auth:
-      method: oauth
-      command: "gh auth login"
-      check: "gh auth status"
+[agents.gemini.auth]
+method = "workload_identity"
+# Uses VM service account automatically
+
+[agents.copilot.auth]
+method = "oauth"
+command = "gh auth login"
+check = "gh auth status"
 ```
 
 ### SSH Tunnel Helper

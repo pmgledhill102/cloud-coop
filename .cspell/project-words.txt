@@ -4,6 +4,7 @@
 # Project name
 cloudcoop
 toml
+tomlq
 
 # Go ecosystem
 golang

@@ -82,61 +82,52 @@ Full plugin system with runtime-loadable agent modules.
 
 ### Agent Configuration File
 
-```yaml
-# ~/.config/sandbox-manager/agents.yaml
+```toml
+# ~/.config/cloudcoop/cloudcoop.toml
 
-agents:
-  claude:
-    name: "Claude Code"
-    command: "claude"
-    autonomous_flags: ["--dangerously-skip-permissions"]
-    resume_flag: "--continue"
-    resume_session_flag: "--resume"
-    session_rename: "/rename {name}"  # In-session command
-    env: {}
+default_agent = "claude"
 
-  gemini:
-    name: "Gemini CLI"
-    command: "gemini"
-    autonomous_flags: ["--sandbox"]  # Hypothetical
-    resume_flag: "--resume"
-    resume_session_flag: "--session"
-    session_rename: null  # May not support
-    env:
-      GOOGLE_AI_API_KEY: "${GOOGLE_AI_API_KEY}"
+[agents.claude]
+name = "Claude Code"
+command = "claude"
+autonomous_flags = ["--dangerously-skip-permissions"]
+resume_flag = "--continue"
+resume_session_flag = "--resume"
+session_rename = "/rename {name}"  # In-session command
 
-  copilot:
-    name: "GitHub Copilot CLI"
-    command: "gh copilot"
-    autonomous_flags: []
-    resume_flag: null  # May not support session persistence
-    resume_session_flag: null
-    session_rename: null
-    env:
-      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+[agents.gemini]
+name = "Gemini CLI"
+command = "gemini"
+autonomous_flags = ["--sandbox"]  # Hypothetical
+resume_flag = "--resume"
+resume_session_flag = "--session"
+# session_rename not supported
+[agents.gemini.env]
+GOOGLE_AI_API_KEY = "${GOOGLE_AI_API_KEY}"
 
-  aider:
-    name: "Aider"
-    command: "aider"
-    autonomous_flags: ["--yes-always", "--no-suggest-shell-commands"]
-    resume_flag: null  # Stateless
-    resume_session_flag: null
-    session_rename: null
-    env:
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-      # Or: OPENAI_API_KEY, etc.
+[agents.copilot]
+name = "GitHub Copilot CLI"
+command = "gh copilot"
+autonomous_flags = []
+# May not support session persistence
+[agents.copilot.env]
+GITHUB_TOKEN = "${GITHUB_TOKEN}"
 
-  codex:
-    name: "OpenAI Codex CLI"
-    command: "codex"
-    autonomous_flags: ["--auto-approve"]  # Hypothetical
-    resume_flag: null
-    resume_session_flag: null
-    session_rename: null
-    env:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+[agents.aider]
+name = "Aider"
+command = "aider"
+autonomous_flags = ["--yes-always", "--no-suggest-shell-commands"]
+# Stateless - no resume support
+[agents.aider.env]
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+# Or: OPENAI_API_KEY, etc.
 
-default_agent: claude
+[agents.codex]
+name = "OpenAI Codex CLI"
+command = "codex"
+autonomous_flags = ["--auto-approve"]  # Hypothetical
+[agents.codex.env]
+OPENAI_API_KEY = "${OPENAI_API_KEY}"
 ```
 
 ### TUI Agent Selection
@@ -169,21 +160,21 @@ AGENT=${1:-claude}
 MODE=${2:-fresh}  # fresh, continue, resume
 WORKSPACE=${3:-/workspaces/default}
 
-# Load agent config
-CONFIG=$(yq e ".agents.$AGENT" ~/.config/sandbox-manager/agents.yaml)
-COMMAND=$(echo "$CONFIG" | yq e '.command')
-AUTO_FLAGS=$(echo "$CONFIG" | yq e '.autonomous_flags | join(" ")')
+# Load agent config (using tomlq or Go binary)
+CONFIG_FILE=~/.config/cloudcoop/cloudcoop.toml
+COMMAND=$(tomlq -r ".agents.$AGENT.command" "$CONFIG_FILE")
+AUTO_FLAGS=$(tomlq -r ".agents.$AGENT.autonomous_flags | join(\" \")" "$CONFIG_FILE")
 
 case $MODE in
   fresh)
     RESUME_FLAGS=""
     ;;
   continue)
-    RESUME_FLAG=$(echo "$CONFIG" | yq e '.resume_flag // ""')
+    RESUME_FLAG=$(tomlq -r ".agents.$AGENT.resume_flag // \"\"" "$CONFIG_FILE")
     RESUME_FLAGS="$RESUME_FLAG"
     ;;
   resume)
-    RESUME_FLAG=$(echo "$CONFIG" | yq e '.resume_session_flag // ""')
+    RESUME_FLAG=$(tomlq -r ".agents.$AGENT.resume_session_flag // \"\"" "$CONFIG_FILE")
     RESUME_FLAGS="$RESUME_FLAG $SESSION_NAME"
     ;;
 esac

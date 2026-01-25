@@ -166,26 +166,25 @@ Host claude-sandbox
 
 ## Configuration
 
-```yaml
-# ~/.config/cloudcoop/config.yaml
-network:
-  # Primary access method
-  access_method: iap  # iap | direct
+```toml
+# ~/.config/cloudcoop/cloudcoop.toml
 
-  # IAP settings (when access_method: iap)
-  iap:
-    # Automatically use IAP for all SSH operations
-    enabled: true
+[network]
+# Primary access method: iap | direct
+access_method = "iap"
 
-  # Direct SSH settings (when access_method: direct)
-  direct:
-    # Dynamic IP firewall management
-    ip_allowlist:
-      mode: auto  # auto | manual | disabled
-      # For mode: manual
-      allowed_ranges:
-        - 203.0.113.0/24    # Home ISP range
-        - 198.51.100.50/32  # Office static IP
+[network.iap]
+# Automatically use IAP for all SSH operations
+enabled = true
+
+[network.direct]
+# Dynamic IP firewall management: auto | manual | disabled
+ip_allowlist_mode = "auto"
+# For mode: manual
+allowed_ranges = [
+    "203.0.113.0/24",    # Home ISP range
+    "198.51.100.50/32",  # Office static IP
+]
 ```
 
 ## Required Permissions

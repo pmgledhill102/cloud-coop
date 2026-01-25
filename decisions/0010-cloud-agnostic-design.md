@@ -254,46 +254,47 @@ func (p *AzureProvider) StartVM(ctx context.Context, name string) error {
 
 ### Configuration
 
-```yaml
-# ~/.config/sandbox-manager/config.yaml
+```toml
+# ~/.config/cloudcoop/cloudcoop.toml
 
-cloud:
-  provider: gcp  # gcp, aws, azure
+[cloud]
+provider = "gcp"  # gcp, aws, azure
 
-  gcp:
-    project: my-project-id
-    zone: europe-north2-a
-    service_account: claude-sandbox@my-project.iam.gserviceaccount.com
+[cloud.gcp]
+project = "my-project-id"
+zone = "europe-north2-a"
+service_account = "claude-sandbox@my-project.iam.gserviceaccount.com"
 
-  aws:
-    region: eu-north-1
-    instance_id: i-0abc123def456  # Or looked up by tag
-    profile: sandbox  # AWS CLI profile
+[cloud.aws]
+region = "eu-north-1"
+instance_id = "i-0abc123def456"  # Or looked up by tag
+profile = "sandbox"  # AWS CLI profile
 
-  azure:
-    subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    resource_group: claude-sandbox-rg
+[cloud.azure]
+subscription = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+resource_group = "claude-sandbox-rg"
 
-vm:
-  name: claude-sandbox
-  machine_type: arm-16cpu-32gb  # Normalized, mapped per cloud
-  disk_size_gb: 50
-  spot: true
+[vm]
+name = "claude-sandbox"
+machine_type = "arm-16cpu-32gb"  # Normalized, mapped per cloud
+disk_size_gb = 50
+spot = true
 
 # Machine type mapping (built-in, can override)
-machine_types:
-  arm-8cpu-16gb:
-    gcp: c4a-highcpu-8
-    aws: c7g.2xlarge
-    azure: Standard_D8pds_v6
-  arm-16cpu-32gb:
-    gcp: c4a-highcpu-16
-    aws: c7g.4xlarge
-    azure: Standard_D16pds_v6
-  arm-32cpu-64gb:
-    gcp: c4a-highcpu-32
-    aws: c7g.8xlarge
-    azure: Standard_D32pds_v6
+[machine_types.arm-8cpu-16gb]
+gcp = "c4a-highcpu-8"
+aws = "c7g.2xlarge"
+azure = "Standard_D8pds_v6"
+
+[machine_types.arm-16cpu-32gb]
+gcp = "c4a-highcpu-16"
+aws = "c7g.4xlarge"
+azure = "Standard_D16pds_v6"
+
+[machine_types.arm-32cpu-64gb]
+gcp = "c4a-highcpu-32"
+aws = "c7g.8xlarge"
+azure = "Standard_D32pds_v6"
 ```
 
 ### Region Mapping
