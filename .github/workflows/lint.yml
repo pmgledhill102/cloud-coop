@@ -8,6 +8,7 @@
 # - actions-lint: GitHub Actions linting with actionlint
 # - shell-lint: Shell script linting with shellcheck
 # - spell-lint: Spell checking with cspell
+# - toml-lint: TOML formatting and linting with taplo
 # - gatekeeper: Required status check for branch protection
 
 name: Lint
@@ -38,6 +39,7 @@ jobs:
       actions: ${{ steps.filter.outputs.actions }}
       shell: ${{ steps.filter.outputs.shell }}
       spell: ${{ steps.filter.outputs.spell }}
+      toml: ${{ steps.filter.outputs.toml }}
     steps:
       - uses: actions/checkout@v4
 
@@ -67,8 +69,12 @@ jobs:
               - '**/*.yaml'
               - '**/*.yml'
               - '**/*.json'
+              - '**/*.toml'
               - '.cspell.json'
               - '.cspell/**'
+            toml:
+              - '**/*.toml'
+              - 'taplo.toml'
 
   # Go linting with golangci-lint
   go-lint:
@@ -198,6 +204,27 @@ jobs:
             --exclude ".git/**" \
             --exclude "go.sum"
 
+  # TOML formatting and linting with taplo
+  toml-lint:
+    name: TOML Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.toml == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install taplo
+        run: |
+          curl -fsSL https://github.com/tamasfe/taplo/releases/latest/download/taplo-linux-x86_64.gz | gunzip > taplo
+          chmod +x taplo
+          sudo mv taplo /usr/local/bin/
+
+      - name: Check TOML formatting
+        run: taplo fmt --check
+
+      - name: Lint TOML files
+        run: taplo lint
+
   # Gatekeeper job for branch protection
   # This job always runs and provides a single required status check
   gatekeeper:
@@ -211,6 +238,7 @@ jobs:
       - actions-lint
       - shell-lint
       - spell-lint
+      - toml-lint
     if: always()
     steps:
       - name: Check lint results
@@ -243,6 +271,7 @@ jobs:
           check_job "actions-lint" "${{ needs.actions-lint.result }}" "${{ needs.changes.outputs.actions }}" || failed=1
           check_job "shell-lint" "${{ needs.shell-lint.result }}" "${{ needs.changes.outputs.shell }}" || failed=1
           check_job "spell-lint" "${{ needs.spell-lint.result }}" "${{ needs.changes.outputs.spell }}" || failed=1
+          check_job "toml-lint" "${{ needs.toml-lint.result }}" "${{ needs.changes.outputs.toml }}" || failed=1
 
           if [ "$failed" -eq 1 ]; then
             echo ""

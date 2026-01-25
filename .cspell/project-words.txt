@@ -5,6 +5,7 @@
 cloudcoop
 toml
 tomlq
+taplo
 
 # Go ecosystem
 golang

@@ -82,10 +82,17 @@ repos:
     hooks:
       - id: hadolint
 
+  # TOML formatting and linting with taplo
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+      - id: taplo-lint
+
   # Spell checking with cspell
   - repo: https://github.com/streetsidesoftware/cspell-cli
     rev: v8.17.3
     hooks:
       - id: cspell
         args: [--no-progress, --no-summary]
-        types_or: [markdown, go, yaml, json]
+        types_or: [markdown, go, yaml, json, toml]

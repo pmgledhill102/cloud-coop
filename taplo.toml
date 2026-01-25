@@ -1,0 +1,29 @@
+# Taplo TOML formatter/linter configuration
+# https://taplo.tamasfe.dev/configuration/
+
+[formatting]
+# Use 2-space indentation
+indent_string = "  "
+# Align consecutive entries
+align_entries = false
+# Reorder keys alphabetically within sections
+reorder_keys = false
+# Max line width
+column_width = 100
+
+[rule]
+# Include all TOML files
+include = ["**/*.toml"]
+# Exclude generated files
+exclude = ["vendor/**", "node_modules/**"]
+
+# Schema associations
+[[rule.schema]]
+# Associate cloudcoop.toml with our schema
+path = "cloudcoop.toml"
+url = "file://schemas/cloudcoop.schema.json"
+
+[[rule.schema]]
+# Also validate example configs
+path = "**/cloudcoop.toml"
+url = "file://schemas/cloudcoop.schema.json"

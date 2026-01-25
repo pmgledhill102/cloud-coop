@@ -1,0 +1,244 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/cloud-coop/cloudcoop/schemas/cloudcoop.schema.json",
+  "title": "cloudcoop configuration",
+  "description": "Configuration schema for cloudcoop - manage sandboxed AI coding agents on cloud VMs",
+  "type": "object",
+  "properties": {
+    "cloud": {
+      "type": "object",
+      "description": "Cloud provider configuration",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["gcp", "aws", "azure"],
+          "description": "Cloud provider to use"
+        },
+        "gcp": {
+          "type": "object",
+          "description": "Google Cloud Platform settings",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "GCP project ID"
+            },
+            "zone": {
+              "type": "string",
+              "description": "GCP zone (e.g., europe-north1-a)"
+            },
+            "region": {
+              "type": "string",
+              "description": "GCP region (e.g., europe-north1)"
+            },
+            "service_account": {
+              "type": "string",
+              "description": "Service account email"
+            }
+          }
+        },
+        "aws": {
+          "type": "object",
+          "description": "Amazon Web Services settings",
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "AWS region (e.g., eu-north-1)"
+            },
+            "profile": {
+              "type": "string",
+              "description": "AWS CLI profile name"
+            },
+            "instance_id": {
+              "type": "string",
+              "description": "EC2 instance ID"
+            }
+          }
+        },
+        "azure": {
+          "type": "object",
+          "description": "Microsoft Azure settings",
+          "properties": {
+            "subscription": {
+              "type": "string",
+              "description": "Azure subscription ID"
+            },
+            "resource_group": {
+              "type": "string",
+              "description": "Azure resource group name"
+            }
+          }
+        }
+      }
+    },
+    "vm": {
+      "type": "object",
+      "description": "Virtual machine configuration",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "VM instance name"
+        },
+        "machine_type": {
+          "type": "string",
+          "description": "Machine type (normalized or provider-specific)"
+        },
+        "disk_size_gb": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Boot disk size in GB"
+        },
+        "spot": {
+          "type": "boolean",
+          "description": "Use spot/preemptible instances for cost savings"
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "description": "Network and access configuration",
+      "properties": {
+        "access_method": {
+          "type": "string",
+          "enum": ["iap", "direct"],
+          "description": "SSH access method"
+        },
+        "ip_allowlist_mode": {
+          "type": "string",
+          "enum": ["auto", "manual", "disabled"],
+          "description": "IP allowlist management mode"
+        },
+        "allowed_ranges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed IP CIDR ranges for direct access"
+        },
+        "iap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable IAP for SSH access"
+            }
+          }
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "description": "AI agent configuration",
+      "properties": {
+        "default": {
+          "type": "string",
+          "description": "Default agent to use"
+        },
+        "installed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of installed agents"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "description": "Agent-specific configuration",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name for the agent"
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to run the agent"
+          },
+          "autonomous_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Flags for autonomous mode"
+          },
+          "resume_flag": {
+            "type": "string",
+            "description": "Flag to resume previous session"
+          },
+          "resume_session_flag": {
+            "type": "string",
+            "description": "Flag to resume specific session"
+          },
+          "session_rename": {
+            "type": "string",
+            "description": "In-session command to rename session"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Environment variables for the agent"
+          },
+          "auth": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": ["oauth", "secret_manager", "workload_identity", "env"],
+                "description": "Authentication method"
+              },
+              "command": {
+                "type": "string",
+                "description": "Command to authenticate"
+              },
+              "check": {
+                "type": "string",
+                "description": "Command to check auth status"
+              },
+              "secrets": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Secret Manager secret mappings"
+              }
+            }
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "Log level"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["text", "json"],
+          "description": "Log output format"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default values",
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "zone": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
