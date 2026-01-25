@@ -1,0 +1,38 @@
+# SSH Configuration Template for Claude Sandbox
+# Replace placeholders and add to ~/.ssh/config
+
+Host claude-sandbox
+    # Connection via IAP tunnel (most secure)
+    ProxyCommand gcloud compute ssh ${VM_NAME} --zone=${VM_ZONE} --tunnel-through-iap --project=${PROJECT_ID} --quiet --verbosity=none -- -W %h:%p
+
+    # Default user
+    User sandbox
+
+    # Connection multiplexing (faster subsequent connections)
+    ControlMaster auto
+    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPersist 600
+
+    # Keep connection alive
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+    # Compression for better performance
+    Compression yes
+
+    # Forward agent for git operations
+    ForwardAgent yes
+
+    # Request pseudo-terminal
+    RequestTTY yes
+
+# Alternative: Direct IP connection (requires external IP and firewall rule)
+# Host claude-sandbox-direct
+#     HostName ${EXTERNAL_IP}
+#     User sandbox
+#     IdentityFile ~/.ssh/claude-sandbox-key
+#     ControlMaster auto
+#     ControlPath ~/.ssh/sockets/%r@%h-%p
+#     ControlPersist 600
+#     ServerAliveInterval 60
+#     Compression yes

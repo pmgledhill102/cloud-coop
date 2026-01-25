@@ -1,0 +1,110 @@
+# Ghostty Terminal Configuration for Claude Sandbox
+# Optimized for viewing multiple agent sessions
+
+# ============================================
+# Font Configuration
+# ============================================
+font-family = JetBrains Mono
+font-size = 11
+font-thicken = false
+
+# Alternative fonts (uncomment preferred):
+# font-family = Fira Code
+# font-family = Source Code Pro
+# font-family = Cascadia Code
+
+# ============================================
+# Window Configuration
+# ============================================
+window-decoration = true
+window-padding-x = 4
+window-padding-y = 4
+window-theme = dark
+
+# Initial size (adjust for your monitor)
+window-width = 1920
+window-height = 1080
+
+# ============================================
+# Color Scheme (Tokyo Night)
+# ============================================
+background = 1a1b26
+foreground = c0caf5
+
+# Normal colors
+palette = 0=#15161e
+palette = 1=#f7768e
+palette = 2=#9ece6a
+palette = 3=#e0af68
+palette = 4=#7aa2f7
+palette = 5=#bb9af7
+palette = 6=#7dcfff
+palette = 7=#a9b1d6
+
+# Bright colors
+palette = 8=#414868
+palette = 9=#f7768e
+palette = 10=#9ece6a
+palette = 11=#e0af68
+palette = 12=#7aa2f7
+palette = 13=#bb9af7
+palette = 14=#7dcfff
+palette = 15=#c0caf5
+
+# Selection
+selection-background = 33467c
+selection-foreground = c0caf5
+
+# ============================================
+# Cursor Configuration
+# ============================================
+cursor-style = block
+cursor-style-blink = true
+cursor-color = c0caf5
+
+# ============================================
+# Scrollback & Performance
+# ============================================
+scrollback-limit = 50000
+clipboard-read = allow
+clipboard-write = allow
+
+# ============================================
+# Shell Integration
+# ============================================
+shell-integration = detect
+
+# ============================================
+# Keybindings
+# ============================================
+
+# Pane navigation (Ctrl+Shift + vim keys)
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+l=goto_split:right
+keybind = ctrl+shift+j=goto_split:down
+keybind = ctrl+shift+k=goto_split:up
+
+# Split creation
+keybind = ctrl+shift+d=new_split:right
+keybind = ctrl+shift+shift+d=new_split:down
+
+# Tab management
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+tab=next_tab
+keybind = ctrl+shift+tab=previous_tab
+
+# Font size
+keybind = ctrl+plus=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+0=reset_font_size
+
+# Copy/paste
+keybind = ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+
+# ============================================
+# Mouse Configuration
+# ============================================
+mouse-hide-while-typing = true
+copy-on-select = true

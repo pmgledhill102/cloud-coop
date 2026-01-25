@@ -1,0 +1,46 @@
+{
+  "$schema": "https://claude.ai/code/settings-schema.json",
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "NotebookEdit(*)",
+      "TodoWrite(*)",
+      "Task(*)"
+    ],
+    "deny": []
+  },
+  "autoApprove": {
+    "enabled": true,
+    "tools": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "TodoWrite",
+      "Task"
+    ]
+  },
+  "behavior": {
+    "autoCompact": true,
+    "compactThreshold": 100000
+  },
+  "terminal": {
+    "shell": "/bin/bash"
+  },
+  "privacy": {
+    "disableAnalytics": true,
+    "disableTelemetry": true
+  }
+}
