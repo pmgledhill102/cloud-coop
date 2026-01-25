@@ -41,7 +41,7 @@ repos:
     rev: v0.5.1
     hooks:
       - id: go-fmt
-      - id: go-imports
+      # go-imports skipped - golangci-lint handles import formatting
 
   # Go linting with golangci-lint
   - repo: https://github.com/golangci/golangci-lint
