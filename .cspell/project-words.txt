@@ -127,6 +127,9 @@ unittests
 carryforward
 unmarshals
 tview
+wrapf
+stdlib
+apperrors
 
 # Geographic
 hamina

@@ -37,7 +37,7 @@ build: $(BIN_DIR)/$(BINARY_NAME)
 
 $(BIN_DIR)/$(BINARY_NAME): $(SRC)
 	@mkdir -p $(BIN_DIR)
-	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/$(BINARY_NAME) ./...
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/cloudcoop
 
 ## test: Run all tests
 test:
