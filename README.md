@@ -62,6 +62,28 @@ chmod +x cloudcoop
 ./cloudcoop --project=my-gcp-project --zone=europe-north2-a
 ```
 
+## Development
+
+```bash
+# Clone and build
+git clone https://github.com/cloud-coop/cloudcoop.git
+cd cloudcoop
+make build
+
+# Run
+./bin/cloudcoop version
+./bin/cloudcoop status
+./bin/cloudcoop  # Launch TUI
+
+# Development commands
+make test           # Run tests
+make lint           # Run linter
+make test-coverage  # Coverage report
+make help           # All targets
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup details.
+
 ## TUI Interface
 
 ```
