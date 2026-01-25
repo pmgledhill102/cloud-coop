@@ -1,0 +1,44 @@
+---
+# yamllint configuration for cloudcoop project
+# https://yamllint.readthedocs.io/en/stable/configuration.html
+
+extends: default
+
+rules:
+  # Allow longer lines (160 chars) for readability in complex YAML
+  line-length:
+    max: 160
+    level: warning
+
+  # Disable truthy check-keys to allow 'on' as workflow trigger key
+  # This is common in GitHub Actions workflows
+  truthy:
+    check-keys: false
+
+  # Require document start marker for clarity
+  document-start:
+    present: true
+    level: warning
+
+  # Allow inline comments
+  comments:
+    min-spaces-from-content: 1
+
+  # Require consistent indentation
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Allow empty values (common in GitHub Actions)
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Require consistent key ordering in mappings (disabled by default)
+  key-ordering: disable
+
+  # Trailing spaces are not allowed
+  trailing-spaces: enable
+
+  # New line at end of file
+  new-line-at-end-of-file: enable

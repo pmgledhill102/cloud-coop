@@ -1,0 +1,14 @@
+# CODEOWNERS - GitHub code ownership configuration
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+* @pmgledhill
+
+# Documentation
+/docs/ @pmgledhill
+
+# GitHub configuration (workflows, templates, etc.)
+/.github/ @pmgledhill
+
+# Test files
+*_test.go @pmgledhill

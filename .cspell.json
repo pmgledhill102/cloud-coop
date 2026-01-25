@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "language": "en",
+  "dictionaries": ["project-words"],
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": ".cspell/project-words.txt",
+      "addWords": true
+    }
+  ],
+  "ignorePaths": [
+    ".git",
+    ".beads",
+    "node_modules",
+    "vendor",
+    "go.sum",
+    "*.lock",
+    "*.min.js",
+    "*.min.css",
+    "coverage",
+    "bin",
+    "dist",
+    "testdata/golden",
+    "**/*.pb.go",
+    "**/*_generated.go"
+  ],
+  "enableFiletypes": [
+    "go",
+    "markdown",
+    "yaml",
+    "json",
+    "dockerfile",
+    "shellscript"
+  ],
+  "ignoreRegExpList": [
+    "\\b[A-Fa-f0-9]{7,40}\\b",
+    "\\b[A-Za-z0-9+/]{40,}={0,2}\\b",
+    "https?://[^\\s]+",
+    "\\$\\{[^}]+\\}",
+    "`[^`]+`",
+    "\\[[A-Z]\\][a-z]+",
+    "notexact|notprefix|suffixnot|initialabc"
+  ],
+  "words": [],
+  "flagWords": [],
+  "minWordLength": 4
+}

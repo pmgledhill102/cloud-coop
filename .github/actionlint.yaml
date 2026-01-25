@@ -1,0 +1,16 @@
+---
+# actionlint configuration for cloudcoop project
+# https://github.com/rhysd/actionlint/blob/main/docs/config.md
+
+# Self-hosted runner labels
+# Add labels here if using self-hosted runners with custom labels
+self-hosted-runner:
+  labels: []
+
+# Configuration variables defined at organization/repository level
+# These are accessed via vars.* context in workflows
+config-variables: []
+
+# Paths to ignore for linting
+# paths:
+#   - '.github/workflows/deprecated-*.yml'

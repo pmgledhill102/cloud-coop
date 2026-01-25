@@ -1,0 +1,75 @@
+---
+name: Feature Request
+description: Suggest a new feature or enhancement for cloudcoop
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe your idea clearly so we can understand and evaluate it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: I would like cloudcoop to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+    validations:
+      required: false
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Which area does this feature relate to?
+      options:
+        - TUI / User Interface
+        - VM Management
+        - Agent Management
+        - Cloud Provider Support
+        - Configuration
+        - Security
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cloud-provider
+    attributes:
+      label: Cloud Provider
+      description: Is this feature specific to a cloud provider?
+      options:
+        - All providers
+        - GCP
+        - AWS
+        - Azure
+        - Not applicable
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or mockups about the feature request here
+    validations:
+      required: false

@@ -1,0 +1,254 @@
+# CI Lint Workflow
+# Runs various linting checks on pull requests and pushes to main
+#
+# Jobs:
+# - go-lint: Go linting with golangci-lint
+# - yaml-lint: YAML linting with yamllint
+# - markdown-lint: Markdown linting with markdownlint-cli2
+# - actions-lint: GitHub Actions linting with actionlint
+# - shell-lint: Shell script linting with shellcheck
+# - spell-lint: Spell checking with cspell
+# - gatekeeper: Required status check for branch protection
+
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOLANGCI_LINT_VERSION: v2.8.0
+  GO_VERSION: "1.25"
+
+jobs:
+  # Detect which files changed to enable path filtering
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      yaml: ${{ steps.filter.outputs.yaml }}
+      markdown: ${{ steps.filter.outputs.markdown }}
+      actions: ${{ steps.filter.outputs.actions }}
+      shell: ${{ steps.filter.outputs.shell }}
+      spell: ${{ steps.filter.outputs.spell }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.golangci.yml'
+            yaml:
+              - '**/*.yaml'
+              - '**/*.yml'
+              - '!.github/workflows/**'
+            markdown:
+              - '**/*.md'
+            actions:
+              - '.github/workflows/**'
+            shell:
+              - '**/*.sh'
+              - 'scripts/**'
+            spell:
+              - '**/*.md'
+              - '**/*.go'
+              - '**/*.yaml'
+              - '**/*.yml'
+              - '**/*.json'
+              - '.cspell.json'
+              - '.cspell/**'
+
+  # Go linting with golangci-lint
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=5m
+
+  # YAML linting with yamllint
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.yaml == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Run yamllint
+        run: |
+          find . -type f \( -name "*.yml" -o -name "*.yaml" \) \
+            ! -path "./.git/*" \
+            ! -path "./.github/workflows/*" \
+            ! -path "./node_modules/*" \
+            ! -path "./vendor/*" \
+            -print0 | xargs -0 yamllint --strict \
+            --config-data "{extends: default, rules: {line-length: {max: 120}, truthy: disable}}"
+
+  # Markdown linting with markdownlint-cli2
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.markdown == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install markdownlint-cli2
+        run: npm install -g markdownlint-cli2
+
+      - name: Run markdownlint
+        run: |
+          markdownlint-cli2 "**/*.md" \
+            --config '{"MD013": false, "MD033": false, "MD041": false}' \
+            --ignore node_modules \
+            --ignore vendor \
+            --ignore .git
+
+  # GitHub Actions linting with actionlint
+  actions-lint:
+    name: Actions Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-review
+          fail_level: error
+
+  # Shell script linting with shellcheck
+  shell-lint:
+    name: Shell Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "./scripts"
+          severity: warning
+          format: gcc
+
+  # Spell checking with cspell
+  spell-lint:
+    name: Spell Check
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.spell == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install cspell
+        run: npm install -g cspell@latest
+
+      - name: Run cspell
+        run: |
+          cspell lint \
+            --no-progress \
+            --no-summary \
+            "**/*.md" \
+            "**/*.go" \
+            "**/*.yaml" \
+            "**/*.yml" \
+            "**/*.json" \
+            --exclude "node_modules/**" \
+            --exclude "vendor/**" \
+            --exclude ".git/**" \
+            --exclude "go.sum"
+
+  # Gatekeeper job for branch protection
+  # This job always runs and provides a single required status check
+  gatekeeper:
+    name: Lint Gatekeeper
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - go-lint
+      - yaml-lint
+      - markdown-lint
+      - actions-lint
+      - shell-lint
+      - spell-lint
+    if: always()
+    steps:
+      - name: Check lint results
+        run: |
+          echo "Checking lint job results..."
+
+          # Function to check job result
+          check_job() {
+            local job_name="$1"
+            local result="$2"
+            local should_run="$3"
+
+            if [ "$should_run" = "true" ]; then
+              if [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+                echo "  $job_name: PASSED ($result)"
+              else
+                echo "  $job_name: FAILED ($result)"
+                return 1
+              fi
+            else
+              echo "  $job_name: SKIPPED (no changes)"
+            fi
+          }
+
+          failed=0
+
+          check_job "go-lint" "${{ needs.go-lint.result }}" "${{ needs.changes.outputs.go }}" || failed=1
+          check_job "yaml-lint" "${{ needs.yaml-lint.result }}" "${{ needs.changes.outputs.yaml }}" || failed=1
+          check_job "markdown-lint" "${{ needs.markdown-lint.result }}" "${{ needs.changes.outputs.markdown }}" || failed=1
+          check_job "actions-lint" "${{ needs.actions-lint.result }}" "${{ needs.changes.outputs.actions }}" || failed=1
+          check_job "shell-lint" "${{ needs.shell-lint.result }}" "${{ needs.changes.outputs.shell }}" || failed=1
+          check_job "spell-lint" "${{ needs.spell-lint.result }}" "${{ needs.changes.outputs.spell }}" || failed=1
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "One or more lint checks failed!"
+            exit 1
+          fi
+
+          echo ""
+          echo "All lint checks passed!"

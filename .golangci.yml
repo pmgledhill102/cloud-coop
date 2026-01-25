@@ -1,0 +1,152 @@
+---
+# golangci-lint configuration for cloudcoop TUI project
+# https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+  # Include test files
+  tests: true
+
+linters:
+  # Start with no linters, enable specific ones
+  default: none
+  enable:
+    # Default/essential linters
+    - errcheck      # Check for unchecked errors
+    - govet         # Examine Go source for suspicious constructs
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Find unused code
+    # Code quality
+    - misspell      # Find misspelled words
+    - revive        # Fast, configurable linter (golint replacement)
+
+  settings:
+    errcheck:
+      # Check for ignored errors in type assertions
+      check-type-assertions: true
+      # Check for blank identifier assignments
+      check-blank: false
+      # Exclude common intentionally ignored errors
+      exclude-functions:
+        - (io.Closer).Close
+        - (net/http.ResponseWriter).Write
+        - (*os.File).Close
+        - (*bufio.Writer).Flush
+
+    misspell:
+      # Correct common misspellings
+      locale: US
+
+    revive:
+      # Enable all available rules with sensible defaults
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true  # Can be noisy during early development
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+          disabled: true  # Can be noisy during early development
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+          disabled: true  # Can be noisy with interface implementations
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    staticcheck:
+      # SA/S/ST/QF checks from staticcheck.io
+      checks:
+        - all
+
+  exclusions:
+    # Don't skip any issues by default
+    presets: []
+
+    # Exclude specific paths
+    paths:
+      - vendor
+      - third_party
+      - testdata
+      - ".*_generated\\.go$"
+      - ".*\\.pb\\.go$"
+
+    # Exclude some rules in specific paths
+    rules:
+      # Test files can have longer functions and unused parameters
+      - path: _test\.go
+        linters:
+          - errcheck
+          - unused
+
+      # Allow dot imports in test files (for testing frameworks)
+      - path: _test\.go
+        text: "dot-imports"
+        linters:
+          - revive
+
+      # Main package often has unused parameters
+      - path: main\.go
+        linters:
+          - unused
+
+formatters:
+  enable:
+    - gofmt         # Check gofmt formatting
+    - goimports     # Check imports formatting/ordering
+
+  settings:
+    gofmt:
+      # Simplify code
+      simplify: true
+
+    goimports:
+      # Put local imports after 3rd-party packages
+      local-prefixes:
+        - github.com/cloud-coop/cloudcoop
+
+  exclusions:
+    paths:
+      - vendor
+      - third_party
+      - testdata
+      - ".*_generated\\.go$"
+      - ".*\\.pb\\.go$"
+
+issues:
+  # Maximum issues to report (0 = unlimited)
+  max-issues-per-linter: 50
+  max-same-issues: 3
+
+severity:
+  # Default severity for all issues
+  default: warning
+  # Set specific severity for specific linters
+  rules:
+    - linters:
+        - errcheck
+      severity: error
+    - linters:
+        - govet
+      severity: error
+    - linters:
+        - staticcheck
+      severity: error

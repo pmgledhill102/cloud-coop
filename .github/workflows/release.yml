@@ -1,0 +1,102 @@
+# Release Workflow
+# Triggered on tag push (v*) to build and publish releases using GoReleaser
+#
+# Prerequisites:
+# - Tags must follow semver format: v1.0.0, v1.2.3-beta.1, etc.
+# - GoReleaser config must exist at .goreleaser.yaml
+#
+# Usage:
+#   git tag -a v1.0.0 -m "Release v1.0.0"
+#   git push origin v1.0.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Validate tag format
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "Tag: $TAG"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z or vX.Y.Z-prerelease)"
+            exit 1
+          fi
+          echo "Tag format is valid"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/*.tar.gz
+          retention-days: 5
+
+  verify:
+    name: Verify Release
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Wait for release to be published
+        run: sleep 10
+
+      - name: Verify release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "Verifying release for tag: $TAG"
+
+          # Check that the release was created
+          RELEASE_URL="https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GH_TOKEN" "$RELEASE_URL")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "Release for $TAG exists and is accessible"
+          else
+            echo "Warning: Could not verify release (HTTP $HTTP_STATUS)"
+            echo "This may be expected if the release is still processing"
+          fi
+
+      - name: Download checksums
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: List release artifacts
+        run: |
+          echo "Release artifacts:"
+          ls -la artifacts/ || echo "No artifacts found"

@@ -1,0 +1,47 @@
+---
+# Codecov configuration for cloudcoop
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  # Coverage thresholds - start with 40%, increase as test coverage improves
+  status:
+    project:
+      default:
+        # Minimum coverage percentage required
+        target: 40%
+        # Allow coverage to drop by this much on a PR
+        threshold: 2%
+        # Only check coverage on files that were changed
+        if_ci_failed: error
+    patch:
+      default:
+        # Require new code to have at least this coverage
+        target: 60%
+        threshold: 5%
+
+  # Round coverage percentages down
+  precision: 2
+  round: down
+  range: "50...100"
+
+# Ignore these files/paths from coverage
+ignore:
+  - "**/*_test.go"
+  - "**/testdata/**"
+  - "**/mocks/**"
+  - "vendor/**"
+
+# Comment settings for PRs
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+# Flags for grouping coverage
+flags:
+  unittests:
+    paths:
+      - "."
+    carryforward: true

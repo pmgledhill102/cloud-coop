@@ -1,0 +1,50 @@
+# Build outputs
+dist/
+build/
+bin/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Generated files
+*.pb.go
+*_generated.go
+*.gen.go
+
+# Git
+.git/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+*.cover
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Go specific
+go.sum
+
+# Beads internal
+.beads/
+
+# Binary and compiled files
+*.exe
+*.dll
+*.so
+*.dylib

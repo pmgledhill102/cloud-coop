@@ -1,0 +1,91 @@
+---
+# Pre-commit hooks configuration
+# https://pre-commit.com/
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+# Skip a hook: SKIP=golangci-lint git commit -m "message"
+# Bypass all: git commit --no-verify -m "message" # HUMAN_HERE
+
+repos:
+  # Beads issue tracker hooks
+  - repo: local
+    hooks:
+      - id: beads
+        name: beads
+        entry: bd hook pre-commit
+        language: system
+        pass_filenames: false
+        always_run: true
+
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+
+  # Go formatting with gofmt
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-imports
+
+  # Go linting with golangci-lint
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.8.0
+    hooks:
+      - id: golangci-lint
+        args: [--timeout=5m]
+        # Skip with: SKIP=golangci-lint git commit # HUMAN_HERE
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args:
+          - --strict
+          - -d
+          - "{extends: default, rules: {line-length: {max: 120}, truthy: disable}}"
+        exclude: ^\.github/workflows/
+
+  # GitHub Actions linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+        types: [shell]
+
+  # Dockerfile linting (when Dockerfiles are added)
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint
+
+  # Spell checking with cspell
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.17.3
+    hooks:
+      - id: cspell
+        args: [--no-progress, --no-summary]
+        types_or: [markdown, go, yaml, json]

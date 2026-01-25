@@ -1,0 +1,66 @@
+---
+name: Question
+description: Ask a question about cloudcoop usage or architecture
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about cloudcoop? We're happy to help!
+
+        Before asking, please check:
+        - [README](https://github.com/yourorg/cloudcoop#readme)
+        - [Architecture Decisions](https://github.com/yourorg/cloudcoop/tree/main/decisions)
+        - [Documentation](https://github.com/yourorg/cloudcoop/tree/main/docs)
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: How do I...?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does your question relate to?
+      options:
+        - Getting Started / Setup
+        - Configuration
+        - VM Management
+        - Agent Management
+        - Cloud Provider (GCP/AWS/Azure)
+        - Security / Permissions
+        - Cost / Billing
+        - Troubleshooting
+        - Architecture / Design
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Add any context that might help us answer your question
+      placeholder: |
+        - What have you tried?
+        - What documentation have you read?
+        - What's your use case?
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if applicable)
+      description: If relevant to your question, please provide environment details
+      placeholder: |
+        - cloudcoop version:
+        - OS:
+        - Cloud provider:
+    validations:
+      required: false

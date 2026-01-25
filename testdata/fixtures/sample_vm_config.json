@@ -1,0 +1,11 @@
+{
+  "name": "test-vm-001",
+  "machineType": "e2-micro",
+  "zone": "europe-north2-a",
+  "diskSizeGB": 10,
+  "spot": true,
+  "labels": {
+    "environment": "test",
+    "created-by": "unit-tests"
+  }
+}
