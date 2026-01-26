@@ -670,7 +670,11 @@ func (m Model) renderConfigError() string {
 
 %s
 
-Create a config file at:
+To get started, run the setup wizard:
+
+  cloudcoop config init
+
+Or create a config file manually at:
   ~/.config/cloudcoop/cloudcoop.toml
 
 Example:

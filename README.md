@@ -55,11 +55,14 @@ cloudcoop provisions and manages cloud VMs configured as secure sandboxes for ru
 curl -fsSL https://github.com/yourorg/cloudcoop/releases/latest/download/cloudcoop-$(uname -s)-$(uname -m) -o cloudcoop
 chmod +x cloudcoop
 
-# First run: setup wizard guides you through GCP project setup
+# Run setup wizard to configure
+./cloudcoop config init
+
+# Launch TUI
 ./cloudcoop
 
-# Or with explicit config
-./cloudcoop --project=my-gcp-project --zone=europe-north2-a
+# Or check status via CLI
+./cloudcoop status
 ```
 
 ## Development
@@ -108,6 +111,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup details.
 
 ## Configuration
 
+Configuration is stored at `~/.config/cloudcoop/cloudcoop.toml`.
+
+```bash
+# Create config with setup wizard
+cloudcoop config init
+
+# View current configuration
+cloudcoop config show
+
+# Update a specific value
+cloudcoop config set cloud.gcp.project my-project
+cloudcoop config set cloud.gcp.zone us-central1-a
+cloudcoop config set vm.name claude-sandbox
+```
+
 ```toml
 # ~/.config/cloudcoop/cloudcoop.toml
 
@@ -116,20 +134,30 @@ provider = "gcp"
 
 [cloud.gcp]
 project = "my-project"
-zone = "europe-north2-a"
+zone = "us-central1-a"
 
 [vm]
 name = "claude-sandbox"
-machine_type = "arm-16cpu-32gb"  # Normalized, mapped per cloud
-disk_size_gb = 50
-spot = true
 
-[network]
-ip_allowlist_mode = "auto"  # auto | manual | disabled
+[ssh]
+port = 22                    # SSH port (default: 22)
+# user = "ubuntu"            # SSH username (default: current user)
 
 [agents]
-default = "claude"
+# default_command = "claude --dangerously-skip-permissions"
 ```
+
+### Available Configuration Keys
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `cloud.provider` | Cloud provider (gcp, aws, azure) | gcp |
+| `cloud.gcp.project` | GCP project ID | (required) |
+| `cloud.gcp.zone` | GCP zone | (required) |
+| `vm.name` | VM instance name | (required) |
+| `ssh.port` | SSH port | 22 |
+| `ssh.user` | SSH username | current user |
+| `agents.default_command` | Default command for new agents | (none) |
 
 ## Agent Support
 

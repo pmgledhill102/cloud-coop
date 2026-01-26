@@ -72,6 +72,17 @@ You should see a token printed. If you get an error, re-run the `application-def
 
 ## Step 3: Create Configuration File
 
+**Option A: Use the setup wizard (recommended)**
+
+```bash
+make build
+./bin/cloudcoop config init
+```
+
+The wizard will prompt you for your GCP project, zone, and VM name.
+
+**Option B: Create manually**
+
 ```bash
 mkdir -p ~/.config/cloudcoop
 
@@ -88,10 +99,10 @@ name = "$VM_NAME"
 EOF
 ```
 
-Verify the config:
+**Verify the config:**
 
 ```bash
-cat ~/.config/cloudcoop/cloudcoop.toml
+./bin/cloudcoop config show
 ```
 
 ## Step 4: Test the Status Command
@@ -197,7 +208,11 @@ Expected output: the VM's hostname.
 
 ### "Configuration not found"
 
-Create the config file as described in Step 3.
+Run the setup wizard or create the config file manually:
+
+```bash
+./bin/cloudcoop config init
+```
 
 ### "create compute client: google: could not find default credentials"
 
