@@ -27,10 +27,14 @@ Examples:
 	RunE: runSSH,
 }
 
-var sshUser string
+var (
+	sshUser string
+	sshPort int
+)
 
 func init() {
-	sshCmd.Flags().StringVarP(&sshUser, "user", "u", "", "SSH username (default: current user)")
+	sshCmd.Flags().StringVarP(&sshUser, "user", "u", "", "SSH username (default: from config or current user)")
+	sshCmd.Flags().IntVarP(&sshPort, "port", "p", 0, "SSH port (default: from config or 22)")
 }
 
 func runSSH(cmd *cobra.Command, args []string) error {
@@ -66,21 +70,32 @@ func runSSH(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("VM %s has no external IP address", cfg.VM.Name)
 	}
 
-	// Determine user
+	// Determine user (flag > config > env > default)
 	user := sshUser
 	if user == "" {
+		user = cfg.SSH.User
+	}
+	if user == "" {
 		user = os.Getenv("USER")
-		if user == "" {
-			user = "root"
-		}
+	}
+	if user == "" {
+		user = "root"
 	}
 
-	log.Debug("connecting via SSH", "host", host, "user", user)
+	// Determine port (flag > config > default)
+	port := sshPort
+	if port == 0 {
+		port = cfg.SSH.Port
+	}
+
+	log.Debug("connecting via SSH", "host", host, "port", port, "user", user)
 
 	// Connect and run command
-	client, err := ssh.NewClient(ssh.DefaultConfig(host, user))
+	sshCfg := ssh.DefaultConfig(host, user)
+	sshCfg.Port = port
+	client, err := ssh.NewClient(sshCfg)
 	if err != nil {
-		return handleSSHError(err, host)
+		return handleSSHError(err, host, port)
 	}
 	defer func() { _ = client.Close() }()
 
@@ -95,8 +110,9 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func handleSSHError(err error, host string) error {
+func handleSSHError(err error, host string, port int) error {
 	errStr := err.Error()
+	hostPort := fmt.Sprintf("%s:%d", host, port)
 
 	if strings.Contains(errStr, "no SSH authentication methods") {
 		fmt.Fprintln(os.Stderr, "No SSH authentication methods available.")
@@ -108,8 +124,42 @@ func handleSSHError(err error, host string) error {
 	}
 
 	if strings.Contains(errStr, "connection refused") {
-		fmt.Fprintf(os.Stderr, "Connection refused to %s.\n", host)
+		fmt.Fprintf(os.Stderr, "Connection refused to %s.\n", hostPort)
 		fmt.Fprintln(os.Stderr, "Check VM is running and firewall allows SSH.")
+		return nil
+	}
+
+	if strings.Contains(errStr, "knownhosts: key is unknown") {
+		fmt.Fprintf(os.Stderr, "Host key for %s is not in known_hosts.\n", host)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "To add the host key, run:")
+		fmt.Fprintf(os.Stderr, "  ssh-keyscan -p %d %s >> ~/.ssh/known_hosts\n", port, host)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Or connect once with ssh to accept the key:")
+		if port == 22 {
+			fmt.Fprintf(os.Stderr, "  ssh %s\n", host)
+		} else {
+			fmt.Fprintf(os.Stderr, "  ssh -p %d %s\n", port, host)
+		}
+		return nil
+	}
+
+	if strings.Contains(errStr, "i/o timeout") || strings.Contains(errStr, "connection timed out") {
+		fmt.Fprintf(os.Stderr, "Connection to %s timed out.\n", hostPort)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Possible causes:")
+		fmt.Fprintf(os.Stderr, "  - Firewall blocking SSH (port %d)\n", port)
+		fmt.Fprintln(os.Stderr, "  - VM not fully started yet")
+		fmt.Fprintln(os.Stderr, "  - Network connectivity issues")
+		return nil
+	}
+
+	if strings.Contains(errStr, "unable to authenticate") || strings.Contains(errStr, "no supported methods remain") {
+		fmt.Fprintf(os.Stderr, "SSH authentication to %s failed.\n", hostPort)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Ensure you have:")
+		fmt.Fprintln(os.Stderr, "  1. SSH key loaded in agent (ssh-add ~/.ssh/your_key)")
+		fmt.Fprintln(os.Stderr, "  2. Public key added to VM's authorized_keys")
 		return nil
 	}
 

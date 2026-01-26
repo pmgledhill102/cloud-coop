@@ -15,6 +15,13 @@ import (
 type Config struct {
 	Cloud CloudConfig `toml:"cloud"`
 	VM    VMConfig    `toml:"vm"`
+	SSH   SSHConfig   `toml:"ssh"`
+}
+
+// SSHConfig contains SSH connection settings.
+type SSHConfig struct {
+	Port int    `toml:"port"` // SSH port (default: 22)
+	User string `toml:"user"` // SSH username (default: current user)
 }
 
 // CloudConfig contains cloud provider settings.
@@ -78,6 +85,9 @@ func LoadFile(path string) (*Config, error) {
 	// Set defaults
 	if cfg.Cloud.Provider == "" {
 		cfg.Cloud.Provider = "gcp"
+	}
+	if cfg.SSH.Port == 0 {
+		cfg.SSH.Port = 22
 	}
 
 	return &cfg, nil
