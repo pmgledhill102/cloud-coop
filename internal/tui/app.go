@@ -75,6 +75,12 @@ type Model struct {
 	confirmingKill   bool   // true when waiting for kill confirmation
 	killTargetIndex  int    // tmux window index to kill
 	killTargetName   string // name of agent to kill (for display)
+
+	// VM create/delete states
+	selectingSize    bool     // true when showing size selection menu
+	sizeOptions      []string // available size names (e.g., "small", "medium", "large", "xlarge")
+	selectedSizeIdx  int      // currently selected size index
+	confirmingDelete bool     // true when waiting for delete confirmation
 }
 
 // New creates a new TUI application model.
@@ -104,6 +110,16 @@ type vmStartMsg struct {
 
 // vmStopMsg is sent when VM stop completes.
 type vmStopMsg struct {
+	err error
+}
+
+// vmCreateMsg is sent when VM create completes.
+type vmCreateMsg struct {
+	err error
+}
+
+// vmDeleteMsg is sent when VM delete completes.
+type vmDeleteMsg struct {
 	err error
 }
 
@@ -219,6 +235,76 @@ func stopVM(cfg *config.Config) tea.Cmd {
 		}
 
 		return vmStopMsg{}
+	}
+}
+
+// createVM creates a new VM with the specified machine type.
+func createVM(cfg *config.Config, machineType string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+		defer cancel()
+
+		var provider cloud.Provider
+		var cleanup func()
+
+		switch cfg.Cloud.Provider {
+		case "gcp":
+			p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
+			if err != nil {
+				return vmCreateMsg{err: fmt.Errorf("create GCP provider: %w", err)}
+			}
+			provider = p
+			cleanup = func() { _ = p.Close() }
+		default:
+			return vmCreateMsg{err: fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)}
+		}
+		defer cleanup()
+
+		createCfg := cloud.VMCreateConfig{
+			Name:        cfg.VM.Name,
+			MachineType: machineType,
+			DiskSizeGB:  cfg.VM.DiskSizeGB,
+			Image:       cfg.VM.Image,
+			Spot:        cfg.VM.Spot,
+			Network:     cfg.VM.Network,
+			Tags:        cfg.VM.Tags,
+		}
+
+		if err := provider.CreateVM(ctx, createCfg); err != nil {
+			return vmCreateMsg{err: fmt.Errorf("create VM: %w", err)}
+		}
+
+		return vmCreateMsg{}
+	}
+}
+
+// deleteVM deletes the configured VM.
+func deleteVM(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		defer cancel()
+
+		var provider cloud.Provider
+		var cleanup func()
+
+		switch cfg.Cloud.Provider {
+		case "gcp":
+			p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
+			if err != nil {
+				return vmDeleteMsg{err: fmt.Errorf("create GCP provider: %w", err)}
+			}
+			provider = p
+			cleanup = func() { _ = p.Close() }
+		default:
+			return vmDeleteMsg{err: fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)}
+		}
+		defer cleanup()
+
+		if err := provider.DeleteVM(ctx, cfg.VM.Name); err != nil {
+			return vmDeleteMsg{err: fmt.Errorf("delete VM: %w", err)}
+		}
+
+		return vmDeleteMsg{}
 	}
 }
 
@@ -353,7 +439,49 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle confirmation dialog first
+		// Handle size selection dialog
+		if m.selectingSize {
+			switch msg.String() {
+			case "up", "k":
+				if m.selectedSizeIdx > 0 {
+					m.selectedSizeIdx--
+				}
+			case "down", "j":
+				if m.selectedSizeIdx < len(m.sizeOptions)-1 {
+					m.selectedSizeIdx++
+				}
+			case "enter":
+				// Create VM with selected size
+				m.selectingSize = false
+				sizeName := m.sizeOptions[m.selectedSizeIdx]
+				machineType := m.cfg.VM.MachineSizes[sizeName]
+				m.operation = "creating"
+				return m, createVM(m.cfg, machineType)
+			case "esc", "escape", "n", "N":
+				// Cancel size selection
+				m.selectingSize = false
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Handle delete confirmation dialog
+		if m.confirmingDelete {
+			switch msg.String() {
+			case "y", "Y":
+				// Confirm delete
+				m.confirmingDelete = false
+				m.operation = "deleting"
+				return m, deleteVM(m.cfg)
+			case "n", "N", "esc", "escape":
+				// Cancel delete
+				m.confirmingDelete = false
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Handle kill confirmation dialog
 		if m.confirmingKill {
 			switch msg.String() {
 			case "y", "Y":
@@ -413,13 +541,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.confirmingKill = true
 				}
 			}
-		case "c", "C":
+		case "c":
 			// Connect to selected agent (only when VM is running, agents exist, and no operation in progress)
 			if m.canModifyAgents() && m.agents != nil && len(m.agents.Sessions) > 0 {
 				if m.selectedAgentIdx < len(m.agents.Sessions) {
 					selected := m.agents.Sessions[m.selectedAgentIdx]
 					return m, connectToAgent(m.cfg, m.vmInfo, selected.Index)
 				}
+			}
+		case "C":
+			// Create VM (only when VM not found and no operation in progress)
+			if m.cfg != nil && m.cfgErr == nil && m.vmInfo != nil &&
+				m.vmInfo.Status == cloud.VMStatusNotFound && m.operation == "" {
+				// Build size options from config
+				m.sizeOptions = []string{"small", "medium", "large", "xlarge"}
+				m.selectedSizeIdx = 0
+				m.selectingSize = true
+				return m, nil
+			}
+		case "D":
+			// Delete VM (only when stopped and no operation in progress)
+			if m.cfg != nil && m.cfgErr == nil && m.vmInfo != nil &&
+				m.vmInfo.Status == cloud.VMStatusStopped && m.operation == "" {
+				m.confirmingDelete = true
+				return m, nil
 			}
 		case "up":
 			// Move selection up
@@ -508,6 +653,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, fetchVMInfo(m.cfg)
 
+	case vmCreateMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.vmErr = msg.err
+			return m, nil
+		}
+		// Refresh VM status after successful create
+		m.loading = true
+		return m, fetchVMInfo(m.cfg)
+
+	case vmDeleteMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.vmErr = msg.err
+			return m, nil
+		}
+		// Refresh VM status after successful delete
+		m.loading = true
+		return m, fetchVMInfo(m.cfg)
+
 	case agentAddedMsg:
 		m.operation = ""
 		if msg.err != nil {
@@ -573,12 +738,20 @@ func (m Model) View() string {
 	var content string
 	if m.cfgErr != nil {
 		content = m.renderConfigError()
+	} else if m.selectingSize {
+		content = m.renderSizeSelection()
+	} else if m.confirmingDelete {
+		content = m.renderDeleteConfirmation()
 	} else if m.confirmingKill {
 		content = m.renderKillConfirmation()
 	} else if m.operation == "starting" {
 		content = boxStyle.Render("Starting VM... ◐")
 	} else if m.operation == "stopping" {
 		content = boxStyle.Render("Stopping VM... ◑")
+	} else if m.operation == "creating" {
+		content = boxStyle.Render("Creating VM... ◐")
+	} else if m.operation == "deleting" {
+		content = boxStyle.Render("Deleting VM... ◑")
 	} else if m.operation == "adding" {
 		content = boxStyle.Render("Adding agent... ◐")
 	} else if m.operation == "killing" {
@@ -792,9 +965,49 @@ Press Y to confirm, N to cancel.`,
 	return boxStyle.Render(msg)
 }
 
+func (m Model) renderSizeSelection() string {
+	var lines []string
+	lines = append(lines, "Select VM size:\n")
+
+	for i, size := range m.sizeOptions {
+		selector := "  "
+		if i == m.selectedSizeIdx {
+			selector = "> "
+		}
+		machineType := m.cfg.VM.MachineSizes[size]
+		lines = append(lines, fmt.Sprintf("%s%s (%s)", selector, size, machineType))
+	}
+
+	lines = append(lines, "\n↑/↓: select • Enter: create • Esc: cancel")
+
+	var result string
+	for i, line := range lines {
+		result += line
+		if i < len(lines)-1 {
+			result += "\n"
+		}
+	}
+
+	return boxStyle.Render(result)
+}
+
+func (m Model) renderDeleteConfirmation() string {
+	msg := fmt.Sprintf(`Delete VM "%s"?
+
+This will permanently delete the VM and its boot disk.
+
+Press Y to confirm, N to cancel.`,
+		m.cfg.VM.Name)
+
+	return boxStyle.Render(msg)
+}
+
 func (m Model) renderHelp() string {
-	// Handle confirmation dialog
-	if m.confirmingKill {
+	// Handle selection/confirmation dialogs
+	if m.selectingSize {
+		return helpStyle.Render("↑/↓: select • Enter: create • Esc: cancel")
+	}
+	if m.confirmingDelete || m.confirmingKill {
 		return helpStyle.Render("Y: confirm • N: cancel")
 	}
 
@@ -804,15 +1017,17 @@ func (m Model) renderHelp() string {
 	// Add context-sensitive actions based on VM state
 	if m.vmInfo != nil && m.operation == "" {
 		switch m.vmInfo.Status {
+		case cloud.VMStatusNotFound:
+			actions = append(actions, "C: create")
 		case cloud.VMStatusStopped:
-			actions = append(actions, "S: start")
+			actions = append(actions, "S: start", "D: delete")
 		case cloud.VMStatusRunning:
 			actions = append(actions, "T: stop")
 			// Agent management actions when VM is running
 			if !m.agentsLoading {
 				actions = append(actions, "A: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
-					actions = append(actions, "C: connect", "K: kill agent", "↑/↓: select")
+					actions = append(actions, "c: connect", "K: kill agent", "↑/↓: select")
 				}
 			}
 		}

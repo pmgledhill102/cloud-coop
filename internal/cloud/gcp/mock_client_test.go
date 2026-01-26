@@ -10,19 +10,25 @@ import (
 
 // mockInstancesClient is a mock implementation of instancesClient for testing.
 type mockInstancesClient struct {
-	getInstance  *computepb.Instance
-	getError     error
-	startError   error
-	stopError    error
-	closeError   error
-	waitError    error
-	getCalled    bool
-	startCalled  bool
-	stopCalled   bool
-	closeCalled  bool
-	lastGetReq   *computepb.GetInstanceRequest
-	lastStartReq *computepb.StartInstanceRequest
-	lastStopReq  *computepb.StopInstanceRequest
+	getInstance   *computepb.Instance
+	getError      error
+	startError    error
+	stopError     error
+	insertError   error
+	deleteError   error
+	closeError    error
+	waitError     error
+	getCalled     bool
+	startCalled   bool
+	stopCalled    bool
+	insertCalled  bool
+	deleteCalled  bool
+	closeCalled   bool
+	lastGetReq    *computepb.GetInstanceRequest
+	lastStartReq  *computepb.StartInstanceRequest
+	lastStopReq   *computepb.StopInstanceRequest
+	lastInsertReq *computepb.InsertInstanceRequest
+	lastDeleteReq *computepb.DeleteInstanceRequest
 }
 
 func (m *mockInstancesClient) Get(ctx context.Context, req *computepb.GetInstanceRequest) (*computepb.Instance, error) {
@@ -45,6 +51,24 @@ func (m *mockInstancesClient) Stop(ctx context.Context, req *computepb.StopInsta
 	m.lastStopReq = req
 	if m.stopError != nil {
 		return nil, m.stopError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockInstancesClient) Insert(ctx context.Context, req *computepb.InsertInstanceRequest) (operation, error) {
+	m.insertCalled = true
+	m.lastInsertReq = req
+	if m.insertError != nil {
+		return nil, m.insertError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockInstancesClient) Delete(ctx context.Context, req *computepb.DeleteInstanceRequest) (operation, error) {
+	m.deleteCalled = true
+	m.lastDeleteReq = req
+	if m.deleteError != nil {
+		return nil, m.deleteError
 	}
 	return &mockOperation{waitError: m.waitError}, nil
 }

@@ -54,6 +54,24 @@ type VMInfo struct {
 	InternalIP string
 }
 
+// VMCreateConfig contains configuration for creating a new VM.
+type VMCreateConfig struct {
+	// Name is the VM instance name.
+	Name string
+	// MachineType is the instance type (e.g., "c4a-highcpu-4").
+	MachineType string
+	// DiskSizeGB is the boot disk size in gigabytes.
+	DiskSizeGB int64
+	// Image is the boot disk image (e.g., "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64").
+	Image string
+	// Spot indicates whether to use spot/preemptible instances.
+	Spot bool
+	// Network is the VPC network name (e.g., "default").
+	Network string
+	// Tags are network tags for firewall rules.
+	Tags []string
+}
+
 // Provider defines the interface for cloud provider operations.
 type Provider interface {
 	// Name returns the provider name (e.g., "gcp", "aws", "azure").
@@ -68,4 +86,10 @@ type Provider interface {
 
 	// StopVM stops a running VM.
 	StopVM(ctx context.Context, name string) error
+
+	// CreateVM creates a new VM with the given configuration.
+	CreateVM(ctx context.Context, config VMCreateConfig) error
+
+	// DeleteVM deletes a VM by name.
+	DeleteVM(ctx context.Context, name string) error
 }
