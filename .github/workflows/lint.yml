@@ -41,7 +41,7 @@ jobs:
       spell: ${{ steps.filter.outputs.spell }}
       toml: ${{ steps.filter.outputs.toml }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -83,15 +83,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.go == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=5m
@@ -103,7 +103,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.yaml == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install yamllint
         run: pip install yamllint
@@ -125,9 +125,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.markdown == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -149,7 +149,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.actions == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run actionlint
         uses: reviewdog/action-actionlint@v1
@@ -164,7 +164,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run shellcheck
         uses: ludeeus/action-shellcheck@master
@@ -180,9 +180,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.spell == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -211,7 +211,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.toml == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install taplo
         run: |
