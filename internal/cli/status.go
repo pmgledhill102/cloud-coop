@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -44,7 +45,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	provider, cleanup, err := createProvider(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("create cloud provider: %w", err)
+		return handleProviderError(err)
 	}
 	defer cleanup()
 
@@ -97,6 +98,40 @@ name = "your-vm-name"`)
 		return nil // Don't propagate error, we've handled it
 	}
 	return err
+}
+
+func handleProviderError(err error) error {
+	errStr := err.Error()
+
+	// Check for credential errors
+	if strings.Contains(errStr, "could not find default credentials") {
+		fmt.Fprintln(os.Stderr, "GCP credentials not found.")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Run the following commands to set up authentication:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  gcloud auth login")
+		fmt.Fprintln(os.Stderr, "  gcloud auth application-default login")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "For more information, see:")
+		fmt.Fprintln(os.Stderr, "  https://cloud.google.com/docs/authentication/application-default-credentials")
+		fmt.Fprintln(os.Stderr)
+		return nil
+	}
+
+	// Check for invalid credentials file
+	if strings.Contains(errStr, "no such file or directory") && strings.Contains(errStr, "credentials") {
+		fmt.Fprintln(os.Stderr, "GCP credentials file not found.")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "If GOOGLE_APPLICATION_CREDENTIALS is set, verify the file exists.")
+		fmt.Fprintln(os.Stderr, "Otherwise, run:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  gcloud auth application-default login")
+		fmt.Fprintln(os.Stderr)
+		return nil
+	}
+
+	// Default: return the error
+	return fmt.Errorf("create cloud provider: %w", err)
 }
 
 func printStatus(cfg *config.Config, info *cloud.VMInfo) {
