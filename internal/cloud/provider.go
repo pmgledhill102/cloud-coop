@@ -72,6 +72,9 @@ type VMCreateConfig struct {
 	Tags []string
 	// SSHPort is the port SSH should listen on (default: 22).
 	SSHPort int
+	// ServiceAccount is the service account email (GCP), instance profile ARN (AWS),
+	// or managed identity ID (Azure) to attach to the VM.
+	ServiceAccount string
 }
 
 // Provider defines the interface for cloud provider operations.

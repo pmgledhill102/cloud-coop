@@ -19,6 +19,13 @@ This directory contains Architecture Decision Records (ADRs) for cloudcoop.
 | [ADR-0011](0011-tui-implementation-approach.md) | TUI Implementation Approach | Accepted | 2026-01-25 |
 | [ADR-0012](0012-dynamic-ip-firewall.md) | Dynamic IP-Based Firewall | Accepted | 2026-01-25 |
 | [ADR-0013](0013-ssh-remote-execution.md) | SSH and Remote Execution | Accepted | 2026-01-25 |
+| [ADR-0014](0014-configuration-file-format.md) | Configuration File Format | Accepted | 2026-01-25 |
+| [ADR-0015](0015-ssh-testing-in-sandboxed-environments.md) | SSH Testing in Sandboxed Environments | Accepted | 2026-01-25 |
+| [ADR-0016](0016-error-handling-pattern.md) | Error Handling Pattern | Accepted | 2026-01-25 |
+| [ADR-0017](0017-logging-strategy.md) | Logging Strategy | Accepted | 2026-01-25 |
+| [ADR-0018](0018-tui-state-machine.md) | TUI State Machine | Accepted | 2026-01-25 |
+| [ADR-0019](0019-ssh-testing-infrastructure.md) | SSH Testing Infrastructure | Accepted | 2026-01-25 |
+| [ADR-0020](0020-vm-service-account-requirement.md) | VM Service Account Requirement | Accepted | 2026-01-26 |
 
 ## About ADRs
 

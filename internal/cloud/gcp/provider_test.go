@@ -11,7 +11,7 @@ import (
 )
 
 func TestProvider_Name(t *testing.T) {
-	p := newWithClient("proj", "zone", &mockInstancesClient{})
+	p := newWithClient("proj", "zone", &mockInstancesClient{}, &mockDisksClient{})
 	if got := p.Name(); got != "gcp" {
 		t.Errorf("Name() = %q, want %q", got, "gcp")
 	}
@@ -146,7 +146,7 @@ func TestProvider_GetVMInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock)
+			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
 			info, err := p.GetVMInfo(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -225,7 +225,7 @@ func TestProvider_StartVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock)
+			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
 			err := p.StartVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -284,7 +284,7 @@ func TestProvider_StopVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock)
+			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
 			err := p.StopVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -311,7 +311,7 @@ func TestProvider_StopVM(t *testing.T) {
 func TestProvider_Close(t *testing.T) {
 	t.Run("successful close", func(t *testing.T) {
 		mock := &mockInstancesClient{}
-		p := newWithClient("proj", "zone", mock)
+		p := newWithClient("proj", "zone", mock, &mockDisksClient{})
 
 		err := p.Close()
 		if err != nil {
@@ -324,7 +324,7 @@ func TestProvider_Close(t *testing.T) {
 
 	t.Run("close error", func(t *testing.T) {
 		mock := &mockInstancesClient{closeError: errors.New("close failed")}
-		p := newWithClient("proj", "zone", mock)
+		p := newWithClient("proj", "zone", mock, &mockDisksClient{})
 
 		err := p.Close()
 		if err == nil {
@@ -417,36 +417,52 @@ func TestProvider_CreateVM(t *testing.T) {
 		{
 			name: "successful create",
 			config: cloud.VMCreateConfig{
-				Name:        "new-vm",
-				MachineType: "c4a-highcpu-4",
-				DiskSizeGB:  50,
-				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
-				Spot:        true,
-				Network:     "default",
-				Tags:        []string{"cloudcoop"},
+				Name:           "new-vm",
+				MachineType:    "c4a-highcpu-4",
+				DiskSizeGB:     50,
+				Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Spot:           true,
+				Network:        "default",
+				Tags:           []string{"cloudcoop"},
+				ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 			},
 			mock: &mockInstancesClient{},
 		},
 		{
 			name: "create without tags",
 			config: cloud.VMCreateConfig{
-				Name:        "no-tags-vm",
-				MachineType: "e2-micro",
-				DiskSizeGB:  10,
-				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
-				Spot:        false,
-				Network:     "default",
+				Name:           "no-tags-vm",
+				MachineType:    "e2-micro",
+				DiskSizeGB:     10,
+				Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Spot:           false,
+				Network:        "default",
+				ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 			},
 			mock: &mockInstancesClient{},
 		},
 		{
-			name: "insert error",
+			name: "missing service account",
 			config: cloud.VMCreateConfig{
-				Name:        "error-vm",
+				Name:        "no-sa-vm",
 				MachineType: "c4a-highcpu-4",
 				DiskSizeGB:  50,
 				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
 				Network:     "default",
+			},
+			mock:       &mockInstancesClient{},
+			wantErr:    true,
+			wantErrMsg: "service_account is required",
+		},
+		{
+			name: "insert error",
+			config: cloud.VMCreateConfig{
+				Name:           "error-vm",
+				MachineType:    "c4a-highcpu-4",
+				DiskSizeGB:     50,
+				Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Network:        "default",
+				ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 			},
 			mock: &mockInstancesClient{
 				insertError: errors.New("insert failed"),
@@ -457,11 +473,12 @@ func TestProvider_CreateVM(t *testing.T) {
 		{
 			name: "wait error",
 			config: cloud.VMCreateConfig{
-				Name:        "wait-error-vm",
-				MachineType: "c4a-highcpu-4",
-				DiskSizeGB:  50,
-				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
-				Network:     "default",
+				Name:           "wait-error-vm",
+				MachineType:    "c4a-highcpu-4",
+				DiskSizeGB:     50,
+				Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Network:        "default",
+				ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 			},
 			mock: &mockInstancesClient{
 				waitError: errors.New("operation failed"),
@@ -473,7 +490,7 @@ func TestProvider_CreateVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock)
+			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
 			err := p.CreateVM(context.Background(), tt.config)
 
 			if (err != nil) != tt.wantErr {
@@ -509,15 +526,16 @@ func TestProvider_CreateVM(t *testing.T) {
 
 func TestProvider_CreateVM_SpotScheduling(t *testing.T) {
 	mock := &mockInstancesClient{}
-	p := newWithClient("test-project", "test-zone", mock)
+	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
 
 	config := cloud.VMCreateConfig{
-		Name:        "spot-vm",
-		MachineType: "c4a-highcpu-4",
-		DiskSizeGB:  50,
-		Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
-		Spot:        true,
-		Network:     "default",
+		Name:           "spot-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Spot:           true,
+		Network:        "default",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 	}
 
 	err := p.CreateVM(context.Background(), config)
@@ -540,15 +558,16 @@ func TestProvider_CreateVM_SpotScheduling(t *testing.T) {
 
 func TestProvider_CreateVM_NetworkTags(t *testing.T) {
 	mock := &mockInstancesClient{}
-	p := newWithClient("test-project", "test-zone", mock)
+	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
 
 	config := cloud.VMCreateConfig{
-		Name:        "tagged-vm",
-		MachineType: "c4a-highcpu-4",
-		DiskSizeGB:  50,
-		Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
-		Network:     "default",
-		Tags:        []string{"cloudcoop", "ssh-allowed"},
+		Name:           "tagged-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "default",
+		Tags:           []string{"cloudcoop", "ssh-allowed"},
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 	}
 
 	err := p.CreateVM(context.Background(), config)
@@ -563,6 +582,37 @@ func TestProvider_CreateVM_NetworkTags(t *testing.T) {
 	}
 	if len(tags.GetItems()) != 2 {
 		t.Errorf("Tags count = %d, want 2", len(tags.GetItems()))
+	}
+}
+
+func TestProvider_CreateVM_ServiceAccount(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
+
+	config := cloud.VMCreateConfig{
+		Name:           "sa-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "default",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	sas := inst.GetServiceAccounts()
+	if len(sas) != 1 {
+		t.Fatalf("ServiceAccounts count = %d, want 1", len(sas))
+	}
+	if sas[0].GetEmail() != "cloudcoop-vm@test-project.iam.gserviceaccount.com" {
+		t.Errorf("ServiceAccount email = %q, want %q", sas[0].GetEmail(), "cloudcoop-vm@test-project.iam.gserviceaccount.com")
+	}
+	if len(sas[0].GetScopes()) != 1 || sas[0].GetScopes()[0] != "https://www.googleapis.com/auth/cloud-platform" {
+		t.Errorf("ServiceAccount scopes = %v, want [https://www.googleapis.com/auth/cloud-platform]", sas[0].GetScopes())
 	}
 }
 
@@ -601,7 +651,7 @@ func TestProvider_DeleteVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock)
+			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
 			err := p.DeleteVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {

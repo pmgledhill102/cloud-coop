@@ -41,8 +41,9 @@ type CloudConfig struct {
 
 // GCPConfig contains GCP-specific settings.
 type GCPConfig struct {
-	Project string `toml:"project"`
-	Zone    string `toml:"zone"`
+	Project        string `toml:"project"`
+	Zone           string `toml:"zone"`
+	ServiceAccount string `toml:"service_account"`
 }
 
 // VMConfig contains VM settings.
@@ -108,7 +109,7 @@ func LoadFile(path string) (*Config, error) {
 		cfg.VM.DiskSizeGB = 50
 	}
 	if cfg.VM.Image == "" {
-		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64"
+		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2504-arm64"
 	}
 	if cfg.VM.Network == "" {
 		cfg.VM.Network = "default"
@@ -169,6 +170,8 @@ func (c *Config) SetValue(key, value string) error {
 		c.Cloud.GCP.Project = value
 	case "cloud.gcp.zone":
 		c.Cloud.GCP.Zone = value
+	case "cloud.gcp.service_account":
+		c.Cloud.GCP.ServiceAccount = value
 	case "vm.name":
 		c.VM.Name = value
 	case "ssh.port":
@@ -199,6 +202,8 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.Cloud.GCP.Project, nil
 	case "cloud.gcp.zone":
 		return c.Cloud.GCP.Zone, nil
+	case "cloud.gcp.service_account":
+		return c.Cloud.GCP.ServiceAccount, nil
 	case "vm.name":
 		return c.VM.Name, nil
 	case "ssh.port":
@@ -218,6 +223,7 @@ func AllKeys() []string {
 		"cloud.provider",
 		"cloud.gcp.project",
 		"cloud.gcp.zone",
+		"cloud.gcp.service_account",
 		"vm.name",
 		"ssh.port",
 		"ssh.user",
@@ -234,6 +240,9 @@ func (c *Config) Validate() error {
 		}
 		if c.Cloud.GCP.Zone == "" {
 			return errors.New("cloud.gcp.zone is required")
+		}
+		if c.Cloud.GCP.ServiceAccount == "" {
+			return errors.New("cloud.gcp.service_account is required; see docs/SETUP-FLOW.md for setup instructions")
 		}
 	case "aws", "azure":
 		return errors.New("provider not yet implemented: " + c.Cloud.Provider)
