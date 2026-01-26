@@ -89,6 +89,13 @@ repos:
       - id: taplo-format
       - id: taplo-lint
 
+  # Markdown linting
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
+        args: [--fix]
+
   # Spell checking with cspell
   - repo: https://github.com/streetsidesoftware/cspell-cli
     rev: v8.17.3
