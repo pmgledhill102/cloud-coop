@@ -16,9 +16,9 @@ This comprehensive review assessed cloudcoop at the MVP stage across documentati
 | Documentation Currency | 5/10 | 5/10 | **Needs Work** |
 | ADR Compliance | 71% | 71% | Good |
 | Code Quality | 7/10 | 7/10 | Good |
-| Security | 4/10 | **6/10** | Fair *(+2: Go 1.25.5 vulnerabilities fixed)* |
+| Security | 4/10 | **7/10** | Good *(+3: vulns fixed, CI scanning added)* |
 | Test Coverage | 6/10 | 6/10 | Fair |
-| CI/CD Maturity | 7/10 | **8/10** | Good *(+1: version consistency fixed)* |
+| CI/CD Maturity | 7/10 | **9/10** | Excellent *(+2: version + security scanning)* |
 
 ---
 
@@ -206,14 +206,14 @@ if ip == "" { ip = vmInfo.InternalIP }
 
 ✅ **FIXED (PR #14):** All workflows now consistently use Go 1.25, and go.mod upgraded to 1.25.5.
 
-### 6.2 Security Scanning Gaps
+### 6.2 Security Scanning ✅ IMPROVED
 
 | Tool | Purpose | Status |
 |------|---------|--------|
-| govulncheck | Dependency vulnerabilities | ❌ **Not in CI** |
-| gosec | Static security analysis | ❌ **Not in CI** |
-| Secret scanning | Credential detection | ❌ **Not in CI** |
-| SBOM generation | Supply chain | ❌ **Not in CI** |
+| govulncheck | Dependency vulnerabilities | ✅ **Added (PR #17)** |
+| gosec | Static security analysis | ✅ **Added (PR #17)** |
+| Secret scanning | Credential detection | ⚠️ Pre-commit only |
+| SBOM generation | Supply chain | ❌ Not in CI |
 
 ### 6.3 What's Implemented Well
 
@@ -258,8 +258,8 @@ The following undocumented architectural decisions should be captured:
 
 1. ~~**Upgrade Go to 1.25.5** - Fix crypto/x509 vulnerabilities~~ ✅ **DONE (PR #14)**
 2. ~~**Fix build.yml Go version** - Change 1.22 → 1.25~~ ✅ **DONE (PR #14)**
-3. **Add govulncheck to CI** - Weekly vulnerability scanning
-4. **Add gosec to CI** - Static security analysis
+3. ~~**Add govulncheck to CI** - Weekly vulnerability scanning~~ ✅ **DONE (PR #17)**
+4. ~~**Add gosec to CI** - Static security analysis~~ ✅ **DONE (PR #17)**
 
 ### Priority 1: High (Next Sprint)
 
