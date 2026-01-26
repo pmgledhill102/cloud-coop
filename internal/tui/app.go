@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"os/user"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -226,32 +225,16 @@ func stopVM(cfg *config.Config) tea.Cmd {
 // fetchAgents queries the VM for running agent sessions.
 func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 	return func() tea.Msg {
-		// Get IP address for SSH
-		ip := vmInfo.ExternalIP
-		if ip == "" {
-			ip = vmInfo.InternalIP
-		}
-		if ip == "" {
+		// Resolve SSH connection parameters using helpers
+		ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+		if err != nil {
 			return agentsMsg{err: fmt.Errorf("no IP address available")}
 		}
 
-		// Determine SSH user
-		sshUser := cfg.SSH.User
-		if sshUser == "" {
-			if u, err := user.Current(); err == nil {
-				sshUser = u.Username
-			}
-		}
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 		// Connect via SSH
-		sshCfg := ssh.Config{
-			Host:    ip,
-			User:    sshUser,
-			Port:    cfg.SSH.Port,
-			Timeout: ssh.DefaultTimeout,
-		}
-
-		client, err := ssh.NewClient(sshCfg)
+		client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 		if err != nil {
 			return agentsMsg{err: fmt.Errorf("SSH: %w", err)}
 		}
@@ -270,32 +253,16 @@ func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 // addAgent creates a new agent session on the VM.
 func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 	return func() tea.Msg {
-		// Get IP address for SSH
-		ip := vmInfo.ExternalIP
-		if ip == "" {
-			ip = vmInfo.InternalIP
-		}
-		if ip == "" {
+		// Resolve SSH connection parameters using helpers
+		ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+		if err != nil {
 			return agentAddedMsg{err: fmt.Errorf("no IP address available")}
 		}
 
-		// Determine SSH user
-		sshUser := cfg.SSH.User
-		if sshUser == "" {
-			if u, err := user.Current(); err == nil {
-				sshUser = u.Username
-			}
-		}
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 		// Connect via SSH
-		sshCfg := ssh.Config{
-			Host:    ip,
-			User:    sshUser,
-			Port:    cfg.SSH.Port,
-			Timeout: ssh.DefaultTimeout,
-		}
-
-		client, err := ssh.NewClient(sshCfg)
+		client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 		if err != nil {
 			return agentAddedMsg{err: fmt.Errorf("SSH: %w", err)}
 		}
@@ -318,25 +285,10 @@ func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 // connectToAgent creates a command to connect to an agent session interactively.
 // It uses tea.ExecProcess to shell out to SSH and resume the TUI after.
 func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) tea.Cmd {
-	// Get IP address for SSH
-	ip := vmInfo.ExternalIP
-	if ip == "" {
-		ip = vmInfo.InternalIP
-	}
-
-	// Determine SSH user
-	sshUser := cfg.SSH.User
-	if sshUser == "" {
-		if u, err := user.Current(); err == nil {
-			sshUser = u.Username
-		}
-	}
-
-	// Determine port
-	port := cfg.SSH.Port
-	if port == 0 {
-		port = 22
-	}
+	// Resolve SSH connection parameters using helpers
+	ip, _ := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+	port := ssh.ResolvePort(cfg.SSH.Port)
 
 	// Build the tmux attach command
 	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
@@ -362,32 +314,16 @@ type connectFinishedMsg struct {
 // killAgent kills an agent session on the VM.
 func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
 	return func() tea.Msg {
-		// Get IP address for SSH
-		ip := vmInfo.ExternalIP
-		if ip == "" {
-			ip = vmInfo.InternalIP
-		}
-		if ip == "" {
+		// Resolve SSH connection parameters using helpers
+		ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+		if err != nil {
 			return agentKilledMsg{index: index, err: fmt.Errorf("no IP address available")}
 		}
 
-		// Determine SSH user
-		sshUser := cfg.SSH.User
-		if sshUser == "" {
-			if u, err := user.Current(); err == nil {
-				sshUser = u.Username
-			}
-		}
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 		// Connect via SSH
-		sshCfg := ssh.Config{
-			Host:    ip,
-			User:    sshUser,
-			Port:    cfg.SSH.Port,
-			Timeout: ssh.DefaultTimeout,
-		}
-
-		client, err := ssh.NewClient(sshCfg)
+		client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 		if err != nil {
 			return agentKilledMsg{index: index, err: fmt.Errorf("SSH: %w", err)}
 		}

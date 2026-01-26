@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/user"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -81,34 +80,17 @@ func runAgentsAdd(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get IP address for SSH
-	ip := vmInfo.ExternalIP
-	if ip == "" {
-		ip = vmInfo.InternalIP
-	}
-	if ip == "" {
+	// Connect via SSH using helper
+	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
 		return nil
 	}
 
-	// Determine SSH user
-	sshUser := cfg.SSH.User
-	if sshUser == "" {
-		if u, err := user.Current(); err == nil {
-			sshUser = u.Username
-		}
-	}
-
-	// Connect via SSH
+	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", cfg.SSH.Port)
-	sshCfg := ssh.Config{
-		Host:    ip,
-		User:    sshUser,
-		Port:    cfg.SSH.Port,
-		Timeout: ssh.DefaultTimeout,
-	}
 
-	client, err := ssh.NewClient(sshCfg)
+	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 	if err != nil {
 		return fmt.Errorf("SSH connection failed: %w", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"strings"
 	"time"
 
@@ -199,33 +198,17 @@ func printStatus(cfg *config.Config, info *cloud.VMInfo) {
 }
 
 func queryAgents(cfg *config.Config, info *cloud.VMInfo) *agent.ListResult {
-	// Get IP address for SSH
-	ip := info.ExternalIP
-	if ip == "" {
-		ip = info.InternalIP
-	}
-	if ip == "" {
+	// Resolve SSH connection parameters using helpers
+	ip, err := ssh.ResolveVMIP(info.ExternalIP, info.InternalIP)
+	if err != nil {
 		fmt.Println("  (no IP address for SSH)")
 		return nil
 	}
 
-	// Determine SSH user
-	sshUser := cfg.SSH.User
-	if sshUser == "" {
-		if u, err := user.Current(); err == nil {
-			sshUser = u.Username
-		}
-	}
+	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 	// Connect via SSH
-	sshCfg := ssh.Config{
-		Host:    ip,
-		User:    sshUser,
-		Port:    cfg.SSH.Port,
-		Timeout: ssh.DefaultTimeout,
-	}
-
-	client, err := ssh.NewClient(sshCfg)
+	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 	if err != nil {
 		fmt.Printf("  (SSH error: %v)\n", err)
 		return nil
