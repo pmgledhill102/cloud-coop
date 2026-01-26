@@ -82,7 +82,11 @@ func handleConfigError(err error) error {
 	if errors.As(err, &pathErr) || errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintln(os.Stderr, "Configuration not found.")
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "To get started, create a configuration file at:")
+		fmt.Fprintln(os.Stderr, "To get started, run the setup wizard:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  cloudcoop config init")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Or create a configuration file manually at:")
 		path, _ := config.DefaultConfigPath()
 		fmt.Fprintf(os.Stderr, "  %s\n", path)
 		fmt.Fprintln(os.Stderr)

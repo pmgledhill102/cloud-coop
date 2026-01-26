@@ -147,3 +147,224 @@ name = "test-vm"
 		t.Errorf("default provider = %q, want %q", cfg.Cloud.Provider, "gcp")
 	}
 }
+
+func TestConfig_Save(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "subdir", "cloudcoop.toml")
+
+	cfg := &Config{
+		Cloud: CloudConfig{
+			Provider: "gcp",
+			GCP: GCPConfig{
+				Project: "my-project",
+				Zone:    "us-west1-a",
+			},
+		},
+		VM: VMConfig{
+			Name: "test-vm",
+		},
+		SSH: SSHConfig{
+			Port: 22,
+			User: "testuser",
+		},
+	}
+
+	// Save should create parent directories
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Error("config file was not created")
+	}
+
+	// Check file permissions (should be 0600)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	perm := info.Mode().Perm()
+	if perm != 0o600 {
+		t.Errorf("file permissions = %o, want %o", perm, 0o600)
+	}
+
+	// Load the saved config and verify
+	loaded, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if loaded.Cloud.GCP.Project != "my-project" {
+		t.Errorf("project = %q, want %q", loaded.Cloud.GCP.Project, "my-project")
+	}
+	if loaded.Cloud.GCP.Zone != "us-west1-a" {
+		t.Errorf("zone = %q, want %q", loaded.Cloud.GCP.Zone, "us-west1-a")
+	}
+	if loaded.VM.Name != "test-vm" {
+		t.Errorf("vm.name = %q, want %q", loaded.VM.Name, "test-vm")
+	}
+	if loaded.SSH.User != "testuser" {
+		t.Errorf("ssh.user = %q, want %q", loaded.SSH.User, "testuser")
+	}
+}
+
+func TestConfig_SetValue(t *testing.T) {
+	tests := []struct {
+		key     string
+		value   string
+		check   func(*Config) bool
+		wantErr bool
+	}{
+		{
+			key:     "cloud.provider",
+			value:   "gcp",
+			check:   func(c *Config) bool { return c.Cloud.Provider == "gcp" },
+			wantErr: false,
+		},
+		{
+			key:     "cloud.gcp.project",
+			value:   "my-project",
+			check:   func(c *Config) bool { return c.Cloud.GCP.Project == "my-project" },
+			wantErr: false,
+		},
+		{
+			key:     "cloud.gcp.zone",
+			value:   "us-central1-a",
+			check:   func(c *Config) bool { return c.Cloud.GCP.Zone == "us-central1-a" },
+			wantErr: false,
+		},
+		{
+			key:     "vm.name",
+			value:   "test-vm",
+			check:   func(c *Config) bool { return c.VM.Name == "test-vm" },
+			wantErr: false,
+		},
+		{
+			key:     "ssh.port",
+			value:   "2222",
+			check:   func(c *Config) bool { return c.SSH.Port == 2222 },
+			wantErr: false,
+		},
+		{
+			key:     "ssh.user",
+			value:   "ubuntu",
+			check:   func(c *Config) bool { return c.SSH.User == "ubuntu" },
+			wantErr: false,
+		},
+		{
+			key:     "agents.default_command",
+			value:   "claude",
+			check:   func(c *Config) bool { return c.Agents.DefaultCommand == "claude" },
+			wantErr: false,
+		},
+		{
+			key:     "unknown.key",
+			value:   "value",
+			check:   func(c *Config) bool { return true },
+			wantErr: true,
+		},
+		{
+			key:     "ssh.port",
+			value:   "invalid",
+			check:   func(c *Config) bool { return true },
+			wantErr: true,
+		},
+		{
+			key:     "ssh.port",
+			value:   "99999",
+			check:   func(c *Config) bool { return true },
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key+"="+tt.value, func(t *testing.T) {
+			cfg := &Config{} // Fresh config for each test
+			err := cfg.SetValue(tt.key, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetValue() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil && !tt.check(cfg) {
+				t.Errorf("SetValue() did not set value correctly")
+			}
+		})
+	}
+}
+
+func TestConfig_GetValue(t *testing.T) {
+	cfg := &Config{
+		Cloud: CloudConfig{
+			Provider: "gcp",
+			GCP: GCPConfig{
+				Project: "my-project",
+				Zone:    "us-central1-a",
+			},
+		},
+		VM: VMConfig{
+			Name: "test-vm",
+		},
+		SSH: SSHConfig{
+			Port: 2222,
+			User: "ubuntu",
+		},
+		Agents: AgentsConfig{
+			DefaultCommand: "claude",
+		},
+	}
+
+	tests := []struct {
+		key     string
+		want    string
+		wantErr bool
+	}{
+		{"cloud.provider", "gcp", false},
+		{"cloud.gcp.project", "my-project", false},
+		{"cloud.gcp.zone", "us-central1-a", false},
+		{"vm.name", "test-vm", false},
+		{"ssh.port", "2222", false},
+		{"ssh.user", "ubuntu", false},
+		{"agents.default_command", "claude", false},
+		{"unknown.key", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			got, err := cfg.GetValue(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetValue() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("GetValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAllKeys(t *testing.T) {
+	keys := AllKeys()
+	if len(keys) == 0 {
+		t.Error("AllKeys() returned empty list")
+	}
+
+	// Check that some expected keys are present
+	expected := []string{"cloud.provider", "cloud.gcp.project", "vm.name", "ssh.port"}
+	for _, exp := range expected {
+		found := false
+		for _, k := range keys {
+			if k == exp {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("AllKeys() missing expected key %q", exp)
+		}
+	}
+}
+
+func TestExists(t *testing.T) {
+	// This test is limited since Exists() uses DefaultConfigPath()
+	// We can only verify it returns a boolean without error
+	_ = Exists() // Should not panic
+}

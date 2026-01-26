@@ -15,4 +15,6 @@ This command group provides tools to list, monitor, and manage these sessions.`,
 
 func init() {
 	agentsCmd.AddCommand(agentsListCmd)
+	agentsCmd.AddCommand(agentsAddCmd)
+	agentsCmd.AddCommand(agentsKillCmd)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"os/user"
 	"time"
 
@@ -58,7 +59,7 @@ type Model struct {
 	height    int
 	ready     bool
 	loading   bool
-	operation string // "", "starting", "stopping"
+	operation string // "", "starting", "stopping", "adding", "killing"
 
 	cfg     *config.Config
 	cfgErr  error
@@ -69,6 +70,12 @@ type Model struct {
 	agents        *agent.ListResult
 	agentsErr     error
 	agentsLoading bool
+
+	// Agent selection and confirmation
+	selectedAgentIdx int    // currently selected agent index in the list (not tmux index)
+	confirmingKill   bool   // true when waiting for kill confirmation
+	killTargetIndex  int    // tmux window index to kill
+	killTargetName   string // name of agent to kill (for display)
 }
 
 // New creates a new TUI application model.
@@ -105,6 +112,18 @@ type vmStopMsg struct {
 type agentsMsg struct {
 	result *agent.ListResult
 	err    error
+}
+
+// agentAddedMsg is sent when agent creation completes.
+type agentAddedMsg struct {
+	session *agent.Session
+	err     error
+}
+
+// agentKilledMsg is sent when agent kill completes.
+type agentKilledMsg struct {
+	index int
+	err   error
 }
 
 // loadConfig loads the configuration file.
@@ -248,6 +267,147 @@ func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 	}
 }
 
+// addAgent creates a new agent session on the VM.
+func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+	return func() tea.Msg {
+		// Get IP address for SSH
+		ip := vmInfo.ExternalIP
+		if ip == "" {
+			ip = vmInfo.InternalIP
+		}
+		if ip == "" {
+			return agentAddedMsg{err: fmt.Errorf("no IP address available")}
+		}
+
+		// Determine SSH user
+		sshUser := cfg.SSH.User
+		if sshUser == "" {
+			if u, err := user.Current(); err == nil {
+				sshUser = u.Username
+			}
+		}
+
+		// Connect via SSH
+		sshCfg := ssh.Config{
+			Host:    ip,
+			User:    sshUser,
+			Port:    cfg.SSH.Port,
+			Timeout: ssh.DefaultTimeout,
+		}
+
+		client, err := ssh.NewClient(sshCfg)
+		if err != nil {
+			return agentAddedMsg{err: fmt.Errorf("SSH: %w", err)}
+		}
+		defer func() { _ = client.Close() }()
+
+		// Create agent session with config defaults
+		opts := agent.CreateSessionOptions{
+			Command: cfg.Agents.DefaultCommand, // Uses config default if set
+		}
+
+		session, err := agent.CreateSession(client, opts)
+		if err != nil {
+			return agentAddedMsg{err: err}
+		}
+
+		return agentAddedMsg{session: session}
+	}
+}
+
+// connectToAgent creates a command to connect to an agent session interactively.
+// It uses tea.ExecProcess to shell out to SSH and resume the TUI after.
+func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) tea.Cmd {
+	// Get IP address for SSH
+	ip := vmInfo.ExternalIP
+	if ip == "" {
+		ip = vmInfo.InternalIP
+	}
+
+	// Determine SSH user
+	sshUser := cfg.SSH.User
+	if sshUser == "" {
+		if u, err := user.Current(); err == nil {
+			sshUser = u.Username
+		}
+	}
+
+	// Determine port
+	port := cfg.SSH.Port
+	if port == 0 {
+		port = 22
+	}
+
+	// Build the tmux attach command
+	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
+
+	// Build SSH command with -t for PTY allocation
+	c := exec.Command("ssh", "-t",
+		"-p", fmt.Sprintf("%d", port),
+		fmt.Sprintf("%s@%s", sshUser, ip),
+		tmuxCmd,
+	)
+
+	// Use tea.ExecProcess to run the command and resume TUI after
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return connectFinishedMsg{err: err}
+	})
+}
+
+// connectFinishedMsg is sent when an interactive connect session ends.
+type connectFinishedMsg struct {
+	err error
+}
+
+// killAgent kills an agent session on the VM.
+func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
+	return func() tea.Msg {
+		// Get IP address for SSH
+		ip := vmInfo.ExternalIP
+		if ip == "" {
+			ip = vmInfo.InternalIP
+		}
+		if ip == "" {
+			return agentKilledMsg{index: index, err: fmt.Errorf("no IP address available")}
+		}
+
+		// Determine SSH user
+		sshUser := cfg.SSH.User
+		if sshUser == "" {
+			if u, err := user.Current(); err == nil {
+				sshUser = u.Username
+			}
+		}
+
+		// Connect via SSH
+		sshCfg := ssh.Config{
+			Host:    ip,
+			User:    sshUser,
+			Port:    cfg.SSH.Port,
+			Timeout: ssh.DefaultTimeout,
+		}
+
+		client, err := ssh.NewClient(sshCfg)
+		if err != nil {
+			return agentKilledMsg{index: index, err: fmt.Errorf("SSH: %w", err)}
+		}
+		defer func() { _ = client.Close() }()
+
+		// Kill agent session (force=true since user confirmed)
+		opts := agent.KillSessionOptions{
+			Index: index,
+			Force: true,
+		}
+
+		err = agent.KillSession(client, opts)
+		if err != nil {
+			return agentKilledMsg{index: index, err: err}
+		}
+
+		return agentKilledMsg{index: index}
+	}
+}
+
 // Init initializes the TUI application.
 func (m Model) Init() tea.Cmd {
 	return loadConfig
@@ -257,6 +417,22 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle confirmation dialog first
+		if m.confirmingKill {
+			switch msg.String() {
+			case "y", "Y":
+				// Confirm kill
+				m.confirmingKill = false
+				m.operation = "killing"
+				return m, killAgent(m.cfg, m.vmInfo, m.killTargetIndex)
+			case "n", "N", "esc", "escape":
+				// Cancel kill
+				m.confirmingKill = false
+				return m, nil
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			if m.cleanup != nil {
@@ -282,6 +458,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.vmInfo.Status == cloud.VMStatusRunning && m.operation == "" {
 				m.operation = "stopping"
 				return m, stopVM(m.cfg)
+			}
+		case "a", "A":
+			// Add agent (only when VM is running and no operation in progress)
+			if m.canModifyAgents() {
+				m.operation = "adding"
+				return m, addAgent(m.cfg, m.vmInfo)
+			}
+		case "K":
+			// Kill agent (only when VM is running, agents exist, and no operation in progress)
+			// Note: uppercase K only, to avoid conflict with vim navigation
+			if m.canModifyAgents() && m.agents != nil && len(m.agents.Sessions) > 0 {
+				// Get the selected agent
+				if m.selectedAgentIdx < len(m.agents.Sessions) {
+					selected := m.agents.Sessions[m.selectedAgentIdx]
+					m.killTargetIndex = selected.Index
+					m.killTargetName = selected.Name
+					m.confirmingKill = true
+				}
+			}
+		case "c", "C":
+			// Connect to selected agent (only when VM is running, agents exist, and no operation in progress)
+			if m.canModifyAgents() && m.agents != nil && len(m.agents.Sessions) > 0 {
+				if m.selectedAgentIdx < len(m.agents.Sessions) {
+					selected := m.agents.Sessions[m.selectedAgentIdx]
+					return m, connectToAgent(m.cfg, m.vmInfo, selected.Index)
+				}
+			}
+		case "up":
+			// Move selection up
+			if m.agents != nil && len(m.agents.Sessions) > 0 && m.selectedAgentIdx > 0 {
+				m.selectedAgentIdx--
+			}
+		case "down", "j", "k":
+			// Move selection down (j = vim down, k = vim up but we handle it as down to avoid confusion)
+			// For cleaner implementation, only up/down arrows for selection
+			if msg.String() == "down" || msg.String() == "j" {
+				if m.agents != nil && len(m.agents.Sessions) > 0 && m.selectedAgentIdx < len(m.agents.Sessions)-1 {
+					m.selectedAgentIdx++
+				}
+			} else if msg.String() == "k" {
+				// k moves up (vim style)
+				if m.agents != nil && len(m.agents.Sessions) > 0 && m.selectedAgentIdx > 0 {
+					m.selectedAgentIdx--
+				}
 			}
 		}
 
@@ -351,9 +571,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh VM status after successful stop
 		m.loading = true
 		return m, fetchVMInfo(m.cfg)
+
+	case agentAddedMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.agentsErr = msg.err
+			return m, nil
+		}
+		// Refresh agents list after successful add
+		m.agentsLoading = true
+		return m, fetchAgents(m.cfg, m.vmInfo)
+
+	case agentKilledMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.agentsErr = msg.err
+			return m, nil
+		}
+		// Refresh agents list after successful kill
+		m.agentsLoading = true
+		// Reset selection if it would be out of bounds
+		if m.agents != nil && m.selectedAgentIdx >= len(m.agents.Sessions)-1 {
+			m.selectedAgentIdx = max(0, len(m.agents.Sessions)-2)
+		}
+		return m, fetchAgents(m.cfg, m.vmInfo)
+
+	case connectFinishedMsg:
+		// Connection ended - refresh agents list in case state changed
+		if msg.err != nil {
+			// Don't show error for normal disconnect
+			// Only show errors that indicate actual problems
+			if exitErr, ok := msg.err.(*exec.ExitError); ok {
+				if exitErr.ExitCode() != 0 {
+					m.agentsErr = msg.err
+				}
+			}
+		}
+		// Refresh agents list after returning from connect
+		m.agentsLoading = true
+		return m, fetchAgents(m.cfg, m.vmInfo)
 	}
 
 	return m, nil
+}
+
+// canModifyAgents returns true if agent add/kill operations are allowed.
+func (m Model) canModifyAgents() bool {
+	return m.cfg != nil &&
+		m.cfgErr == nil &&
+		m.vmInfo != nil &&
+		m.vmInfo.Status == cloud.VMStatusRunning &&
+		m.operation == "" &&
+		!m.agentsLoading
 }
 
 // View renders the TUI.
@@ -368,10 +637,16 @@ func (m Model) View() string {
 	var content string
 	if m.cfgErr != nil {
 		content = m.renderConfigError()
+	} else if m.confirmingKill {
+		content = m.renderKillConfirmation()
 	} else if m.operation == "starting" {
 		content = boxStyle.Render("Starting VM... ◐")
 	} else if m.operation == "stopping" {
 		content = boxStyle.Render("Stopping VM... ◑")
+	} else if m.operation == "adding" {
+		content = boxStyle.Render("Adding agent... ◐")
+	} else if m.operation == "killing" {
+		content = boxStyle.Render("Killing agent... ◑")
 	} else if m.loading {
 		content = boxStyle.Render("Loading VM status...")
 	} else if m.vmErr != nil {
@@ -395,7 +670,11 @@ func (m Model) renderConfigError() string {
 
 %s
 
-Create a config file at:
+To get started, run the setup wizard:
+
+  cloudcoop config init
+
+Or create a config file manually at:
   ~/.config/cloudcoop/cloudcoop.toml
 
 Example:
@@ -552,10 +831,15 @@ func (m Model) renderAgents() []string {
 		labelStyle.Render("Agents:"),
 		runningStyle.Render(fmt.Sprintf("%d running", len(m.agents.Sessions)))))
 
-	// List individual agents
-	for _, s := range m.agents.Sessions {
-		lines = append(lines, fmt.Sprintf("%s  %s (%s)",
+	// List individual agents with selection indicator
+	for i, s := range m.agents.Sessions {
+		selector := "  "
+		if i == m.selectedAgentIdx {
+			selector = "> "
+		}
+		lines = append(lines, fmt.Sprintf("%s%s%s (%s)",
 			labelStyle.Render(""),
+			selector,
 			s.Name,
 			s.Command))
 	}
@@ -563,7 +847,21 @@ func (m Model) renderAgents() []string {
 	return lines
 }
 
+func (m Model) renderKillConfirmation() string {
+	msg := fmt.Sprintf(`Kill agent "%s" (index %d)?
+
+Press Y to confirm, N to cancel.`,
+		m.killTargetName, m.killTargetIndex)
+
+	return boxStyle.Render(msg)
+}
+
 func (m Model) renderHelp() string {
+	// Handle confirmation dialog
+	if m.confirmingKill {
+		return helpStyle.Render("Y: confirm • N: cancel")
+	}
+
 	// Base actions always available
 	actions := []string{"q: quit", "r: refresh"}
 
@@ -574,6 +872,13 @@ func (m Model) renderHelp() string {
 			actions = append(actions, "S: start")
 		case cloud.VMStatusRunning:
 			actions = append(actions, "T: stop")
+			// Agent management actions when VM is running
+			if !m.agentsLoading {
+				actions = append(actions, "A: add agent")
+				if m.agents != nil && len(m.agents.Sessions) > 0 {
+					actions = append(actions, "C: connect", "K: kill agent", "↑/↓: select")
+				}
+			}
 		}
 	}
 

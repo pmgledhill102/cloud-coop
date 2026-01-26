@@ -2,9 +2,12 @@
 package config
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 
@@ -13,9 +16,15 @@ import (
 
 // Config represents the cloudcoop configuration.
 type Config struct {
-	Cloud CloudConfig `toml:"cloud"`
-	VM    VMConfig    `toml:"vm"`
-	SSH   SSHConfig   `toml:"ssh"`
+	Cloud  CloudConfig  `toml:"cloud"`
+	VM     VMConfig     `toml:"vm"`
+	SSH    SSHConfig    `toml:"ssh"`
+	Agents AgentsConfig `toml:"agents"`
+}
+
+// AgentsConfig contains settings for agent sessions.
+type AgentsConfig struct {
+	DefaultCommand string `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
 }
 
 // SSHConfig contains SSH connection settings.
@@ -91,6 +100,106 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Exists checks if a configuration file exists at the default location.
+func Exists() bool {
+	path, err := DefaultConfigPath()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(path)
+	return err == nil
+}
+
+// Save writes the configuration to the specified path.
+// It creates parent directories if needed and sets secure permissions.
+func (c *Config) Save(path string) error {
+	// Create parent directories with secure permissions
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return apperrors.Wrap(err, "create config directory")
+	}
+
+	// Encode to TOML
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	if err := encoder.Encode(c); err != nil {
+		return apperrors.Wrap(err, "encode config")
+	}
+
+	// Write with secure permissions (owner read/write only)
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		return apperrors.Wrap(err, "write config file")
+	}
+
+	return nil
+}
+
+// SetValue sets a configuration value by dot-notation key (e.g., "cloud.gcp.project").
+// Returns an error if the key is not recognized.
+func (c *Config) SetValue(key, value string) error {
+	switch key {
+	case "cloud.provider":
+		c.Cloud.Provider = value
+	case "cloud.gcp.project":
+		c.Cloud.GCP.Project = value
+	case "cloud.gcp.zone":
+		c.Cloud.GCP.Zone = value
+	case "vm.name":
+		c.VM.Name = value
+	case "ssh.port":
+		port, err := strconv.Atoi(value)
+		if err != nil {
+			return errors.New("ssh.port must be a number")
+		}
+		if port < 1 || port > 65535 {
+			return errors.New("ssh.port must be between 1 and 65535")
+		}
+		c.SSH.Port = port
+	case "ssh.user":
+		c.SSH.User = value
+	case "agents.default_command":
+		c.Agents.DefaultCommand = value
+	default:
+		return fmt.Errorf("unknown config key: %s", key)
+	}
+	return nil
+}
+
+// GetValue returns a configuration value by dot-notation key.
+func (c *Config) GetValue(key string) (string, error) {
+	switch key {
+	case "cloud.provider":
+		return c.Cloud.Provider, nil
+	case "cloud.gcp.project":
+		return c.Cloud.GCP.Project, nil
+	case "cloud.gcp.zone":
+		return c.Cloud.GCP.Zone, nil
+	case "vm.name":
+		return c.VM.Name, nil
+	case "ssh.port":
+		return strconv.Itoa(c.SSH.Port), nil
+	case "ssh.user":
+		return c.SSH.User, nil
+	case "agents.default_command":
+		return c.Agents.DefaultCommand, nil
+	default:
+		return "", fmt.Errorf("unknown config key: %s", key)
+	}
+}
+
+// AllKeys returns all valid configuration keys in dot notation.
+func AllKeys() []string {
+	return []string{
+		"cloud.provider",
+		"cloud.gcp.project",
+		"cloud.gcp.zone",
+		"vm.name",
+		"ssh.port",
+		"ssh.user",
+		"agents.default_command",
+	}
 }
 
 // Validate checks that required configuration is present.

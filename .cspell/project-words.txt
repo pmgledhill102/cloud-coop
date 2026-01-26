@@ -36,6 +36,10 @@ kitty
 dockerfiles
 dockerfile
 
+# Shells
+tcsh
+ksh
+
 # Technical terms
 precommit
 pre-commit
@@ -93,6 +97,7 @@ knownhosts
 testdata
 testutil
 subtests
+testuser
 
 # Misc
 pmgledhill
