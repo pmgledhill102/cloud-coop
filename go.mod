@@ -1,6 +1,6 @@
 module github.com/cloud-coop/cloudcoop
 
-go 1.25.3
+go 1.25.5
 
 require (
 	cloud.google.com/go/compute v1.54.0
