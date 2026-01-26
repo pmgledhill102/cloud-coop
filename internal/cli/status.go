@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
 var statusCmd = &cobra.Command{
@@ -166,13 +169,77 @@ func printStatus(cfg *config.Config, info *cloud.VMInfo) {
 	}
 	fmt.Println()
 
-	// Agents section (placeholder for future)
+	// Agents section
 	fmt.Println("Agents:")
-	if info.Status == cloud.VMStatusRunning {
-		fmt.Println("  (querying agents not yet implemented)")
-	} else {
+	if info.Status != cloud.VMStatusRunning {
 		fmt.Println("  (VM not running)")
+		return
 	}
+
+	// Query agents via SSH
+	agentResult := queryAgents(cfg, info)
+	if agentResult == nil {
+		return
+	}
+
+	if agentResult.NoSession {
+		fmt.Println("  No agents session")
+	} else if len(agentResult.Sessions) == 0 {
+		fmt.Println("  0 running")
+	} else {
+		for _, s := range agentResult.Sessions {
+			fmt.Printf("  %d: %s (%s)\n", s.Index, s.Name, s.Command)
+		}
+		fmt.Printf("  (%d total)\n", len(agentResult.Sessions))
+	}
+}
+
+func queryAgents(cfg *config.Config, info *cloud.VMInfo) *agent.ListResult {
+	// Get IP address for SSH
+	ip := info.ExternalIP
+	if ip == "" {
+		ip = info.InternalIP
+	}
+	if ip == "" {
+		fmt.Println("  (no IP address for SSH)")
+		return nil
+	}
+
+	// Determine SSH user
+	sshUser := cfg.SSH.User
+	if sshUser == "" {
+		if u, err := user.Current(); err == nil {
+			sshUser = u.Username
+		}
+	}
+
+	// Connect via SSH
+	sshCfg := ssh.Config{
+		Host:    ip,
+		User:    sshUser,
+		Port:    cfg.SSH.Port,
+		Timeout: ssh.DefaultTimeout,
+	}
+
+	client, err := ssh.NewClient(sshCfg)
+	if err != nil {
+		fmt.Printf("  (SSH error: %v)\n", err)
+		return nil
+	}
+	defer func() { _ = client.Close() }()
+
+	// List agent sessions
+	result, err := agent.ListSessions(client)
+	if err != nil {
+		if errors.Is(err, agent.ErrTmuxNotInstalled) {
+			fmt.Println("  (tmux not installed)")
+		} else {
+			fmt.Printf("  (error: %v)\n", err)
+		}
+		return nil
+	}
+
+	return result
 }
 
 func formatStatus(status cloud.VMStatus) string {

@@ -3,15 +3,19 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os/user"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
 // Styles for the TUI.
@@ -61,6 +65,10 @@ type Model struct {
 	vmInfo  *cloud.VMInfo
 	vmErr   error
 	cleanup func()
+
+	agents        *agent.ListResult
+	agentsErr     error
+	agentsLoading bool
 }
 
 // New creates a new TUI application model.
@@ -91,6 +99,12 @@ type vmStartMsg struct {
 // vmStopMsg is sent when VM stop completes.
 type vmStopMsg struct {
 	err error
+}
+
+// agentsMsg is sent when agent listing completes.
+type agentsMsg struct {
+	result *agent.ListResult
+	err    error
 }
 
 // loadConfig loads the configuration file.
@@ -190,6 +204,50 @@ func stopVM(cfg *config.Config) tea.Cmd {
 	}
 }
 
+// fetchAgents queries the VM for running agent sessions.
+func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+	return func() tea.Msg {
+		// Get IP address for SSH
+		ip := vmInfo.ExternalIP
+		if ip == "" {
+			ip = vmInfo.InternalIP
+		}
+		if ip == "" {
+			return agentsMsg{err: fmt.Errorf("no IP address available")}
+		}
+
+		// Determine SSH user
+		sshUser := cfg.SSH.User
+		if sshUser == "" {
+			if u, err := user.Current(); err == nil {
+				sshUser = u.Username
+			}
+		}
+
+		// Connect via SSH
+		sshCfg := ssh.Config{
+			Host:    ip,
+			User:    sshUser,
+			Port:    cfg.SSH.Port,
+			Timeout: ssh.DefaultTimeout,
+		}
+
+		client, err := ssh.NewClient(sshCfg)
+		if err != nil {
+			return agentsMsg{err: fmt.Errorf("SSH: %w", err)}
+		}
+		defer func() { _ = client.Close() }()
+
+		// List agent sessions
+		result, err := agent.ListSessions(client)
+		if err != nil {
+			return agentsMsg{err: err}
+		}
+
+		return agentsMsg{result: result}
+	}
+}
+
 // Init initializes the TUI application.
 func (m Model) Init() tea.Cmd {
 	return loadConfig
@@ -258,6 +316,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.cleanup = msg.cleanup
 		}
+		// Fetch agents if VM is running
+		if msg.err == nil && msg.info != nil && msg.info.Status == cloud.VMStatusRunning {
+			m.agentsLoading = true
+			m.agents = nil
+			m.agentsErr = nil
+			return m, fetchAgents(m.cfg, msg.info)
+		}
+		// Clear agents if VM not running
+		m.agents = nil
+		m.agentsErr = nil
+
+	case agentsMsg:
+		m.agentsLoading = false
+		m.agents = msg.result
+		m.agentsErr = msg.err
 
 	case vmStartMsg:
 		m.operation = ""
@@ -394,9 +467,7 @@ func (m Model) renderVMStatus() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, fmt.Sprintf("%s%s",
-		labelStyle.Render("Agents:"),
-		stoppedStyle.Render("(not yet implemented)")))
+	lines = append(lines, m.renderAgents()...)
 
 	var result string
 	for i, line := range lines {
@@ -422,6 +493,74 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 	default:
 		return string(status)
 	}
+}
+
+func (m Model) renderAgents() []string {
+	var lines []string
+
+	// Only show agents when VM is running
+	if m.vmInfo == nil || m.vmInfo.Status != cloud.VMStatusRunning {
+		lines = append(lines, fmt.Sprintf("%s%s",
+			labelStyle.Render("Agents:"),
+			stoppedStyle.Render("(VM not running)")))
+		return lines
+	}
+
+	if m.agentsLoading {
+		lines = append(lines, fmt.Sprintf("%s%s",
+			labelStyle.Render("Agents:"),
+			"loading..."))
+		return lines
+	}
+
+	if m.agentsErr != nil {
+		if errors.Is(m.agentsErr, agent.ErrTmuxNotInstalled) {
+			lines = append(lines, fmt.Sprintf("%s%s",
+				labelStyle.Render("Agents:"),
+				stoppedStyle.Render("tmux not installed")))
+		} else {
+			lines = append(lines, fmt.Sprintf("%s%s",
+				labelStyle.Render("Agents:"),
+				errorStyle.Render(fmt.Sprintf("error: %v", m.agentsErr))))
+		}
+		return lines
+	}
+
+	if m.agents == nil {
+		lines = append(lines, fmt.Sprintf("%s%s",
+			labelStyle.Render("Agents:"),
+			stoppedStyle.Render("(unknown)")))
+		return lines
+	}
+
+	if m.agents.NoSession {
+		lines = append(lines, fmt.Sprintf("%s%s",
+			labelStyle.Render("Agents:"),
+			stoppedStyle.Render("no session")))
+		return lines
+	}
+
+	if len(m.agents.Sessions) == 0 {
+		lines = append(lines, fmt.Sprintf("%s%s",
+			labelStyle.Render("Agents:"),
+			stoppedStyle.Render("0 running")))
+		return lines
+	}
+
+	// Show agent count
+	lines = append(lines, fmt.Sprintf("%s%s",
+		labelStyle.Render("Agents:"),
+		runningStyle.Render(fmt.Sprintf("%d running", len(m.agents.Sessions)))))
+
+	// List individual agents
+	for _, s := range m.agents.Sessions {
+		lines = append(lines, fmt.Sprintf("%s  %s (%s)",
+			labelStyle.Render(""),
+			s.Name,
+			s.Command))
+	}
+
+	return lines
 }
 
 func (m Model) renderHelp() string {
