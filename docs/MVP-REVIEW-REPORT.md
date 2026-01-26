@@ -1,6 +1,7 @@
 # MVP Comprehensive Review Report
 
 **Date:** 2026-01-26
+**Last Updated:** 2026-01-26
 **Project:** cloudcoop
 **Version:** Pre-v1.0 MVP
 
@@ -10,14 +11,14 @@
 
 This comprehensive review assessed cloudcoop at the MVP stage across documentation, architecture, code quality, security, and CI/CD. Overall, the project has a **solid foundation** with good architectural decisions, but has **critical security gaps** and **documentation drift** that should be addressed before production release.
 
-| Category | Score | Status |
-|----------|-------|--------|
-| Documentation Currency | 5/10 | **Needs Work** |
-| ADR Compliance | 71% | Good |
-| Code Quality | 7/10 | Good |
-| Security | 4/10 | **Critical Gaps** |
-| Test Coverage | 6/10 | Fair |
-| CI/CD Maturity | 7/10 | Good |
+| Category | Original | Current | Status |
+|----------|----------|---------|--------|
+| Documentation Currency | 5/10 | 5/10 | **Needs Work** |
+| ADR Compliance | 71% | 71% | Good |
+| Code Quality | 7/10 | 7/10 | Good |
+| Security | 4/10 | **6/10** | Fair *(+2: Go 1.25.5 vulnerabilities fixed)* |
+| Test Coverage | 6/10 | 6/10 | Fair |
+| CI/CD Maturity | 7/10 | **8/10** | Good *(+1: version consistency fixed)* |
 
 ---
 
@@ -27,12 +28,14 @@ This comprehensive review assessed cloudcoop at the MVP stage across documentati
 
 **govulncheck** found 2 vulnerabilities in Go standard library:
 
-| ID | Package | Severity | Fixed In |
-|----|---------|----------|----------|
-| GO-2025-4175 | crypto/x509 | MEDIUM | go1.25.5 |
-| GO-2025-4155 | crypto/x509 | MEDIUM | go1.25.5 |
+| ID | Package | Severity | Fixed In | Status |
+|----|---------|----------|----------|--------|
+| GO-2025-4175 | crypto/x509 | MEDIUM | go1.25.5 | ✅ **FIXED** |
+| GO-2025-4155 | crypto/x509 | MEDIUM | go1.25.5 | ✅ **FIXED** |
 
-**Action Required:** Upgrade Go from 1.25.3 to 1.25.5
+~~**Action Required:** Upgrade Go from 1.25.3 to 1.25.5~~
+
+✅ **FIXED (PR #14):** Go upgraded to 1.25.5. `govulncheck ./...` now reports "No vulnerabilities found."
 
 ### 1.2 Static Analysis Results (gosec)
 
@@ -189,17 +192,19 @@ if ip == "" { ip = vmInfo.InternalIP }
 
 ## 6. CI/CD Pipeline Review
 
-### 6.1 Go Version Inconsistency
+### 6.1 Go Version Consistency ✅ FIXED
 
 | Workflow | Go Version | Status |
 |----------|-----------|--------|
-| build.yml | **1.22** | ❌ Outdated |
+| build.yml | 1.25 | ✅ Correct |
 | lint.yml | 1.25 | ✅ Correct |
 | test.yml | 1.25 | ✅ Correct |
 | release.yml | 1.25 | ✅ Correct |
-| go.mod | 1.25.3 | Source of truth |
+| go.mod | 1.25.5 | ✅ Source of truth |
 
-**Action Required:** Update `build.yml` line 14: `GO_VERSION: '1.22'` → `GO_VERSION: '1.25'`
+~~**Action Required:** Update `build.yml` line 14: `GO_VERSION: '1.22'` → `GO_VERSION: '1.25'`~~
+
+✅ **FIXED (PR #14):** All workflows now consistently use Go 1.25, and go.mod upgraded to 1.25.5.
 
 ### 6.2 Security Scanning Gaps
 
@@ -251,8 +256,8 @@ The following undocumented architectural decisions should be captured:
 
 ### Priority 0: Critical (This Week)
 
-1. **Upgrade Go to 1.25.5** - Fix crypto/x509 vulnerabilities
-2. **Fix build.yml Go version** - Change 1.22 → 1.25
+1. ~~**Upgrade Go to 1.25.5** - Fix crypto/x509 vulnerabilities~~ ✅ **DONE (PR #14)**
+2. ~~**Fix build.yml Go version** - Change 1.22 → 1.25~~ ✅ **DONE (PR #14)**
 3. **Add govulncheck to CI** - Weekly vulnerability scanning
 4. **Add gosec to CI** - Static security analysis
 
