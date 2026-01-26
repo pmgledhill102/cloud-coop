@@ -87,6 +87,7 @@ revive
 sshd
 pubkey
 openssh
+knownhosts
 
 # Testing
 testdata
