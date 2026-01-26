@@ -2,8 +2,12 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/cloud-coop/cloudcoop/internal/apperrors"
 	"github.com/cloud-coop/cloudcoop/internal/log"
@@ -40,6 +44,15 @@ func Execute() error {
 
 // runTUI launches the interactive terminal UI.
 func runTUI(cmd *cobra.Command, args []string) error {
+	// Check if we're running in an interactive terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Fprintln(os.Stderr, "The TUI requires an interactive terminal.")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Use 'cloudcoop status' for non-interactive output,")
+		fmt.Fprintln(os.Stderr, "or run cloudcoop in a terminal emulator.")
+		return nil
+	}
+
 	log.Debug("launching TUI")
 
 	// Create and run the TUI application

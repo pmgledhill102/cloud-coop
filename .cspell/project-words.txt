@@ -106,6 +106,9 @@ preemptible
 axion
 oslogin
 computepb
+secretmanager
+googleapi
+apiv
 
 # Cloud/Infra terms
 sandboxed

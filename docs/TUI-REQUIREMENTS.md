@@ -358,3 +358,4 @@ Generate optimized terminal emulator configuration for multi-agent viewing. Woul
 - Integration with issue tracker (GitHub Issues, Linear, etc.)
 - Multi-VM support for different projects
 - AWS and Azure provider support
+- **VM metadata tagging**: Tag created VMs with cloudcoop version, creation timestamp, and config hash for identification, upgrade detection, and diagnostics (see cc-s7h)
