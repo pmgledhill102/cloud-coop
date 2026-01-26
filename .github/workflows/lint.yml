@@ -137,7 +137,6 @@ jobs:
       - name: Run markdownlint
         run: |
           markdownlint-cli2 "**/*.md" \
-            --config '{"MD013": false, "MD033": false, "MD041": false}' \
             --ignore node_modules \
             --ignore vendor \
             --ignore .git
