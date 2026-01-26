@@ -380,7 +380,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.confirmingKill = false
 				m.operation = "killing"
 				return m, killAgent(m.cfg, m.vmInfo, m.killTargetIndex)
-			case "n", "N", "escape":
+			case "n", "N", "esc", "escape":
 				// Cancel kill
 				m.confirmingKill = false
 				return m, nil

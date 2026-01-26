@@ -289,6 +289,35 @@ func TestCreateSession(t *testing.T) {
 			wantSession: &Session{Index: 2, Name: "", Command: "bash"},
 			wantCmdPart: "'agent-2'",
 		},
+		{
+			name: "create 13th agent (12+ agents)",
+			opts: CreateSessionOptions{},
+			calls: []mockCall{
+				{output: "0|agent-0|bash\n1|agent-1|bash\n2|agent-2|bash\n3|agent-3|bash\n4|agent-4|bash\n5|agent-5|bash\n6|agent-6|bash\n7|agent-7|bash\n8|agent-8|bash\n9|agent-9|bash\n10|agent-10|bash\n11|agent-11|bash\n", err: nil},
+				{output: "", err: nil},
+			},
+			wantSession: &Session{Index: 12, Name: "", Command: "bash"},
+			wantCmdPart: "'agent-12'",
+		},
+		{
+			name: "command with special characters",
+			opts: CreateSessionOptions{Command: "claude --flag='value with spaces'"},
+			calls: []mockCall{
+				{output: "can't find session: agents", err: errors.New("exit status 1")},
+				{output: "", err: nil},
+			},
+			wantSession: &Session{Index: 0, Name: "", Command: "claude --flag='value with spaces'"},
+		},
+		{
+			name: "name with special characters",
+			opts: CreateSessionOptions{Name: "my-agent's-name"},
+			calls: []mockCall{
+				{output: "can't find session: agents", err: errors.New("exit status 1")},
+				{output: "", err: nil},
+			},
+			wantSession: &Session{Index: 0, Name: "my-agent's-name", Command: "bash"},
+			wantCmdPart: "'my-agent'\"'\"'s-name'", // properly escaped single quote
+		},
 	}
 
 	for _, tt := range tests {
