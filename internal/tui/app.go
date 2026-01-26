@@ -133,7 +133,7 @@ func fetchVMInfo(cfg *config.Config) tea.Cmd {
 // startVM starts the VM asynchronously.
 func startVM(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
 		var provider cloud.Provider
@@ -163,7 +163,7 @@ func startVM(cfg *config.Config) tea.Cmd {
 // stopVM stops the VM asynchronously.
 func stopVM(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
 		var provider cloud.Provider

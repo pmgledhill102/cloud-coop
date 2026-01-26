@@ -33,8 +33,8 @@ func runStop(cmd *cobra.Command, args []string) error {
 		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Create provider with 60s timeout (stop operations take 20-40s)
-	ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+	// Create provider with 180s timeout (stop operations can take 90s+ on laden VMs)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 180*time.Second)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
