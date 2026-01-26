@@ -144,10 +144,10 @@ func (f *Fixtures) GoldenFile(name string, actual []byte) {
 	path := filepath.Join(f.baseDir, name)
 
 	if UpdateGoldenFiles {
-		if err := os.MkdirAll(f.baseDir, 0o755); err != nil {
+		if err := os.MkdirAll(f.baseDir, 0o750); err != nil {
 			f.t.Fatalf("failed to create testdata directory: %v", err)
 		}
-		if err := os.WriteFile(path, actual, 0o644); err != nil {
+		if err := os.WriteFile(path, actual, 0o600); err != nil {
 			f.t.Fatalf("failed to update golden file %s: %v", name, err)
 		}
 		return
@@ -194,7 +194,7 @@ func (f *Fixtures) TempFixtureDir(names ...string) string {
 		dst := filepath.Join(tempDir, name)
 
 		// Create parent directories if needed
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 			f.t.Fatalf("failed to create directory for %s: %v", name, err)
 		}
 
@@ -203,7 +203,7 @@ func (f *Fixtures) TempFixtureDir(names ...string) string {
 			f.t.Fatalf("failed to read fixture %s: %v", name, err)
 		}
 
-		if err := os.WriteFile(dst, data, 0o644); err != nil {
+		if err := os.WriteFile(dst, data, 0o600); err != nil {
 			f.t.Fatalf("failed to write fixture copy %s: %v", name, err)
 		}
 	}

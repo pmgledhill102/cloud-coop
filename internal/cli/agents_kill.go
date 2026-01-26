@@ -12,7 +12,6 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
@@ -49,7 +48,7 @@ func runAgentsKill(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := configLoader()
 	if err != nil {
 		return handleConfigError(err)
 	}
