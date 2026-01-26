@@ -15,9 +15,9 @@ This comprehensive review assessed cloudcoop at the MVP stage across documentati
 |----------|----------|---------|--------|
 | Documentation Currency | 5/10 | **7/10** | Good *(+2: TROUBLESHOOTING.md rewritten, README.md fixed)* |
 | ADR Compliance | 71% | 71% | Good |
-| Code Quality | 7/10 | 7/10 | Good |
+| Code Quality | 7/10 | **8/10** | Good *(+1: SSH helpers extracted, ~100 LOC deduplication)* |
 | Security | 4/10 | **7/10** | Good *(+3: vulns fixed, CI scanning added)* |
-| Test Coverage | 6/10 | 6/10 | Fair |
+| Test Coverage | 6/10 | **6.5/10** | Fair *(+0.5: CLI tests 0%→19%, SSH helper tests added)* |
 | CI/CD Maturity | 7/10 | **9/10** | Excellent *(+2: version + security scanning)* |
 
 ---
@@ -267,8 +267,8 @@ The following undocumented architectural decisions should be captured:
 
 5. ~~**Rewrite TROUBLESHOOTING.md** - Remove Docker/Terraform references~~ ✅ **DONE (PR #19)**
 6. ~~**Update README.md keyboard shortcuts** - Remove resize, add refresh~~ ✅ **DONE (PR #19)**
-7. **Extract SSH helper function** - Eliminate 120 lines of duplication
-8. **Add CLI tests** - Target 60% coverage for cli/ package
+7. ~~**Extract SSH helper function** - Eliminate 120 lines of duplication~~ ✅ **DONE (PR #21)**
+8. ~~**Add CLI tests** - Target 60% coverage for cli/ package~~ ⚠️ **PARTIAL (PR #21)** - 19.2% achieved; full coverage requires mock infrastructure
 
 ### Priority 2: Medium (Next Month)
 
