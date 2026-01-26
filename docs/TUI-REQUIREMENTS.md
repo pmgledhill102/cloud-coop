@@ -40,8 +40,11 @@ Per ADR-0011 and ADR-0013:
 │  ...                                                            │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│  [S]tart  s[T]op  [R]esize  [A]dd  [K]ill  [C]onnect  [Q]uit   │
+│  s[T]op  [R]esize  [D]elete  [A]dd  [K]ill  conne[X]t  [Q]uit  │
 └─────────────────────────────────────────────────────────────────┘
+
+Note: Actions are context-sensitive. When VM is stopped: [S]tart [R]esize [D]elete
+When VM does not exist: [C]reate
 ```
 
 ## Functional Requirements
@@ -141,6 +144,75 @@ op, err := client.SetMachineType(ctx, &computepb.SetMachineTypeInstanceRequest{.
 ```
 
 Pre-check: VM must be stopped (offer to stop if running).
+
+#### 2.5 Create VM
+
+Create a new VM when none exists. Shows size selection menu:
+
+```
+Create VM:
+  Select machine size:
+  ► [Small]   c4a-highcpu-4   ( 4 vCPU,  8GB)
+    [Medium]  c4a-highcpu-8   ( 8 vCPU, 16GB)
+    [Large]   c4a-highcpu-16  (16 vCPU, 32GB)
+    [XLarge]  c4a-highcpu-32  (32 vCPU, 64GB)
+
+  ↑/↓: Select  Enter: Create  Esc: Cancel
+```
+
+```go
+req := &computepb.InsertInstanceRequest{
+    Project: project,
+    Zone: zone,
+    InstanceResource: &computepb.Instance{
+        Name: name,
+        MachineType: machineTypeURL,
+        Disks: []*computepb.AttachedDisk{{
+            Boot: true,
+            AutoDelete: true,
+            InitializeParams: &computepb.AttachedDiskInitializeParams{
+                DiskSizeGb: diskSize,
+                SourceImage: imageURL,
+            },
+        }},
+        NetworkInterfaces: []*computepb.NetworkInterface{{
+            Network: networkURL,
+            AccessConfigs: []*computepb.AccessConfig{{Type: "ONE_TO_ONE_NAT"}},
+        }},
+        Scheduling: &computepb.Scheduling{
+            Preemptible: spot,
+            InstanceTerminationAction: "STOP", // Per ADR-0003: stop on preemption
+        },
+        Tags: &computepb.Tags{Items: tags},
+    },
+}
+op, err := client.Insert(ctx, req)
+err = op.Wait(ctx)
+```
+
+Configuration: Machine sizes are configurable via `vm.machine_sizes` in cloudcoop.toml.
+
+#### 2.6 Delete VM
+
+Delete a stopped VM (requires confirmation):
+
+```
+Delete VM "claude-sandbox"?
+  ⚠️  This cannot be undone. All data on the boot disk will be lost.
+
+  Press Y to confirm, N to cancel
+```
+
+```go
+op, err := client.Delete(ctx, &computepb.DeleteInstanceRequest{
+    Project: project,
+    Zone: zone,
+    Instance: name,
+})
+err = op.Wait(ctx)
+```
+
+Pre-check: VM must be stopped. Requires explicit Y confirmation.
 
 ### 3. Agent Session Management
 
@@ -251,17 +323,21 @@ Options:
 
 ### 4. Quick Actions
 
-| Key | Action | Description |
-|-----|--------|-------------|
-| S | Start | Start stopped VM |
-| T | Stop | Stop running VM |
-| R | Resize | Change machine type |
-| A | Add | Create new agent session |
-| B | Bulk | Start/stop multiple agents |
-| K | Kill | Remove agent session |
-| C | Connect | SSH into agent session |
-| L | Logs | View agent logs |
-| Q | Quit | Exit TUI |
+Actions are context-sensitive based on VM state:
+
+| Key | Action | When Available | Description |
+|-----|--------|----------------|-------------|
+| C | Create | VM not found | Create new VM (shows size selection) |
+| S | Start | VM stopped | Start stopped VM |
+| T | Stop | VM running | Stop running VM |
+| D | Delete | VM stopped | Delete VM (requires confirmation) |
+| R | Resize | VM stopped | Change machine type |
+| A | Add | VM running | Create new agent session |
+| B | Bulk | VM running | Start/stop multiple agents |
+| K | Kill | VM running | Remove agent session |
+| X | Connect | VM running | SSH into agent session |
+| L | Logs | VM running | View agent logs |
+| Q | Quit | Always | Exit TUI |
 
 ### 5. Monitoring View
 
