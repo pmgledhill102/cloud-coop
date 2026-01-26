@@ -113,6 +113,7 @@ apiv
 
 # Cloud/Infra terms
 sandboxed
+sandboxing
 tfstate
 hotspot
 pulumi
