@@ -9,11 +9,11 @@
 
 ## Executive Summary
 
-This comprehensive review assessed cloudcoop at the MVP stage across documentation, architecture, code quality, security, and CI/CD. Overall, the project has a **solid foundation** with good architectural decisions, but has **critical security gaps** and **documentation drift** that should be addressed before production release.
+This comprehensive review assessed cloudcoop at the MVP stage across documentation, architecture, code quality, security, and CI/CD. Overall, the project has a **solid foundation** with good architectural decisions. Critical security gaps and documentation drift have been addressed.
 
 | Category | Original | Current | Status |
 |----------|----------|---------|--------|
-| Documentation Currency | 5/10 | 5/10 | **Needs Work** |
+| Documentation Currency | 5/10 | **7/10** | Good *(+2: TROUBLESHOOTING.md rewritten, README.md fixed)* |
 | ADR Compliance | 71% | 71% | Good |
 | Code Quality | 7/10 | 7/10 | Good |
 | Security | 4/10 | **7/10** | Good *(+3: vulns fixed, CI scanning added)* |
@@ -98,31 +98,33 @@ func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
 
 ### 3.1 Critical Issues
 
-| Document | Issue | Impact |
-|----------|-------|--------|
-| **README.md** | Shows `[R]esize` key that doesn't exist | User confusion |
-| **TUI-REQUIREMENTS.md** | Documents Create VM, Delete VM, Resize VM as features | Misleading roadmap |
-| **QUICKSTART.md** | References `cloudcoop create` command | Command doesn't exist |
-| **TROUBLESHOOTING.md** | **Completely outdated** - references Docker/Terraform | Useless for users |
+| Document | Issue | Impact | Status |
+|----------|-------|--------|--------|
+| **README.md** | Shows `[R]esize` key that doesn't exist | User confusion | ✅ **FIXED (PR #19)** |
+| **TUI-REQUIREMENTS.md** | Documents Create VM, Delete VM, Resize VM as features | Misleading roadmap | Open |
+| **QUICKSTART.md** | References `cloudcoop create` command | Command doesn't exist | Open |
+| **TROUBLESHOOTING.md** | **Completely outdated** - references Docker/Terraform | Useless for users | ✅ **FIXED (PR #19)** |
 
-### 3.2 README.md Fixes Needed
+### 3.2 README.md Fixes ~~Needed~~ ✅ DONE
 
-Current (incorrect):
+~~Current (incorrect):~~
 ```
 │  [S]tart  s[T]op  [R]esize  [A]dd  [K]ill  [C]onnect  [Q]uit   │
 ```
 
-Should be:
+~~Should be:~~ Now shows:
 ```
 │  [S]tart  s[T]op  [A]dd  [K]ill  [C]onnect  [r]efresh  [Q]uit   │
 ```
 
-### 3.3 TROUBLESHOOTING.md - Complete Rewrite Required
+### 3.3 TROUBLESHOOTING.md ~~- Complete Rewrite Required~~ ✅ DONE
 
-Current content discusses Docker containers and Terraform, but cloudcoop:
-- Uses **SSH + tmux** for agent execution (not Docker)
-- Has **no Terraform** templates
-- Manages VMs via **Go SDK** (not container orchestration)
+~~Current content discusses Docker containers and Terraform, but cloudcoop:~~
+~~- Uses **SSH + tmux** for agent execution (not Docker)~~
+~~- Has **no Terraform** templates~~
+~~- Manages VMs via **Go SDK** (not container orchestration)~~
+
+Rewritten in PR #19 to cover actual architecture: SSH connections, tmux sessions, VM management, config troubleshooting, and recovery procedures.
 
 ---
 
@@ -263,8 +265,8 @@ The following undocumented architectural decisions should be captured:
 
 ### Priority 1: High (Next Sprint)
 
-5. **Rewrite TROUBLESHOOTING.md** - Remove Docker/Terraform references
-6. **Update README.md keyboard shortcuts** - Remove resize, add refresh
+5. ~~**Rewrite TROUBLESHOOTING.md** - Remove Docker/Terraform references~~ ✅ **DONE (PR #19)**
+6. ~~**Update README.md keyboard shortcuts** - Remove resize, add refresh~~ ✅ **DONE (PR #19)**
 7. **Extract SSH helper function** - Eliminate 120 lines of duplication
 8. **Add CLI tests** - Target 60% coverage for cli/ package
 
