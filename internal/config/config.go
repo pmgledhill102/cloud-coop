@@ -109,7 +109,7 @@ func LoadFile(path string) (*Config, error) {
 		cfg.VM.DiskSizeGB = 50
 	}
 	if cfg.VM.Image == "" {
-		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64"
+		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2504-arm64"
 	}
 	if cfg.VM.Network == "" {
 		cfg.VM.Network = "default"

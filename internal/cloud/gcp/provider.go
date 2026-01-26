@@ -16,9 +16,10 @@ import (
 
 // Provider implements cloud.Provider for GCP.
 type Provider struct {
-	project string
-	zone    string
-	client  instancesClient
+	project     string
+	zone        string
+	client      instancesClient
+	disksClient disksClient
 }
 
 // New creates a new GCP provider.
@@ -29,19 +30,27 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 		return nil, fmt.Errorf("create compute client: %w", err)
 	}
 
+	disksClient, err := compute.NewDisksRESTClient(ctx)
+	if err != nil {
+		_ = client.Close() // Best-effort cleanup; already returning an error
+		return nil, fmt.Errorf("create disks client: %w", err)
+	}
+
 	return &Provider{
-		project: project,
-		zone:    zone,
-		client:  &realInstancesClient{client: client},
+		project:     project,
+		zone:        zone,
+		client:      &realInstancesClient{client: client},
+		disksClient: &realDisksClient{client: disksClient},
 	}, nil
 }
 
-// newWithClient creates a provider with a custom client (for testing).
-func newWithClient(project, zone string, client instancesClient) *Provider {
+// newWithClient creates a provider with custom clients (for testing).
+func newWithClient(project, zone string, client instancesClient, disks disksClient) *Provider {
 	return &Provider{
-		project: project,
-		zone:    zone,
-		client:  client,
+		project:     project,
+		zone:        zone,
+		client:      client,
+		disksClient: disks,
 	}
 }
 
@@ -192,18 +201,31 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 		Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
 	}}
 
-	// Add startup script to configure SSH port if non-standard
-	if config.SSHPort > 0 && config.SSHPort != 22 {
-		startupScript := fmt.Sprintf(`#!/bin/bash
-# Configure SSH to listen on port %d
+	// Build startup script for VM configuration
+	var startupScript string
+
+	// Always create xterm-ghostty symlink for Ghostty terminal compatibility
+	// Ubuntu 25.04 has 'ghostty' terminfo but Ghostty uses TERM=xterm-ghostty
+	startupScript = `#!/bin/bash
 set -e
 
+# Create symlink for Ghostty terminal compatibility
+# Ubuntu has terminfo for 'ghostty' but Ghostty sets TERM=xterm-ghostty
+if [ -f /usr/share/terminfo/g/ghostty ] && [ ! -e /usr/share/terminfo/x/xterm-ghostty ]; then
+    ln -sf /usr/share/terminfo/g/ghostty /usr/share/terminfo/x/xterm-ghostty
+fi
+`
+
+	// Add SSH port configuration if non-standard
+	if config.SSHPort > 0 && config.SSHPort != 22 {
+		startupScript += fmt.Sprintf(`
+# Configure SSH to listen on port %d
 SSH_PORT=%d
 
 # Wait for system to be ready
 sleep 5
 
-# Ubuntu 24.04 uses systemd socket activation for SSH
+# Ubuntu uses systemd socket activation for SSH
 # We need to override the socket configuration
 mkdir -p /etc/systemd/system/ssh.socket.d
 cat > /etc/systemd/system/ssh.socket.d/port.conf << EOF
@@ -224,15 +246,15 @@ systemctl stop ssh.socket 2>/dev/null || true
 systemctl start ssh.socket
 systemctl start ssh.service
 `, config.SSHPort, config.SSHPort)
+	}
 
-		instance.Metadata = &computepb.Metadata{
-			Items: []*computepb.Items{
-				{
-					Key:   ptr("startup-script"),
-					Value: ptr(startupScript),
-				},
+	instance.Metadata = &computepb.Metadata{
+		Items: []*computepb.Items{
+			{
+				Key:   ptr("startup-script"),
+				Value: ptr(startupScript),
 			},
-		}
+		},
 	}
 
 	op, err := p.client.Insert(ctx, &computepb.InsertInstanceRequest{
@@ -252,7 +274,9 @@ systemctl start ssh.service
 	return nil
 }
 
-// DeleteVM deletes a VM by name.
+// DeleteVM deletes a VM and its boot disk by name.
+// The boot disk is created with AutoDelete=false (per ADR-0003) to preserve state across
+// preemption/stops, but when explicitly deleting the VM we also delete the disk.
 func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 	op, err := p.client.Delete(ctx, &computepb.DeleteInstanceRequest{
 		Project:  p.project,
@@ -263,9 +287,26 @@ func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 		return fmt.Errorf("delete instance %s: %w", name, err)
 	}
 
-	// Wait for operation to complete
+	// Wait for instance deletion to complete
 	if err := op.Wait(ctx); err != nil {
 		return fmt.Errorf("wait for delete %s: %w", name, err)
+	}
+
+	// Delete the boot disk (has same name as instance by convention)
+	diskOp, err := p.disksClient.Delete(ctx, &computepb.DeleteDiskRequest{
+		Project: p.project,
+		Zone:    p.zone,
+		Disk:    name,
+	})
+	if err != nil {
+		// Log but don't fail if disk deletion fails (disk may not exist or have different name)
+		return nil
+	}
+
+	// Wait for disk deletion to complete
+	if err := diskOp.Wait(ctx); err != nil {
+		// Log but don't fail - VM is already deleted
+		return nil
 	}
 
 	return nil
@@ -276,8 +317,19 @@ func ptr[T any](v T) *T { return &v }
 
 // Close closes the provider's clients.
 func (p *Provider) Close() error {
+	var errs []error
 	if p.client != nil {
-		return p.client.Close()
+		if err := p.client.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if p.disksClient != nil {
+		if err := p.disksClient.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }

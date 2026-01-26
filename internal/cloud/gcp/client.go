@@ -18,6 +18,12 @@ type instancesClient interface {
 	Close() error
 }
 
+// disksClient defines the interface for GCP Compute disks operations.
+type disksClient interface {
+	Delete(ctx context.Context, req *computepb.DeleteDiskRequest) (operation, error)
+	Close() error
+}
+
 // operation defines the interface for GCP long-running operations.
 type operation interface {
 	Wait(ctx context.Context) error
@@ -65,6 +71,23 @@ func (r *realInstancesClient) Delete(ctx context.Context, req *computepb.DeleteI
 }
 
 func (r *realInstancesClient) Close() error {
+	return r.client.Close()
+}
+
+// realDisksClient wraps the actual GCP DisksClient to implement our interface.
+type realDisksClient struct {
+	client *compute.DisksClient
+}
+
+func (r *realDisksClient) Delete(ctx context.Context, req *computepb.DeleteDiskRequest) (operation, error) {
+	op, err := r.client.Delete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &realOperation{op: op}, nil
+}
+
+func (r *realDisksClient) Close() error {
 	return r.client.Close()
 }
 

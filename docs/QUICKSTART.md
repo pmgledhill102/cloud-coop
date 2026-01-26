@@ -285,7 +285,7 @@ gcloud compute instances create $VM_NAME \
   --project=$PROJECT_ID \
   --zone=$ZONE \
   --machine-type=e2-micro \
-  --image-family=ubuntu-2404-lts-amd64 \
+  --image-family=ubuntu-2504-amd64 \
   --image-project=ubuntu-os-cloud
 ```
 
