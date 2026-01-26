@@ -130,6 +130,13 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 	// Build the machine type URL
 	machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", p.zone, config.MachineType)
 
+	// Select disk type based on machine type
+	// c4a (Axion/ARM64) requires hyperdisk-balanced, others use pd-balanced
+	diskType := "pd-balanced"
+	if strings.HasPrefix(config.MachineType, "c4a-") {
+		diskType = "hyperdisk-balanced"
+	}
+
 	// Build the instance specification
 	instance := &computepb.Instance{
 		Name:        &config.Name,
@@ -141,7 +148,7 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 				InitializeParams: &computepb.AttachedDiskInitializeParams{
 					SourceImage: &config.Image,
 					DiskSizeGb:  &config.DiskSizeGB,
-					DiskType:    ptr(fmt.Sprintf("zones/%s/diskTypes/pd-balanced", p.zone)),
+					DiskType:    ptr(fmt.Sprintf("zones/%s/diskTypes/%s", p.zone, diskType)),
 				},
 			},
 		},
