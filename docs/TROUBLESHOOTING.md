@@ -1,296 +1,301 @@
 # Troubleshooting Guide
 
-Common issues and solutions for the Claude Code sandbox environment.
+Common issues and solutions for cloudcoop.
 
 ## Connection Issues
 
 ### Cannot SSH into VM
 
-**Symptom:** `gcloud compute ssh` hangs or fails
+**Symptom:** `cloudcoop` shows "connecting..." indefinitely or SSH fails
 
 **Solutions:**
 
-1. **Check IAP permissions:**
+1. **Check VM is running:**
    ```bash
+   cloudcoop status
+   # Or directly via gcloud:
+   gcloud compute instances describe VM_NAME --zone=ZONE --format='value(status)'
+   ```
+
+2. **Verify SSH key is configured:**
+   ```bash
+   # Check your SSH key exists
+   ls -la ~/.ssh/id_rsa ~/.ssh/id_ed25519
+
+   # Test SSH directly
+   ssh -v USER@VM_IP
+   ```
+
+3. **Check firewall allows SSH:**
+   ```bash
+   gcloud compute firewall-rules list --filter="allowed.ports:22"
+   ```
+
+4. **For IAP tunnel issues:**
+   ```bash
+   # Verify IAP permissions
    gcloud projects get-iam-policy PROJECT_ID \
      --filter="bindings.role:roles/iap.tunnelResourceAccessor"
    ```
 
-2. **Verify VM is running:**
-   ```bash
-   gcloud compute instances describe claude-sandbox --zone=ZONE
+### SSH connection drops or hangs
+
+**Symptom:** Connection works initially then freezes
+
+**Solutions:**
+
+1. **Enable SSH keepalive in ~/.ssh/config:**
+   ```
+   Host *
+       ServerAliveInterval 60
+       ServerAliveCountMax 3
    ```
 
-3. **Check firewall rules:**
+2. **Clear stale SSH control sockets:**
    ```bash
-   gcloud compute firewall-rules list --filter="network:claude-sandbox-network"
+   rm -rf ~/.ssh/sockets/*
    ```
 
-4. **Try direct SSH (if external IP enabled):**
+3. **Check network stability:**
    ```bash
-   ssh -i ~/.ssh/google_compute_engine EXTERNAL_IP
+   ping VM_IP
    ```
-
-### SSH multiplexing issues
-
-**Symptom:** Stale connections, "Connection refused"
-
-**Solution:** Clear socket directory
-```bash
-rm -rf ~/.ssh/sockets/*
-```
 
 ## Agent Issues
 
-### Agents won't start
+### tmux not installed on VM
 
-**Symptom:** `docker-compose up` fails
+**Symptom:** cloudcoop shows "tmux not installed"
 
-**Check 1: Docker is running**
+**Solution:** Install tmux on the VM:
 ```bash
-sudo systemctl status docker
-sudo systemctl start docker
+# SSH into VM first
+ssh USER@VM_IP
+
+# Then install tmux
+sudo apt-get update && sudo apt-get install -y tmux
 ```
 
-**Check 2: Image exists**
+### No agents session exists
+
+**Symptom:** Agent list is empty or shows "no session"
+
+This is normal if no agents have been started yet. Use the **A** key in the TUI or:
 ```bash
-docker images | grep claude-sandbox
+# Start an agent via CLI
+cloudcoop agents add --name agent-1 --command "claude --dangerously-skip-permissions"
 ```
 
-**Check 3: Pull image if missing**
+### Cannot connect to agent
+
+**Symptom:** Pressing **C** to connect fails
+
+**Solutions:**
+
+1. **Check the agent is running:**
+   ```bash
+   # SSH to VM and list tmux windows
+   ssh USER@VM_IP "tmux list-windows -t agents"
+   ```
+
+2. **Check tmux session exists:**
+   ```bash
+   ssh USER@VM_IP "tmux has-session -t agents && echo 'Session exists'"
+   ```
+
+3. **Manually attach to agent:**
+   ```bash
+   # Connect directly via SSH + tmux
+   ssh -t USER@VM_IP "tmux attach -t agents"
+   ```
+
+### Agent shows wrong status
+
+**Symptom:** Agent appears idle but is actually working
+
+The TUI shows the current process in the tmux pane. If an agent is running a subprocess, it may show that subprocess name instead of "claude" or "aider".
+
+**Refresh the view:** Press **r** to refresh the agent list.
+
+## VM Issues
+
+### VM won't start
+
+**Symptom:** Pressing **S** (Start) shows an error
+
+**Solutions:**
+
+1. **Check GCP quota:**
+   ```bash
+   gcloud compute regions describe REGION --format="table(quotas)"
+   ```
+
+2. **Check spot instance availability:**
+   Spot instances may be unavailable in your zone. Try a different zone or use standard instances.
+
+3. **Verify your permissions:**
+   ```bash
+   gcloud projects get-iam-policy PROJECT_ID \
+     --filter="bindings.members:user:YOUR_EMAIL"
+   ```
+
+### VM won't stop
+
+**Symptom:** Pressing **T** (sTop) shows an error
+
+**Solution:** Check if VM is already stopped:
 ```bash
-docker pull us-central1-docker.pkg.dev/PROJECT/claude-sandbox/agent:latest
+gcloud compute instances describe VM_NAME --zone=ZONE --format='value(status)'
 ```
 
-### API key not found
+If stuck in STOPPING state, wait a few minutes. GCP VMs can take time to stop gracefully.
 
-**Symptom:** "ANTHROPIC_API_KEY is not set"
+## Configuration Issues
 
-**Solution 1: Set directly in .env**
+### Configuration file not found
+
+**Symptom:** cloudcoop shows "config error"
+
+**Solution:** Create the config file:
 ```bash
-echo "ANTHROPIC_API_KEY=sk-ant-..." >> /workspaces/.env
+# Run the setup wizard
+cloudcoop config init
+
+# Or create manually
+mkdir -p ~/.config/cloudcoop
+cat > ~/.config/cloudcoop/cloudcoop.toml << 'EOF'
+[cloud]
+provider = "gcp"
+
+[cloud.gcp]
+project = "your-project-id"
+zone = "us-central1-a"
+
+[vm]
+name = "claude-sandbox"
+EOF
 ```
 
-**Solution 2: Add to Secret Manager**
-```bash
-echo "sk-ant-..." | gcloud secrets versions add anthropic-api-key --data-file=-
-```
+### Invalid configuration
 
-**Solution 3: Check Secret Manager access**
-```bash
-gcloud secrets versions access latest --secret=anthropic-api-key
-```
+**Symptom:** cloudcoop shows specific config field errors
 
-### Agent container crashes
+**Solutions:**
 
-**Symptom:** Container exits immediately
+1. **View current configuration:**
+   ```bash
+   cloudcoop config show
+   ```
 
-**Check logs:**
-```bash
-docker logs claude-agent-1
-```
+2. **Update specific values:**
+   ```bash
+   cloudcoop config set cloud.gcp.project my-project
+   cloudcoop config set cloud.gcp.zone us-central1-a
+   cloudcoop config set vm.name claude-sandbox
+   ```
 
-**Common causes:**
-- Missing API key
-- Invalid settings.json
-- Out of memory (increase limits)
+3. **Validate TOML syntax:**
+   ```bash
+   cat ~/.config/cloudcoop/cloudcoop.toml
+   # Check for syntax errors like missing quotes or brackets
+   ```
 
-## Resource Issues
+## API Key Issues
 
-### Out of memory
+### Anthropic API key not available to agents
 
-**Symptom:** Agents killed by OOM killer
+**Symptom:** Claude Code agents fail with API key errors
 
-**Solution 1: Reduce agent count**
-```bash
-AGENT_COUNT=8 ./scripts/start-agents.sh
-```
+cloudcoop does not manage API keys directly. You need to configure keys on the VM.
 
-**Solution 2: Increase VM size**
-```hcl
-# In terraform/terraform.tfvars
-machine_type = "e2-standard-32"  # 128 GB RAM
-```
+**Solutions:**
 
-**Solution 3: Reduce per-agent limits**
-```yaml
-# In docker-compose.yml
-deploy:
-  resources:
-    limits:
-      memory: 4G  # Reduce from 6G
-```
+1. **Set environment variable in VM shell profile:**
+   ```bash
+   ssh USER@VM_IP
+   echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+   ```
 
-### Disk full
-
-**Symptom:** "No space left on device"
-
-**Check usage:**
-```bash
-df -h
-du -sh /var/lib/docker/*
-```
-
-**Clean up:**
-```bash
-# Remove unused Docker resources
-docker system prune -a
-
-# Remove old agent workspaces
-docker volume prune
-```
+2. **Use SSH agent forwarding for GitHub/other credentials:**
+   ```bash
+   # In your ~/.ssh/config
+   Host VM_IP
+       ForwardAgent yes
+   ```
 
 ## Network Issues
 
-### Cannot reach external APIs
+### Cannot reach external APIs from VM
 
-**Symptom:** API calls timeout
-
-**Check 1: NAT is configured**
-```bash
-gcloud compute routers nats list --router=claude-sandbox-router --region=REGION
-```
-
-**Check 2: DNS resolution**
-```bash
-docker exec claude-agent-1 nslookup api.anthropic.com
-```
-
-**Check 3: Test connectivity**
-```bash
-docker exec claude-agent-1 curl -v https://api.anthropic.com
-```
-
-### GitHub authentication fails
-
-**Symptom:** `gh` commands fail
-
-**Solution: Re-authenticate**
-```bash
-docker exec -it claude-agent-1 gh auth login
-```
-
-Or set token in .env:
-```bash
-GITHUB_TOKEN=ghp_xxxxx
-```
-
-## Terraform Issues
-
-### State lock error
-
-**Symptom:** "Error acquiring state lock"
-
-**Solution:**
-```bash
-terraform force-unlock LOCK_ID
-```
-
-### API not enabled
-
-**Symptom:** "API not enabled" errors
-
-**Solution:**
-```bash
-gcloud services enable compute.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
-gcloud services enable secretmanager.googleapis.com
-```
-
-### Quota exceeded
-
-**Symptom:** Cannot create VM
-
-**Check quotas:**
-```bash
-gcloud compute regions describe REGION --format="table(quotas)"
-```
-
-**Request increase:**
-Visit: https://console.cloud.google.com/iam-admin/quotas
-
-## Performance Issues
-
-### Slow agent responses
-
-**Possible causes:**
-1. API rate limiting - spread requests across agents
-2. Network latency - use region closer to Anthropic
-3. Resource contention - reduce agent count
-
-### High CPU usage
-
-**Check:**
-```bash
-docker stats
-```
+**Symptom:** Agents cannot reach api.anthropic.com or api.github.com
 
 **Solutions:**
-- Reduce concurrent agents
-- Add CPU limits to containers
-- Scale up VM size
 
-## Logging & Debugging
+1. **Check NAT gateway is configured (for private VMs):**
+   ```bash
+   gcloud compute routers nats list --router=ROUTER_NAME --region=REGION
+   ```
 
-### View all agent logs
+2. **Test connectivity from VM:**
+   ```bash
+   ssh USER@VM_IP "curl -s https://api.anthropic.com/v1/messages -I | head -1"
+   ```
 
+3. **Check DNS resolution:**
+   ```bash
+   ssh USER@VM_IP "nslookup api.anthropic.com"
+   ```
+
+## Debugging
+
+### Enable verbose output
+
+Set the LOG_LEVEL environment variable:
 ```bash
-# Follow all logs
-docker-compose logs -f
-
-# Last 100 lines from specific agent
-docker logs --tail 100 claude-agent-1
+LOG_LEVEL=debug cloudcoop
 ```
 
-### Enable debug logging
+### Check cloudcoop version
 
 ```bash
-# In container
-export CLAUDE_CODE_DEBUG=1
+cloudcoop version
 ```
 
-### Export logs to Cloud Logging
+### View raw VM information
 
-Logs are automatically sent to Cloud Logging. Query with:
 ```bash
-gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id=INSTANCE_ID"
+cloudcoop status --json
 ```
 
 ## Recovery Procedures
 
-### Reset agent workspace
+### Kill a stuck agent
 
+If an agent is unresponsive:
+
+1. **Use the TUI:** Select the agent and press **K** to kill it
+
+2. **Or manually via SSH:**
+   ```bash
+   ssh USER@VM_IP "tmux kill-window -t agents:WINDOW_INDEX"
+   ```
+
+### Reset all agents
+
+To kill all agents and start fresh:
 ```bash
-# Stop agent
-docker stop claude-agent-1
-
-# Remove workspace volume
-docker volume rm workspaces_agent-1-workspace
-
-# Restart agent
-docker start claude-agent-1
+ssh USER@VM_IP "tmux kill-session -t agents"
 ```
 
-### Full environment reset
+### Full VM reset
 
+If the VM is in a bad state:
 ```bash
-# Stop everything
-./scripts/stop-agents.sh
+# Stop the VM
+cloudcoop stop
+# or: gcloud compute instances stop VM_NAME --zone=ZONE
 
-# Remove all containers and volumes
-docker-compose down -v
-
-# Rebuild images
-./docker/build-and-push.sh
-
-# Start fresh
-./scripts/start-agents.sh 12
-```
-
-### Recreate VM from scratch
-
-```bash
-cd terraform
-terraform destroy
-terraform apply
+# Start it fresh
+cloudcoop start
+# or: gcloud compute instances start VM_NAME --zone=ZONE
 ```
