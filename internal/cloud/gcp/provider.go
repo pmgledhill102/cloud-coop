@@ -180,6 +180,49 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 		}
 	}
 
+	// Add startup script to configure SSH port if non-standard
+	if config.SSHPort > 0 && config.SSHPort != 22 {
+		startupScript := fmt.Sprintf(`#!/bin/bash
+# Configure SSH to listen on port %d
+set -e
+
+SSH_PORT=%d
+
+# Wait for system to be ready
+sleep 5
+
+# Ubuntu 24.04 uses systemd socket activation for SSH
+# We need to override the socket configuration
+mkdir -p /etc/systemd/system/ssh.socket.d
+cat > /etc/systemd/system/ssh.socket.d/port.conf << EOF
+[Socket]
+ListenStream=
+ListenStream=0.0.0.0:${SSH_PORT}
+ListenStream=[::]:${SSH_PORT}
+EOF
+
+# Also update sshd_config for completeness
+sed -i '/^#*Port /d' /etc/ssh/sshd_config
+echo "Port ${SSH_PORT}" >> /etc/ssh/sshd_config
+
+# Reload systemd and restart SSH socket
+systemctl daemon-reload
+systemctl stop ssh.service 2>/dev/null || true
+systemctl stop ssh.socket 2>/dev/null || true
+systemctl start ssh.socket
+systemctl start ssh.service
+`, config.SSHPort, config.SSHPort)
+
+		instance.Metadata = &computepb.Metadata{
+			Items: []*computepb.Items{
+				{
+					Key:   ptr("startup-script"),
+					Value: ptr(startupScript),
+				},
+			},
+		}
+	}
+
 	op, err := p.client.Insert(ctx, &computepb.InsertInstanceRequest{
 		Project:          p.project,
 		Zone:             p.zone,
