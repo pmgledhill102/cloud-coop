@@ -1,6 +1,8 @@
 # Development Environment Setup
 
-This document describes how to configure a safe development environment for building and testing the Sandbox Manager TUI. The goal is to provide Claude Code (or another coding agent) with sufficient access to develop and test against real cloud resources, while limiting blast radius.
+This document describes how to configure a safe development environment for building and testing
+the Sandbox Manager TUI. The goal is to provide Claude Code (or another coding agent) with
+sufficient access to develop and test against real cloud resources, while limiting blast radius.
 
 ## Principles
 
@@ -11,7 +13,7 @@ This document describes how to configure a safe development environment for buil
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  Your GCP Organization / Personal Account                               │
 │                                                                         │
@@ -155,7 +157,7 @@ gcloud compute project-info set-usage-export-bucket $DEV_PROJECT_ID \
 
 ### Test Levels
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Level 1: Unit Tests (no cloud access)                              │
 │  • Mock cloud SDK clients                                           │
@@ -250,6 +252,7 @@ func TestRealVMOperations(t *testing.T) {
 ```
 
 Run integration tests:
+
 ```bash
 # Set credentials
 export GOOGLE_APPLICATION_CREDENTIALS="./dev-credentials.json"
@@ -326,6 +329,7 @@ func TestVMLifecycle(t *testing.T) {
 ```
 
 Run E2E tests:
+
 ```bash
 # Run E2E tests (slow, costs money)
 go test -tags=e2e -timeout=15m ./e2e/...
@@ -335,7 +339,7 @@ go test -tags=e2e -timeout=15m ./e2e/...
 
 Use consistent naming to identify and clean up test resources:
 
-```
+```text
 Pattern: {type}-{purpose}-{timestamp}
 
 Examples:

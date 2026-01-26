@@ -19,10 +19,12 @@ What is the change that we're proposing and/or doing?
 Description of the option.
 
 **Pros:**
+
 - Pro 1
 - Pro 2
 
 **Cons:**
+
 - Con 1
 - Con 2
 
@@ -31,10 +33,12 @@ Description of the option.
 Description of the option.
 
 **Pros:**
+
 - Pro 1
 - Pro 2
 
 **Cons:**
+
 - Con 1
 - Con 2
 

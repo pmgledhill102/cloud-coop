@@ -7,6 +7,7 @@ Accepted
 ## Context
 
 The TUI runs on the user's workstation but needs to manage tmux sessions on a remote VM. This requires:
+
 - Executing commands on the VM (list tmux windows, create sessions, etc.)
 - Connecting the user's terminal to a specific tmux session
 - Maintaining responsiveness in the TUI
@@ -15,7 +16,8 @@ We need to decide how the TUI communicates with the remote VM.
 
 ## Decision
 
-Use the **Go SSH library** (`golang.org/x/crypto/ssh`) for programmatic commands, and **shell out to `ssh`** for interactive terminal sessions.
+Use the **Go SSH library** (`golang.org/x/crypto/ssh`) for programmatic commands, and **shell out
+to `ssh`** for interactive terminal sessions.
 
 ## Options Considered
 
@@ -30,11 +32,13 @@ func (r *Remote) ListAgents() ([]Agent, error) {
 ```
 
 **Pros:**
+
 - Simple implementation
 - Uses user's existing SSH config (~/.ssh/config)
 - Handles SSH agent forwarding automatically
 
 **Cons:**
+
 - Requires `ssh` binary on user's system
 - Process spawn overhead for each command
 - Parsing text output is fragile
@@ -58,12 +62,14 @@ func (r *Remote) ListAgents() ([]Agent, error) {
 ```
 
 **Pros:**
+
 - No external dependencies
 - Type-safe connection handling
 - Better error handling
 - Single binary distribution maintained
 
 **Cons:**
+
 - Must handle SSH key loading explicitly
 - SSH agent forwarding requires extra work
 - Interactive terminal attachment is complex
@@ -73,21 +79,25 @@ func (r *Remote) ListAgents() ([]Agent, error) {
 Use Go SSH library for programmatic commands, shell out to `ssh` for interactive sessions.
 
 **Programmatic (Go SSH):**
+
 - List tmux sessions
 - Create new agent windows
 - Kill agent windows
 - Check agent status
 
 **Interactive (shell out to ssh):**
+
 - `[C]onnect` - attach to agent's tmux window
 
 **Pros:**
+
 - Best of both worlds
 - Programmatic commands are fast and reliable
 - Interactive sessions use familiar SSH behavior
 - Single binary for TUI, ssh binary only for connect
 
 **Cons:**
+
 - Two different code paths
 - Still requires `ssh` for connect feature
 
@@ -247,9 +257,11 @@ func (c *Client) EnsureSSHKey() error {
 1. TUI starts → checks for SSH key
 2. Connects to VM using Go SSH library
 3. If connection fails, prompts user to add key to VM:
-   ```
+
+   ```bash
    gcloud compute ssh claude-sandbox --zone=europe-north2-a
    ```
+
 4. Once connected, maintains persistent connection for commands
 5. For interactive connect, spawns `ssh` process
 

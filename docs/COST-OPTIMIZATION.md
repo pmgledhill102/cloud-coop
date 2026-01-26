@@ -25,11 +25,13 @@ use_spot = true
 ```
 
 **Trade-off:** VM may be stopped with 30 seconds notice. Suitable for:
+
 - Development and testing
 - Batch processing
 - Non-time-critical work
 
 **Mitigation:**
+
 - Use persistent volumes (data survives preemption)
 - Implement auto-restart scripts
 - Run critical tasks on on-demand instances
@@ -39,6 +41,7 @@ use_spot = true
 Stop the VM when not in use.
 
 **Create shutdown schedule:**
+
 ```bash
 # Create instance schedule
 gcloud compute resource-policies create instance-schedule sandbox-schedule \
@@ -55,6 +58,7 @@ gcloud compute instances add-resource-policies claude-sandbox \
 ```
 
 **Manual scripts:**
+
 ```bash
 # scripts/schedule-stop.sh
 gcloud compute instances stop claude-sandbox --zone=us-central1-a
@@ -75,6 +79,7 @@ Match VM size to actual usage.
 | 10-16 | e2-standard-32 | ~$800 |
 
 **Monitor and adjust:**
+
 ```bash
 # Check CPU/memory utilization
 gcloud monitoring metrics list --filter="metric.type=compute.googleapis.com/instance"
@@ -114,6 +119,7 @@ gcloud compute commitments create sandbox-commitment \
 | pd-ssd | $0.17 | High performance |
 
 **For most sandbox use cases, pd-balanced is sufficient:**
+
 ```hcl
 # terraform/variables.tf
 boot_disk_type = "pd-balanced"  # Instead of pd-ssd
@@ -147,6 +153,7 @@ Some regions are 10-20% cheaper:
 ### 8. Network Optimization
 
 **Reduce egress costs:**
+
 - Keep API responses small
 - Cache frequently accessed data
 - Use internal IPs when possible

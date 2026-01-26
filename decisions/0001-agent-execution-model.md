@@ -6,13 +6,17 @@ Accepted
 
 ## Context
 
-We need to run multiple Claude Code agents (10-12) concurrently on a single GCP Compute Engine VM. Each agent works on different tasks and needs access to development tools, git repositories, and the ability to build and run containers.
+We need to run multiple Claude Code agents (10-12) concurrently on a single GCP Compute Engine
+VM. Each agent works on different tasks and needs access to development tools, git repositories,
+and the ability to build and run containers.
 
 The question is how to isolate and manage these agent sessions.
 
 ## Decision
 
-Run Claude Code agents directly in shell sessions managed by tmux, not inside Docker containers. Docker is installed on the VM for agents to use as part of their development work (building images, running services), but agent execution itself happens in native shell sessions.
+Run Claude Code agents directly in shell sessions managed by tmux, not inside Docker containers.
+Docker is installed on the VM for agents to use as part of their development work (building images,
+running services), but agent execution itself happens in native shell sessions.
 
 ## Options Considered
 
@@ -21,12 +25,14 @@ Run Claude Code agents directly in shell sessions managed by tmux, not inside Do
 Run each Claude Code agent inside its own Docker container with mounted volumes.
 
 **Pros:**
+
 - Strong isolation between agents
 - Easy to reset/recreate individual agent environments
 - Consistent environment via Dockerfile
 - Resource limits per container
 
 **Cons:**
+
 - Added complexity (Docker-in-Docker or sibling containers)
 - Performance overhead for file I/O through volume mounts
 - Claude Code session persistence more complex (need to persist ~/.claude across container restarts)
@@ -37,6 +43,7 @@ Run each Claude Code agent inside its own Docker container with mounted volumes.
 Run agents directly in shell sessions within a tmux session, one window per agent.
 
 **Pros:**
+
 - Simple architecture - no container orchestration needed
 - Native file system performance
 - Claude Code session persistence works naturally (~/.claude on disk)
@@ -44,6 +51,7 @@ Run agents directly in shell sessions within a tmux session, one window per agen
 - Easy to attach/detach and monitor via tmux
 
 **Cons:**
+
 - Less isolation between agents (shared file system, processes)
 - All agents share same installed tools/versions
 - One agent could potentially affect others (resource contention)
@@ -53,11 +61,13 @@ Run agents directly in shell sessions within a tmux session, one window per agen
 Run each agent on its own small VM instance.
 
 **Pros:**
+
 - Complete isolation
 - Independent scaling and lifecycle
 - Can use different machine types per agent
 
 **Cons:**
+
 - Significantly higher cost (VM overhead per instance)
 - More complex orchestration
 - Higher management overhead

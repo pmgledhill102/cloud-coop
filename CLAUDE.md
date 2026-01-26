@@ -4,7 +4,9 @@ Project context for AI assistants working on cloudcoop.
 
 ## Project Overview
 
-cloudcoop is a terminal UI (TUI) for managing sandboxed AI coding agents on cloud VMs. It provisions and manages cloud VMs configured as secure sandboxes for running multiple AI coding agents (Claude Code, Aider, Gemini CLI, etc.) in tmux sessions.
+cloudcoop is a terminal UI (TUI) for managing sandboxed AI coding agents on cloud VMs. It provisions
+and manages cloud VMs configured as secure sandboxes for running multiple AI coding agents (Claude
+Code, Aider, Gemini CLI, etc.) in tmux sessions.
 
 **Key capabilities:**
 
@@ -17,7 +19,7 @@ cloudcoop is a terminal UI (TUI) for managing sandboxed AI coding agents on clou
 
 ## Architecture Summary
 
-```
+```text
 Workstation (cloudcoop TUI)
     |
     | SSH + Cloud SDK
@@ -43,7 +45,7 @@ Cloud VM (GCP/AWS/Azure)
 
 **Project structure:**
 
-```
+```text
 cmd/              # Main binary entry point
 internal/
   tui/            # Bubbletea TUI components

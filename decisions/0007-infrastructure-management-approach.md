@@ -7,12 +7,14 @@ Accepted
 ## Context
 
 The sandbox environment requires management of GCP resources:
+
 - Compute Engine VM instance
 - Service account and IAM bindings
 - Firewall rules
 - (Optional) Persistent disks, snapshots
 
 A Terminal UI (TUI) will provide the primary interface for users to manage these resources. The TUI needs to:
+
 - Check if resources exist
 - Create resources if missing
 - Start/stop VMs
@@ -34,6 +36,7 @@ Terraform may be provided as an optional reference for initial setup, but the TU
 Use Terraform to manage all infrastructure, with the TUI generating and applying Terraform configurations.
 
 **Pros:**
+
 - Declarative infrastructure definition
 - State tracking and drift detection
 - Plan/apply workflow shows changes before execution
@@ -42,6 +45,7 @@ Use Terraform to manage all infrastructure, with the TUI generating and applying
 - Can version control infrastructure
 
 **Cons:**
+
 - **State file management** - need to store and sync terraform.tfstate
 - **Slow for simple operations** - `terraform apply` is slow for "just start the VM"
 - **Overkill for single resources** - overhead not justified for one VM
@@ -54,6 +58,7 @@ Use Terraform to manage all infrastructure, with the TUI generating and applying
 Use gcloud CLI directly for all operations. The TUI constructs and executes gcloud commands.
 
 **Pros:**
+
 - **Simple and direct** - one command = one action
 - **Fast** - no state reconciliation, immediate execution
 - **No state file** - GCP is the source of truth
@@ -63,6 +68,7 @@ Use gcloud CLI directly for all operations. The TUI constructs and executes gclo
 - **Real-time status** - `gcloud compute instances describe` returns current state
 
 **Cons:**
+
 - No drift detection (but single VM rarely drifts)
 - No plan preview (but operations are simple and reversible)
 - Must handle idempotency manually (check before create)
@@ -73,10 +79,12 @@ Use gcloud CLI directly for all operations. The TUI constructs and executes gclo
 Use Terraform for initial setup, gcloud for runtime operations.
 
 **Pros:**
+
 - Initial setup is reproducible via Terraform
 - Runtime operations remain simple
 
 **Cons:**
+
 - Two tools to understand and maintain
 - Potential for Terraform state and actual state to diverge
 - Confusing when to use which tool
@@ -95,13 +103,14 @@ Use Terraform for initial setup, gcloud for runtime operations.
 | Add agent | Frequent | Imperative | SSH/tmux |
 | Delete/recreate VM | Rare | Declarative | Either |
 
-The vast majority of operations are **imperative** (do this now) rather than **declarative** (ensure this state). gcloud is naturally imperative; Terraform is naturally declarative.
+The vast majority of operations are **imperative** (do this now) rather than **declarative**
+(ensure this state). gcloud is naturally imperative; Terraform is naturally declarative.
 
 ### State Management Complexity
 
 Terraform requires state file management:
 
-```
+```text
 # With Terraform, you need:
 - terraform.tfstate (local or remote)
 - State locking (if remote)
@@ -155,6 +164,7 @@ This is slightly more code but straightforward and predictable.
 ### When Terraform Makes Sense
 
 Terraform excels when:
+
 - Managing many interdependent resources
 - Multiple environments (dev, staging, prod)
 - Team collaboration on infrastructure
@@ -204,7 +214,7 @@ esac
 
 Provide Terraform configs as documentation/reference for users who prefer IaC:
 
-```
+```text
 sandbox-setup-template/
 ├── terraform/           # Reference configs (optional use)
 │   ├── main.tf

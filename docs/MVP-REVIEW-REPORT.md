@@ -9,7 +9,9 @@
 
 ## Executive Summary
 
-This comprehensive review assessed cloudcoop at the MVP stage across documentation, architecture, code quality, security, and CI/CD. Overall, the project has a **solid foundation** with good architectural decisions. Critical security gaps and documentation drift have been addressed.
+This comprehensive review assessed cloudcoop at the MVP stage across documentation, architecture,
+code quality, security, and CI/CD. Overall, the project has a **solid foundation** with good
+architectural decisions. Critical security gaps and documentation drift have been addressed.
 
 | Category | Original | Current | Status |
 |----------|----------|---------|--------|
@@ -50,6 +52,7 @@ This comprehensive review assessed cloudcoop at the MVP stage across documentati
 ### 1.3 Critical Security Issue
 
 **SSH Host Key Verification** (`internal/ssh/client.go:121-128`):
+
 ```go
 func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
     if cb, err := knownhosts.New(...); err == nil {
@@ -108,12 +111,14 @@ func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
 ### 3.2 README.md Fixes ~~Needed~~ ✅ DONE
 
 ~~Current (incorrect):~~
-```
+
+```text
 │  [S]tart  s[T]op  [R]esize  [A]dd  [K]ill  [C]onnect  [Q]uit   │
 ```
 
 ~~Should be:~~ Now shows:
-```
+
+```text
 │  [S]tart  s[T]op  [A]dd  [K]ill  [C]onnect  [r]efresh  [Q]uit   │
 ```
 
@@ -124,7 +129,8 @@ func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
 ~~- Has **no Terraform** templates~~
 ~~- Manages VMs via **Go SDK** (not container orchestration)~~
 
-Rewritten in PR #19 to cover actual architecture: SSH connections, tmux sessions, VM management, config troubleshooting, and recovery procedures.
+Rewritten in PR #19 to cover actual architecture: SSH connections, tmux sessions, VM management,
+config troubleshooting, and recovery procedures.
 
 ---
 
@@ -151,11 +157,13 @@ Rewritten in PR #19 to cover actual architecture: SSH connections, tmux sessions
 ### 4.3 Complexity Hotspots
 
 **`Update()` function in tui/app.go (lines 417-615):**
+
 - 198 lines, ~30 branches
 - Handles all keyboard input + all message types
 - **Recommendation:** Extract handlers into separate functions
 
 **Duplicate Code Pattern (6 files):**
+
 ```go
 // Repeated in: agents_add.go, agents_list.go, agents_kill.go,
 //              connect.go, status.go, tui/app.go
@@ -233,21 +241,25 @@ if ip == "" { ip = vmInfo.InternalIP }
 The following undocumented architectural decisions should be captured:
 
 ### ADR-0016: Error Handling Pattern
+
 - Custom `apperrors` package with Wrap/Wrapf pattern
 - Domain-specific error types (CloudError, SSHError, ConfigError)
 - Exit code mapping
 
 ### ADR-0017: Logging Strategy
+
 - slog-based structured logging
 - Environment variable configuration (LOG_LEVEL, LOG_FORMAT)
 - Context-aware logging
 
 ### ADR-0018: TUI State Machine
+
 - Operation states (starting, stopping, adding, killing)
 - Confirmation flows for destructive operations
 - Message-based architecture
 
 ### ADR-0019: SSH Testing Infrastructure
+
 - MockSSHClient with expectations pattern
 - Wildcard pattern matching for commands
 - Thread-safe mock implementation
@@ -265,36 +277,39 @@ The following undocumented architectural decisions should be captured:
 
 ### Priority 1: High (Next Sprint)
 
-5. ~~**Rewrite TROUBLESHOOTING.md** - Remove Docker/Terraform references~~ ✅ **DONE (PR #19)**
-6. ~~**Update README.md keyboard shortcuts** - Remove resize, add refresh~~ ✅ **DONE (PR #19)**
-7. ~~**Extract SSH helper function** - Eliminate 120 lines of duplication~~ ✅ **DONE (PR #21)**
-8. ~~**Add CLI tests** - Target 60% coverage for cli/ package~~ ⚠️ **PARTIAL (PR #21)** - 19.2% achieved; full coverage requires mock infrastructure
+1. ~~**Rewrite TROUBLESHOOTING.md** - Remove Docker/Terraform references~~ ✅ **DONE (PR #19)**
+2. ~~**Update README.md keyboard shortcuts** - Remove resize, add refresh~~ ✅ **DONE (PR #19)**
+3. ~~**Extract SSH helper function** - Eliminate 120 lines of duplication~~ ✅ **DONE (PR #21)**
+4. ~~**Add CLI tests** - Target 60% coverage for cli/ package~~ ⚠️ **PARTIAL (PR #21)** -
+   19.2% achieved; full coverage requires mock infrastructure
 
 ### Priority 2: Medium (Next Month)
 
-9. **Refactor tui/app.go** - Split into model/commands/update/view files
-10. **Add SSH package tests** - Target 60% coverage
-11. **Improve TUI test coverage** - Target 50% coverage
-12. **Document implemented vs planned features** - Update TUI-REQUIREMENTS.md
+1. **Refactor tui/app.go** - Split into model/commands/update/view files
+2. **Add SSH package tests** - Target 60% coverage
+3. **Improve TUI test coverage** - Target 50% coverage
+4. **Document implemented vs planned features** - Update TUI-REQUIREMENTS.md
 
 ### Priority 3: Low (Backlog)
 
-13. **Add SBOM generation** - Supply chain transparency
-14. **Implement ADR-0009** - API key management
-15. **Implement ADR-0012** - IAP tunnel support
-16. **Create composite GitHub Actions** - Reduce workflow duplication
+1. **Add SBOM generation** - Supply chain transparency
+2. **Implement ADR-0009** - API key management
+3. **Implement ADR-0012** - IAP tunnel support
+4. **Create composite GitHub Actions** - Reduce workflow duplication
 
 ---
 
 ## 9. Summary
 
 ### Strengths
+
 - Clean provider abstraction pattern (exceeds ADR spec by using native SDKs)
 - Well-structured error handling with domain-specific types
 - Strong test coverage in core packages (agent, config, apperrors)
 - Comprehensive pre-commit and CI linting
 
 ### Weaknesses
+
 - Security gaps (SSH host key verification, missing security scanning)
 - Documentation drift (features documented but not implemented)
 - Low test coverage in user-facing code (CLI, TUI)
@@ -315,10 +330,12 @@ Addressing Priority 0 and Priority 1 items will significantly improve production
 ## Appendix: Files Analyzed
 
 **Security Scans:**
+
 - govulncheck ./...
 - gosec -quiet ./...
 
 **Key Code Files:**
+
 - internal/tui/app.go (894 LOC)
 - internal/ssh/client.go (129 LOC)
 - internal/cli/*.go (8 files, 0% tested)
@@ -326,11 +343,13 @@ Addressing Priority 0 and Priority 1 items will significantly improve production
 - internal/log/log.go (231 LOC)
 
 **Documentation:**
+
 - README.md, CLAUDE.md, TUI-REQUIREMENTS.md
 - QUICKSTART.md, SETUP-FLOW.md, TROUBLESHOOTING.md
 - All 17 ADRs in decisions/
 
 **CI/CD:**
+
 - .github/workflows/*.yml (5 workflows)
 - .pre-commit-config.yaml, .golangci.yml
 - .goreleaser.yml, dependabot.yml

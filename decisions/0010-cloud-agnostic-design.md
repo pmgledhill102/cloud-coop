@@ -7,6 +7,7 @@ Accepted
 ## Context
 
 The current design targets GCP exclusively. Users may prefer or require AWS or Azure due to:
+
 - Existing cloud credits or enterprise agreements
 - Organizational cloud standards
 - Regional availability or compliance requirements
@@ -18,7 +19,8 @@ The question is whether to abstract the cloud layer to support multiple provider
 
 Design for **cloud abstraction from the start**, but implement **GCP first** as the reference provider.
 
-Use a provider interface pattern that isolates cloud-specific code, making it straightforward to add AWS and Azure support later.
+Use a provider interface pattern that isolates cloud-specific code, making it straightforward to
+add AWS and Azure support later.
 
 ## Complexity Assessment
 
@@ -67,12 +69,14 @@ Use a provider interface pattern that isolates cloud-specific code, making it st
 Keep the current GCP-only implementation.
 
 **Pros:**
+
 - Simplest implementation
 - No abstraction overhead
 - Optimized for one platform
 - Faster initial delivery
 
 **Cons:**
+
 - Excludes AWS/Azure users
 - Cannot leverage existing cloud credits elsewhere
 - Vendor lock-in
@@ -82,6 +86,7 @@ Keep the current GCP-only implementation.
 Define interfaces for cloud operations, implement per provider.
 
 **Pros:**
+
 - Users can choose their preferred cloud
 - Leverage existing cloud relationships/credits
 - Future-proof for new clouds
@@ -89,6 +94,7 @@ Define interfaces for cloud operations, implement per provider.
 - Community can contribute providers
 
 **Cons:**
+
 - More upfront design work
 - Must maintain multiple implementations
 - Lowest common denominator features
@@ -99,10 +105,12 @@ Define interfaces for cloud operations, implement per provider.
 Use infrastructure-as-code tools that support multiple clouds.
 
 **Pros:**
+
 - Existing multi-cloud abstraction
 - Declarative infrastructure
 
 **Cons:**
+
 - Already rejected Terraform for runtime ops (ADR-0007)
 - Adds heavyweight dependency
 - Slow for simple operations
@@ -113,10 +121,12 @@ Use infrastructure-as-code tools that support multiple clouds.
 Run everything in containers, abstract at container orchestration level.
 
 **Pros:**
+
 - Cloud-agnostic by nature
 - Could use Kubernetes anywhere
 
 **Cons:**
+
 - Over-engineered for single VM use case
 - Adds significant complexity
 - Higher cost (K8s control plane)
@@ -318,7 +328,7 @@ regions:
 
 ### TUI Changes
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Sandbox Manager                                     v0.2.0     │
 ├─────────────────────────────────────────────────────────────────┤
@@ -349,23 +359,27 @@ All three cloud SDKs provide equivalent capabilities. The abstraction is feasibl
 ## Implementation Phases
 
 ### Phase 1: GCP Reference (Current)
+
 - Complete GCP implementation
 - Define provider interface based on GCP experience
 - Document patterns for other providers
 
 ### Phase 2: Abstraction Layer
+
 - Refactor GCP code behind provider interface
 - Move GCP-specific code to `pkg/cloud/gcp/`
 - Update TUI to use provider interface
 - Test that GCP still works identically
 
 ### Phase 3: AWS Provider
+
 - Implement AWS provider
 - Add EC2, IAM, Secrets Manager support
 - Document AWS-specific setup
 - Test full workflow on AWS
 
 ### Phase 4: Azure Provider
+
 - Implement Azure provider
 - Add VM, Managed Identity, Key Vault support
 - Document Azure-specific setup

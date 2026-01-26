@@ -7,12 +7,14 @@ Accepted
 ## Context
 
 We need to select a GCP region for the Claude Code sandbox VM. Requirements:
+
 - European location (for latency and data residency)
 - Support for C4A (Axion ARM) machine types
 - Cost-effective pricing tier
 - Good availability
 
 GCP has 13 European regions with varying pricing tiers:
+
 - **Tier 1** (cheapest): Belgium, Netherlands, Finland, Stockholm
 - **Tier 2**: Frankfurt, Zurich, London, Warsaw, Milan, Madrid, Paris, Turin, Berlin
 
@@ -29,11 +31,13 @@ Zone: `europe-north2-a`
 Most established European region.
 
 **Pros:**
+
 - Tier 1 pricing
 - Mature region with full service availability
 - Central European location
 
 **Cons:**
+
 - High demand, potentially more spot preemptions
 - Slightly higher latency to Nordic locations
 
@@ -42,12 +46,14 @@ Most established European region.
 Nordic region in Hamina.
 
 **Pros:**
+
 - Tier 1 pricing
 - C4A availability
 - Cooler climate (efficient cooling)
 - Low carbon energy
 
 **Cons:**
+
 - Higher latency to central/southern Europe
 - Smaller region than Belgium
 
@@ -56,6 +62,7 @@ Nordic region in Hamina.
 Nordic region in Stockholm.
 
 **Pros:**
+
 - Tier 1 pricing (cheapest tier)
 - C4A (Axion ARM) availability
 - Nordic location with good connectivity
@@ -63,6 +70,7 @@ Nordic region in Stockholm.
 - Low carbon energy (Sweden's grid)
 
 **Cons:**
+
 - Newer region (2022), slightly fewer services than Belgium
 - Higher latency to southern Europe
 
@@ -71,11 +79,13 @@ Nordic region in Stockholm.
 Central European hub.
 
 **Pros:**
+
 - Central location, good connectivity
 - Full service availability
 - Major internet exchange point
 
 **Cons:**
+
 - Tier 2 pricing (~10-15% more expensive)
 - High demand region
 

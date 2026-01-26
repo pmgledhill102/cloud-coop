@@ -28,6 +28,7 @@ Only ~5% of the system is agent-specific. The infrastructure should be designed 
 Design the sandbox as an **agent-agnostic platform** with pluggable agent configurations.
 
 Agent-specific behavior is isolated to a configuration file that defines:
+
 - Agent command and flags
 - Session resume mechanism
 - Environment variables required
@@ -39,11 +40,13 @@ Agent-specific behavior is isolated to a configuration file that defines:
 Hardcode Claude Code throughout the implementation.
 
 **Pros:**
+
 - Simpler initial implementation
 - No abstraction overhead
 - Optimized for one tool
 
 **Cons:**
+
 - Cannot use with other agents (Gemini CLI, Copilot, Codex, etc.)
 - Must fork/rewrite to support alternatives
 - Vendor lock-in to Anthropic tooling
@@ -53,6 +56,7 @@ Hardcode Claude Code throughout the implementation.
 Abstract agent-specific details into a configuration layer.
 
 **Pros:**
+
 - Support multiple agents with minimal changes
 - Easy to add new agents as they emerge
 - Community can contribute agent configs
@@ -60,6 +64,7 @@ Abstract agent-specific details into a configuration layer.
 - Can run different agents in different tmux windows simultaneously
 
 **Cons:**
+
 - Slightly more complex initial design
 - Must define abstraction boundaries carefully
 - Some agent-specific features may not map cleanly
@@ -69,11 +74,13 @@ Abstract agent-specific details into a configuration layer.
 Full plugin system with runtime-loadable agent modules.
 
 **Pros:**
+
 - Maximum flexibility
 - Agents can define custom UI elements
 - Rich extensibility
 
 **Cons:**
+
 - Over-engineered for the problem
 - Significant implementation complexity
 - Plugin API maintenance burden
@@ -132,7 +139,7 @@ OPENAI_API_KEY = "${OPENAI_API_KEY}"
 
 ### TUI Agent Selection
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Sandbox Manager                                     v0.1.0     │
 ├─────────────────────────────────────────────────────────────────┤

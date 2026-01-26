@@ -7,6 +7,7 @@ Accepted
 ## Context
 
 We need to select a GCP machine type to run 10-12 concurrent Claude Code agents. Each agent:
+
 - Runs Claude Code CLI (Node.js based)
 - May build Docker containers
 - May run tests and compilation tasks
@@ -25,11 +26,13 @@ Use **c4a-highcpu-16** (16 vCPU, 32GB RAM) with Axion ARM processors.
 General-purpose x86 instances.
 
 **Pros:**
+
 - Widest software compatibility
 - Available in all regions
 - Familiar architecture
 
 **Cons:**
+
 - Higher cost than ARM equivalents
 - Less power-efficient
 
@@ -38,10 +41,12 @@ General-purpose x86 instances.
 First-generation GCP ARM instances.
 
 **Pros:**
+
 - ARM architecture (cost-effective)
 - Good compatibility with modern software
 
 **Cons:**
+
 - Being superseded by C4A
 - Less performant than Axion
 
@@ -50,6 +55,7 @@ First-generation GCP ARM instances.
 Latest ARM instances using Google's custom Axion processors.
 
 **Pros:**
+
 - Best price/performance for CPU workloads
 - ~30-40% better performance than T2A
 - Excellent power efficiency
@@ -57,6 +63,7 @@ Latest ARM instances using Google's custom Axion processors.
 - highcpu variants available (more vCPUs per GB RAM)
 
 **Cons:**
+
 - ARM architecture (some x86 software won't work)
 - Newer, less battle-tested than N2
 - Not available in all regions
@@ -66,11 +73,13 @@ Latest ARM instances using Google's custom Axion processors.
 Latest Intel-based compute-optimized instances.
 
 **Pros:**
+
 - Highest single-thread performance
 - Full x86 compatibility
 - Latest Intel features
 
 **Cons:**
+
 - Most expensive option
 - Overkill for this workload
 

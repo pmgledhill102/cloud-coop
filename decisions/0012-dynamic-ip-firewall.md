@@ -7,11 +7,13 @@ Accepted (Revised)
 ## Context
 
 The sandbox VM requires SSH access for:
+
 - Programmatic commands (list/create/kill tmux sessions)
 - Interactive terminal attachment to agent sessions
 - Potentially long-running tmux sessions (hours)
 
 Security considerations:
+
 - Exposing SSH to the internet increases attack surface
 - Key-based authentication is strong but not infallible
 - Most developers work from dynamic IPs (home ISP, mobile hotspot)
@@ -30,10 +32,12 @@ Support two primary approaches, with **IAP tunnel as the recommended default**:
 
 ### Option 1: IAP Tunnel (Recommended)
 
-Identity-Aware Proxy (IAP) TCP forwarding allows SSH access through Google's infrastructure without exposing the VM to the public internet.
+Identity-Aware Proxy (IAP) TCP forwarding allows SSH access through Google's infrastructure without
+exposing the VM to the public internet.
 
 **How it works:**
-```
+
+```text
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │ Workstation │────▶│ Google IAP  │────▶│  VM (no     │
 │             │     │ (OAuth +    │     │  external   │
@@ -42,6 +46,7 @@ Identity-Aware Proxy (IAP) TCP forwarding allows SSH access through Google's inf
 ```
 
 **Usage:**
+
 ```bash
 # Via gcloud (easiest)
 gcloud compute ssh claude-sandbox --zone=europe-north2-a --tunnel-through-iap
@@ -51,6 +56,7 @@ ssh -o ProxyCommand='gcloud compute start-iap-tunnel %h %p --zone=europe-north2-
 ```
 
 **Pros:**
+
 - No external IP needed on VM - zero public attack surface
 - Two-factor authentication: Google identity + SSH keys
 - No firewall rules to manage - access controlled via IAM
@@ -59,6 +65,7 @@ ssh -o ProxyCommand='gcloud compute start-iap-tunnel %h %p --zone=europe-north2-
 - No additional setup for users already authenticated with gcloud
 
 **Cons:**
+
 - Requires `gcloud` CLI installed and authenticated
 - Adds latency (~10-50ms per request due to proxy hop)
 - Data transfer costs (see Cost Analysis below)
@@ -77,12 +84,14 @@ For users who need direct SSH access or have constraints with IAP.
 | `disabled` | No firewall management, user handles manually |
 
 **Pros:**
+
 - Direct connection - no proxy latency
 - No data transfer costs
 - Works without gcloud CLI (standard SSH)
 - Familiar model for users with static IPs
 
 **Cons:**
+
 - Requires external IP on VM
 - Exposes SSH to (restricted) internet
 - Dynamic IPs require ongoing firewall updates
@@ -93,10 +102,12 @@ For users who need direct SSH access or have constraints with IAP.
 Use a VPN or mesh network like Tailscale.
 
 **Pros:**
+
 - Very secure - VM only accessible via VPN
 - Works well for teams
 
 **Cons:**
+
 - Additional software to install and manage
 - More complex setup
 - Overkill for single-user sandbox
@@ -114,7 +125,9 @@ IAP TCP forwarding is charged at **$0.01 per GB** of data transferred (both ingr
 | Heavy usage (12 agents, constant interaction) | ~10 GB/month | ~$0.10 |
 | File transfers via SCP (occasional) | ~50 GB/month | ~$0.50 |
 
-**Conclusion:** For typical SSH/tmux usage, IAP costs are negligible (cents per month). Text-based terminal sessions generate minimal data. Only significant file transfers would incur noticeable costs.
+**Conclusion:** For typical SSH/tmux usage, IAP costs are negligible (cents per month). Text-based
+terminal sessions generate minimal data. Only significant file transfers would incur noticeable
+costs.
 
 ### Cost Comparison
 
@@ -234,7 +247,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --role="projects/$PROJECT_ID/roles/sandboxFirewallManager"
 ```
 
-This grants permission to manage firewall rules only - not security policies, SSL certificates, or other security resources that `compute.securityAdmin` includes.
+This grants permission to manage firewall rules only - not security policies, SSL certificates,
+or other security resources that `compute.securityAdmin` includes.
 
 ## Consequences
 

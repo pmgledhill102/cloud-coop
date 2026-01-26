@@ -11,6 +11,7 @@ Common issues and solutions for cloudcoop.
 **Solutions:**
 
 1. **Check VM is running:**
+
    ```bash
    cloudcoop status
    # Or directly via gcloud:
@@ -18,6 +19,7 @@ Common issues and solutions for cloudcoop.
    ```
 
 2. **Verify SSH key is configured:**
+
    ```bash
    # Check your SSH key exists
    ls -la ~/.ssh/id_rsa ~/.ssh/id_ed25519
@@ -27,11 +29,13 @@ Common issues and solutions for cloudcoop.
    ```
 
 3. **Check firewall allows SSH:**
+
    ```bash
    gcloud compute firewall-rules list --filter="allowed.ports:22"
    ```
 
 4. **For IAP tunnel issues:**
+
    ```bash
    # Verify IAP permissions
    gcloud projects get-iam-policy PROJECT_ID \
@@ -45,18 +49,21 @@ Common issues and solutions for cloudcoop.
 **Solutions:**
 
 1. **Enable SSH keepalive in ~/.ssh/config:**
-   ```
+
+   ```text
    Host *
        ServerAliveInterval 60
        ServerAliveCountMax 3
    ```
 
 2. **Clear stale SSH control sockets:**
+
    ```bash
    rm -rf ~/.ssh/sockets/*
    ```
 
 3. **Check network stability:**
+
    ```bash
    ping VM_IP
    ```
@@ -68,6 +75,7 @@ Common issues and solutions for cloudcoop.
 **Symptom:** cloudcoop shows "tmux not installed"
 
 **Solution:** Install tmux on the VM:
+
 ```bash
 # SSH into VM first
 ssh USER@VM_IP
@@ -81,6 +89,7 @@ sudo apt-get update && sudo apt-get install -y tmux
 **Symptom:** Agent list is empty or shows "no session"
 
 This is normal if no agents have been started yet. Use the **A** key in the TUI or:
+
 ```bash
 # Start an agent via CLI
 cloudcoop agents add --name agent-1 --command "claude --dangerously-skip-permissions"
@@ -93,17 +102,20 @@ cloudcoop agents add --name agent-1 --command "claude --dangerously-skip-permiss
 **Solutions:**
 
 1. **Check the agent is running:**
+
    ```bash
    # SSH to VM and list tmux windows
    ssh USER@VM_IP "tmux list-windows -t agents"
    ```
 
 2. **Check tmux session exists:**
+
    ```bash
    ssh USER@VM_IP "tmux has-session -t agents && echo 'Session exists'"
    ```
 
 3. **Manually attach to agent:**
+
    ```bash
    # Connect directly via SSH + tmux
    ssh -t USER@VM_IP "tmux attach -t agents"
@@ -113,7 +125,8 @@ cloudcoop agents add --name agent-1 --command "claude --dangerously-skip-permiss
 
 **Symptom:** Agent appears idle but is actually working
 
-The TUI shows the current process in the tmux pane. If an agent is running a subprocess, it may show that subprocess name instead of "claude" or "aider".
+The TUI shows the current process in the tmux pane. If an agent is running a subprocess, it may
+show that subprocess name instead of "claude" or "aider".
 
 **Refresh the view:** Press **r** to refresh the agent list.
 
@@ -126,6 +139,7 @@ The TUI shows the current process in the tmux pane. If an agent is running a sub
 **Solutions:**
 
 1. **Check GCP quota:**
+
    ```bash
    gcloud compute regions describe REGION --format="table(quotas)"
    ```
@@ -134,6 +148,7 @@ The TUI shows the current process in the tmux pane. If an agent is running a sub
    Spot instances may be unavailable in your zone. Try a different zone or use standard instances.
 
 3. **Verify your permissions:**
+
    ```bash
    gcloud projects get-iam-policy PROJECT_ID \
      --filter="bindings.members:user:YOUR_EMAIL"
@@ -144,6 +159,7 @@ The TUI shows the current process in the tmux pane. If an agent is running a sub
 **Symptom:** Pressing **T** (sTop) shows an error
 
 **Solution:** Check if VM is already stopped:
+
 ```bash
 gcloud compute instances describe VM_NAME --zone=ZONE --format='value(status)'
 ```
@@ -157,6 +173,7 @@ If stuck in STOPPING state, wait a few minutes. GCP VMs can take time to stop gr
 **Symptom:** cloudcoop shows "config error"
 
 **Solution:** Create the config file:
+
 ```bash
 # Run the setup wizard
 cloudcoop config init
@@ -183,11 +200,13 @@ EOF
 **Solutions:**
 
 1. **View current configuration:**
+
    ```bash
    cloudcoop config show
    ```
 
 2. **Update specific values:**
+
    ```bash
    cloudcoop config set cloud.gcp.project my-project
    cloudcoop config set cloud.gcp.zone us-central1-a
@@ -195,6 +214,7 @@ EOF
    ```
 
 3. **Validate TOML syntax:**
+
    ```bash
    cat ~/.config/cloudcoop/cloudcoop.toml
    # Check for syntax errors like missing quotes or brackets
@@ -211,12 +231,14 @@ cloudcoop does not manage API keys directly. You need to configure keys on the V
 **Solutions:**
 
 1. **Set environment variable in VM shell profile:**
+
    ```bash
    ssh USER@VM_IP
    echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
    ```
 
 2. **Use SSH agent forwarding for GitHub/other credentials:**
+
    ```bash
    # In your ~/.ssh/config
    Host VM_IP
@@ -232,16 +254,19 @@ cloudcoop does not manage API keys directly. You need to configure keys on the V
 **Solutions:**
 
 1. **Check NAT gateway is configured (for private VMs):**
+
    ```bash
    gcloud compute routers nats list --router=ROUTER_NAME --region=REGION
    ```
 
 2. **Test connectivity from VM:**
+
    ```bash
    ssh USER@VM_IP "curl -s https://api.anthropic.com/v1/messages -I | head -1"
    ```
 
 3. **Check DNS resolution:**
+
    ```bash
    ssh USER@VM_IP "nslookup api.anthropic.com"
    ```
@@ -251,6 +276,7 @@ cloudcoop does not manage API keys directly. You need to configure keys on the V
 ### Enable verbose output
 
 Set the LOG_LEVEL environment variable:
+
 ```bash
 LOG_LEVEL=debug cloudcoop
 ```
@@ -276,6 +302,7 @@ If an agent is unresponsive:
 1. **Use the TUI:** Select the agent and press **K** to kill it
 
 2. **Or manually via SSH:**
+
    ```bash
    ssh USER@VM_IP "tmux kill-window -t agents:WINDOW_INDEX"
    ```
@@ -283,6 +310,7 @@ If an agent is unresponsive:
 ### Reset all agents
 
 To kill all agents and start fresh:
+
 ```bash
 ssh USER@VM_IP "tmux kill-session -t agents"
 ```
@@ -290,6 +318,7 @@ ssh USER@VM_IP "tmux kill-session -t agents"
 ### Full VM reset
 
 If the VM is in a bad state:
+
 ```bash
 # Stop the VM
 cloudcoop stop

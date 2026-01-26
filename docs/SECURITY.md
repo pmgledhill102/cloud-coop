@@ -11,7 +11,9 @@ The sandbox is designed to:
 3. **Prevent lateral movement** - Network isolation within the VM
 4. **Audit activity** - Logging of all agent actions
 
-> **Note:** Agents run as tmux windows on the VM, not in Docker containers. However, agents may use Docker as part of their work (building images, running tests, etc.). The Docker configuration below applies to containers the agents create, not to the agents themselves.
+> **Note:** Agents run as tmux windows on the VM, not in Docker containers. However, agents may
+> use Docker as part of their work (building images, running tests, etc.). The Docker
+> configuration below applies to containers the agents create, not to the agents themselves.
 
 ## Security Layers
 
@@ -19,7 +21,7 @@ The sandbox is designed to:
 
 The VM runs under a dedicated service account with minimal permissions:
 
-```
+```text
 ✅ Allowed:
 - artifactregistry.reader      # Pull container images
 - logging.logWriter            # Write logs to Cloud Logging
@@ -137,21 +139,25 @@ gcloud alpha monitoring policies create \
 ### If an Agent is Compromised
 
 1. **Stop all agents immediately:**
+
    ```bash
    ./scripts/stop-agents.sh
    ```
 
 2. **Revoke API key:**
+
    ```bash
    gcloud secrets versions disable anthropic-api-key --version=latest
    ```
 
 3. **Isolate the VM:**
+
    ```bash
    gcloud compute instances stop claude-sandbox --zone=ZONE
    ```
 
 4. **Review logs:**
+
    ```bash
    gcloud logging read "resource.type=gce_instance"
    ```

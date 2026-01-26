@@ -18,6 +18,7 @@ gcloud compute instances create claude-sandbox \
 ```
 
 Key flags:
+
 - `--boot-disk-auto-delete=no` - Disk survives instance deletion
 - `--provisioning-model=SPOT` - Use spot pricing (~70% discount)
 - `--instance-termination-action=STOP` - Stop (don't delete) on preemption
@@ -43,6 +44,7 @@ gcloud compute instances stop claude-sandbox --zone=europe-north2-a
 | Stopped | Just disk storage | ~$5/month |
 
 **Everything persists:**
+
 - `~/.claude/` - All Claude sessions intact
 - `/workspaces/` - All git repos and work
 - Installed tools, configs, everything
@@ -96,6 +98,7 @@ claude --resume
 ```
 
 **Tip:** Name your sessions for easy resumption:
+
 ```bash
 # Inside Claude Code:
 /rename agent-1-issue-123

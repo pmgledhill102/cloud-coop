@@ -7,6 +7,7 @@ Accepted
 ## Context
 
 The sandbox manager needs a terminal-based user interface. Key requirements:
+
 - Interactive dashboard showing VM and agent status
 - Keyboard-driven navigation
 - Real-time updates
@@ -14,6 +15,7 @@ The sandbox manager needs a terminal-based user interface. Key requirements:
 - Easy distribution
 
 Several implementation decisions need to be made:
+
 1. Language: Shell scripts vs Go vs other
 2. TUI framework (if Go): Cobra, Bubbletea, Tview, etc.
 3. Cloud interaction: CLI tools (gcloud/aws/az) vs native SDKs
@@ -43,12 +45,14 @@ show_status() {
 ```
 
 **Pros:**
+
 - Quick to prototype
 - No compilation needed
 - Direct CLI tool integration
 - Universal on Unix systems
 
 **Cons:**
+
 - Poor error handling
 - Difficult to build complex TUI
 - Parsing CLI output is fragile
@@ -68,11 +72,13 @@ class SandboxManager(App):
 ```
 
 **Pros:**
+
 - Textual is a powerful TUI framework
 - Familiar to many developers
 - Good async support
 
 **Cons:**
+
 - Requires Python runtime
 - Virtual environment management
 - Slower startup than compiled language
@@ -92,6 +98,7 @@ func main() {
 ```
 
 **Pros:**
+
 - Single static binary - trivial distribution
 - Fast startup and execution
 - Excellent cloud SDKs for all major providers
@@ -101,6 +108,7 @@ func main() {
 - Mature TUI ecosystem (Bubbletea, Lipgloss)
 
 **Cons:**
+
 - Longer initial development vs shell scripts
 - Must compile for distribution
 - Steeper learning curve than Python
@@ -108,11 +116,13 @@ func main() {
 #### Option D: Rust + Ratatui
 
 **Pros:**
+
 - Performance and safety
 - Single binary
 - Growing TUI ecosystem
 
 **Cons:**
+
 - Steeper learning curve
 - Slower development velocity
 - Smaller ecosystem for cloud SDKs
@@ -122,6 +132,7 @@ func main() {
 #### Cobra
 
 Cobra is a **CLI framework**, not a TUI framework. It handles:
+
 - Command structure (`sandbox start`, `sandbox stop`)
 - Flag parsing (`--zone`, `--machine-type`)
 - Help text generation
@@ -132,6 +143,7 @@ Cobra is a **CLI framework**, not a TUI framework. It handles:
 #### Bubbletea (Chosen for TUI)
 
 Bubbletea is an **interactive TUI framework** based on The Elm Architecture:
+
 - Model: Application state
 - Update: Handle events, update state
 - View: Render state to terminal
@@ -170,16 +182,18 @@ func (m model) View() string {
 Alternative TUI framework with more traditional widget model.
 
 **Pros:**
+
 - Widget-based (forms, tables, lists)
 - Familiar to GUI developers
 
 **Cons:**
+
 - Less flexible than Bubbletea
 - Harder to customize styling
 
 #### Recommended Combination
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │  Cobra                                          │
 │  (subcommands: start, stop, status, agents)     │
@@ -210,12 +224,14 @@ func getVMStatus() (string, error) {
 ```
 
 **Pros:**
+
 - Simple to implement
 - Matches what users do manually
 - Auth handled by CLI tool
 - Less code
 
 **Cons:**
+
 - Requires CLI tools installed (`gcloud`, `aws`, `az`)
 - Parsing text output is fragile
 - Slower (process spawn overhead)
@@ -244,6 +260,7 @@ func getVMStatus(ctx context.Context) (string, error) {
 ```
 
 **Pros:**
+
 - Single binary - no external dependencies
 - Type-safe API responses
 - Proper error types
@@ -252,6 +269,7 @@ func getVMStatus(ctx context.Context) (string, error) {
 - Consistent across platforms
 
 **Cons:**
+
 - More code initially
 - Must handle auth explicitly
 - SDK updates needed for new features
@@ -264,9 +282,11 @@ func getVMStatus(ctx context.Context) (string, error) {
 | AWS | aws-sdk-go-v2 | Excellent | Very mature, comprehensive coverage |
 | Azure | azure-sdk-for-go | Good | Significantly improved, now comprehensive |
 
-All three providers have production-quality Go SDKs. Azure has invested heavily in their Go SDK over the past few years - my initial assumption about limited support was outdated.
+All three providers have production-quality Go SDKs. Azure has invested heavily in their Go SDK
+over the past few years - my initial assumption about limited support was outdated.
 
 **Verification:**
+
 ```go
 // GCP - Compute Engine
 import compute "cloud.google.com/go/compute/apiv1"
@@ -282,7 +302,7 @@ import "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute
 
 #### Option A: Multi-Repo with Plugins
 
-```
+```text
 github.com/org/sandbox-manager        # Core
 github.com/org/sandbox-manager-gcp    # GCP provider
 github.com/org/sandbox-manager-aws    # AWS provider
@@ -290,11 +310,13 @@ github.com/org/sandbox-manager-azure  # Azure provider
 ```
 
 **Pros:**
+
 - Independent release cycles
 - Community can own providers
 - Smaller core binary
 
 **Cons:**
+
 - Complex dependency management
 - Version compatibility issues
 - Harder to ensure consistency
@@ -302,7 +324,7 @@ github.com/org/sandbox-manager-azure  # Azure provider
 
 #### Option B: Monorepo with Internal Packages (Chosen)
 
-```
+```text
 sandbox-manager/
 ├── cmd/
 │   └── sandbox/           # Main binary
@@ -327,6 +349,7 @@ sandbox-manager/
 ```
 
 **Pros:**
+
 - Single repository to manage
 - Atomic changes across providers
 - Shared testing infrastructure
@@ -334,6 +357,7 @@ sandbox-manager/
 - Consistent versioning
 
 **Cons:**
+
 - All providers compiled into binary (larger size)
 - Can't release providers independently
 

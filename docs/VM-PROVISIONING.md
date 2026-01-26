@@ -1,10 +1,12 @@
 # VM Provisioning Prerequisites
 
-This guide covers how to provision and configure a GCP VM for use with cloudcoop. Follow these steps before running cloudcoop for the first time.
+This guide covers how to provision and configure a GCP VM for use with cloudcoop. Follow these
+steps before running cloudcoop for the first time.
 
 ## Overview
 
 The cloudcoop TUI automates most setup, but you need:
+
 1. A GCP account with billing enabled
 2. The gcloud CLI installed and authenticated
 3. An SSH key for VM access
@@ -121,6 +123,7 @@ When cloudcoop creates VMs, it adds metadata labels for identification and upgra
 | `cloudcoop-config-hash` | `a1b2c3d4` | Hash of config for upgrade detection |
 
 This metadata enables:
+
 - **Identification**: Detect if a VM was created by cloudcoop vs manually
 - **Upgrade workflows**: Detect missing tools/config when cloudcoop version advances
 - **Multi-VM support**: Identify which VMs belong to cloudcoop
@@ -305,6 +308,7 @@ gcloud compute instances stop claude-sandbox --zone=europe-north2-a
 | Stopped | Just disk storage | ~$5/month for 50GB SSD |
 
 Everything on the boot disk persists:
+
 - `~/.claude/` - All Claude sessions intact
 - `/workspaces/` - All git repos and work
 - Installed tools, configs, everything
@@ -341,6 +345,7 @@ gcloud projects get-iam-policy $(gcloud config get-value project) \
 ### VM Preempted Frequently
 
 Spot instances can be preempted based on demand. Options:
+
 - Switch to on-demand for critical work
 - Choose regions with lower demand
 - Use during off-peak hours
@@ -361,6 +366,7 @@ sudo du -h / --max-depth=3 2>/dev/null | sort -rh | head -20
 ## Next Steps
 
 After VM setup:
+
 1. cloudcoop TUI will handle agent installation
 2. See [SPOT-RESILIENCE.md](./SPOT-RESILIENCE.md) for session persistence
 3. See [TOOLING.md](./TOOLING.md) for installed development tools

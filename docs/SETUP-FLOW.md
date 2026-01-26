@@ -8,7 +8,7 @@ The TUI guides users through setup interactively, creating resources as needed. 
 
 ## Setup Stages
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Stage 1: Prerequisites                                         │
 │  • Check for gcloud CLI (for initial auth)                     │
@@ -47,7 +47,7 @@ The TUI guides users through setup interactively, creating resources as needed. 
 
 ### Stage 1: Prerequisites
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - First Run Setup                                    │
 ├─────────────────────────────────────────────────────────────────┤
@@ -69,13 +69,14 @@ The TUI guides users through setup interactively, creating resources as needed. 
 ```
 
 **Checks:**
+
 - SSH key exists (`~/.ssh/id_ed25519` or `~/.ssh/id_rsa`)
 - gcloud CLI installed and in PATH
 - Active GCP authentication (for initial setup only - TUI uses SDK after)
 
 ### Stage 2: Project Configuration
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - Project Setup                                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -92,7 +93,8 @@ The TUI guides users through setup interactively, creating resources as needed. 
 ```
 
 If creating new project:
-```
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Create New Project                                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -113,7 +115,7 @@ If creating new project:
 
 ### Stage 3: IAM Setup
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - IAM Setup                                          │
 ├─────────────────────────────────────────────────────────────────┤
@@ -136,7 +138,7 @@ If creating new project:
 
 ### Stage 4: VM Creation
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - VM Configuration                                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -160,7 +162,7 @@ If creating new project:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Creating VM...                                                 │
 ├─────────────────────────────────────────────────────────────────┤
@@ -175,13 +177,14 @@ If creating new project:
 ```
 
 **VM Metadata:** cloudcoop adds metadata labels to VMs it creates:
+
 - `cloudcoop-version`: Version that created the VM (for upgrade detection)
 - `cloudcoop-created`: Creation timestamp
 - `cloudcoop-config-hash`: Config hash (to detect when reconfiguration needed)
 
 ### Stage 5: VM Provisioning
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - Installing Tools                                   │
 ├─────────────────────────────────────────────────────────────────┤
@@ -204,7 +207,7 @@ If creating new project:
 
 ### Stage 6: Agent Authentication
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - Agent Setup                                        │
 ├─────────────────────────────────────────────────────────────────┤
@@ -221,7 +224,8 @@ If creating new project:
 ```
 
 After authentication:
-```
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop - Setup Complete!                                    │
 ├─────────────────────────────────────────────────────────────────┤
@@ -245,7 +249,7 @@ After authentication:
 
 After initial setup, cloudcoop starts directly to the main TUI:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop                                           v0.1.0     │
 ├─────────────────────────────────────────────────────────────────┤

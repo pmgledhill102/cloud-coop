@@ -4,7 +4,9 @@ This document describes the tracer bullet approach for implementing cloudcoop.
 
 ## Philosophy
 
-A **tracer bullet** approach builds thin vertical slices of functionality end-to-end, proving out the architecture and integration points before filling in details. Each iteration delivers working software that can be demonstrated and tested.
+A **tracer bullet** approach builds thin vertical slices of functionality end-to-end, proving out
+the architecture and integration points before filling in details. Each iteration delivers working
+software that can be demonstrated and tested.
 
 Benefits:
 
@@ -29,7 +31,7 @@ This prevents technical debt accumulation and ensures each layer is solid before
 
 Each tracer bullet passes through these layers:
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │  User Interface (CLI / TUI)             │  ← Cobra + Bubbletea
 ├─────────────────────────────────────────┤
@@ -152,6 +154,7 @@ User with valid GCP credentials sees real VM status.
 ### Refactoring Considerations
 
 - **Cloud provider interface:** Abstract GCP behind interface for future AWS/Azure:
+
   ```go
   type CloudProvider interface {
       GetInstance(ctx context.Context) (*Instance, error)
@@ -159,6 +162,7 @@ User with valid GCP credentials sees real VM status.
       StopInstance(ctx context.Context) error
   }
   ```
+
 - **Context propagation:** Ensure context flows through for cancellation
 - **Credential caching:** Consider caching authenticated client
 - **Rate limiting:** Add basic rate limiting for API calls
@@ -223,12 +227,14 @@ User can start/stop VM from both CLI and TUI.
 ### Refactoring Considerations
 
 - **Operation abstraction:** Consider operation pattern for all async work:
+
   ```go
   type Operation interface {
       Wait(ctx context.Context) error
       Status() OperationStatus
   }
   ```
+
 - **TUI state machine:** Formalize TUI states (idle, loading, error)
 - **Command confirmation:** Consider `--yes` flag pattern for destructive ops
 - **Async in TUI:** Ensure Bubbletea Cmd pattern used correctly for async
@@ -295,12 +301,14 @@ User can run `cloudcoop ssh hostname` and see VM hostname.
 ### Refactoring Considerations
 
 - **SSH client abstraction:** Interface for testing:
+
   ```go
   type SSHClient interface {
       Run(ctx context.Context, cmd string) (string, error)
       Close() error
   }
   ```
+
 - **Connection pooling:** Consider reusing SSH connections
 - **Known hosts:** Decide on host key verification strategy
 - **Username handling:** Make SSH username configurable
@@ -365,6 +373,7 @@ User sees list of tmux windows (or empty state message).
 ### Refactoring Considerations
 
 - **Agent model:** Define clear struct for agent representation:
+
   ```go
   type Agent struct {
       Index     int
@@ -374,6 +383,7 @@ User sees list of tmux windows (or empty state message).
       StartTime time.Time
   }
   ```
+
 - **tmux parser:** Dedicated parser for tmux output formats
 - **Polling vs events:** Consider approach for real-time updates
 - **Session naming:** Establish convention (e.g., "agents" session name)
@@ -644,7 +654,7 @@ Test complete user journeys:
 
 ## Iteration Dependencies
 
-```
+```text
 Iteration 1 (Skeleton)
     │
     ▼

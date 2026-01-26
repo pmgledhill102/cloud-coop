@@ -5,6 +5,7 @@ This document lists all tools pre-installed on the Claude Sandbox VM by the prov
 ## Sources
 
 The tooling list is based on:
+
 1. **Anthropic's official devcontainer** - [github.com/anthropics/claude-code/.devcontainer](https://github.com/anthropics/claude-code/tree/main/.devcontainer)
 2. **discord-bot-test-suite CI** - Pre-commit hooks, GitHub workflows, and Dockerfiles
 3. **Docker's Claude Code sandbox template** - [docker/sandbox-templates:claude-code](https://docs.docker.com/ai/sandboxes/claude-code/)
@@ -74,7 +75,7 @@ These tools are used by `.pre-commit-config.yaml`:
 
 ## Node.js Global Packages
 
-```
+```text
 @anthropic-ai/claude-code
 yarn
 pnpm
@@ -90,7 +91,7 @@ markdownlint-cli2
 
 ## Python Packages (pip)
 
-```
+```text
 pipx
 poetry
 uv
@@ -108,7 +109,7 @@ semgrep
 
 ## Go Tools
 
-```
+```text
 golangci-lint (v2.8.0)
 delve (dlv)
 grpcurl
@@ -171,6 +172,7 @@ HADOLINT_VERSION="2.12.0"
 ```
 
 To update versions:
+
 1. Edit `config/versions.env`
 2. Re-run `provision-vm.sh` or rebuild the VM
 

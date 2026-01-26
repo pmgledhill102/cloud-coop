@@ -72,7 +72,7 @@ You should see a token printed. If you get an error, re-run the `application-def
 
 ## Step 3: Create Configuration File
 
-**Option A: Use the setup wizard (recommended)**
+### Option A: Use the setup wizard (recommended)
 
 ```bash
 make build
@@ -81,7 +81,7 @@ make build
 
 The wizard will prompt you for your GCP project, zone, and VM name.
 
-**Option B: Create manually**
+### Option B: Create manually
 
 ```bash
 mkdir -p ~/.config/cloudcoop
@@ -114,7 +114,7 @@ make build
 
 Expected output for a running VM:
 
-```
+```text
 cloudcoop status
 
 Cloud:    gcp
@@ -134,7 +134,7 @@ Agents:
 
 Expected output if VM doesn't exist:
 
-```
+```text
 VM:
   your-vm-name: not found
 
@@ -241,6 +241,7 @@ gcloud compute instances list --project=$PROJECT_ID
 cloudcoop couldn't find any SSH keys. Either:
 
 1. Start SSH agent and add your key:
+
    ```bash
    eval "$(ssh-agent -s)"
    ssh-add ~/.ssh/id_ed25519
@@ -251,16 +252,19 @@ cloudcoop couldn't find any SSH keys. Either:
 ### "Connection refused" or SSH timeout
 
 1. Check the VM is running:
+
    ```bash
    ./bin/cloudcoop status
    ```
 
 2. Check firewall allows SSH from your IP:
+
    ```bash
    gcloud compute firewall-rules list --filter="name~ssh" --project=$PROJECT_ID
    ```
 
 3. Verify SSH works via gcloud:
+
    ```bash
    gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID
    ```
@@ -268,6 +272,7 @@ cloudcoop couldn't find any SSH keys. Either:
 ### "VM has no external IP address"
 
 The VM doesn't have a public IP. Either:
+
 - Add an external IP to the VM in GCP Console
 - Use IAP tunneling (not yet supported by cloudcoop)
 

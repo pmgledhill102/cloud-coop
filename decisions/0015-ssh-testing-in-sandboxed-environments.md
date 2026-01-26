@@ -6,13 +6,19 @@ Accepted
 
 ## Context
 
-Claude Code (and similar AI coding assistants) run in sandboxed execution environments that restrict outbound network connections. Specifically, connections to port 22 (SSH) are blocked. This creates a significant testing gap:
+Claude Code (and similar AI coding assistants) run in sandboxed execution environments that
+restrict outbound network connections. Specifically, connections to port 22 (SSH) are blocked.
+This creates a significant testing gap:
 
-1. **Manual testing burden**: Every SSH-related feature requires the user to manually test functionality, breaking the development flow
+1. **Manual testing burden**: Every SSH-related feature requires the user to manually test
+   functionality, breaking the development flow
 2. **Reduced confidence**: Without automated testing, regressions in SSH functionality may go undetected
-3. **Iteration friction**: The majority of cloudcoop features from here forward require SSH connectivity (agent sessions, tmux management, etc.)
+3. **Iteration friction**: The majority of cloudcoop features from here forward require SSH
+   connectivity (agent sessions, tmux management, etc.)
 
-During Gate 4 (SSH Integration Review), we discovered that `cloudcoop ssh hostname` could not be tested from within Claude Code sessions due to these network restrictions. The user had to run all SSH tests manually.
+During Gate 4 (SSH Integration Review), we discovered that `cloudcoop ssh hostname` could not be
+tested from within Claude Code sessions due to these network restrictions. The user had to run all
+SSH tests manually.
 
 ### Constraints
 
@@ -23,9 +29,11 @@ During Gate 4 (SSH Integration Review), we discovered that `cloudcoop ssh hostna
 
 ## Decision
 
-**Use a non-standard SSH port (2222) for development/test VMs, with network tags for firewall management.**
+**Use a non-standard SSH port (2222) for development/test VMs, with network tags for firewall
+management.**
 
-This allows SSH testing from sandboxed environments while maintaining security boundaries. Production VMs can continue using port 22.
+This allows SSH testing from sandboxed environments while maintaining security boundaries. Production
+VMs can continue using port 22.
 
 ## Options Considered
 
@@ -34,10 +42,12 @@ This allows SSH testing from sandboxed environments while maintaining security b
 Disable sandbox restrictions to allow port 22 connections.
 
 **Pros:**
+
 - No code or infrastructure changes required
 - Works immediately with existing VMs
 
 **Cons:**
+
 - Defeats the purpose of sandboxing
 - Reduces security posture for all operations, not just SSH
 - User explicitly wants to avoid this approach
@@ -49,15 +59,17 @@ Disable sandbox restrictions to allow port 22 connections.
 
 Run a local proxy that accepts connections on an allowed port, then forwards to port 22 on the remote host.
 
-```
+```text
 Claude Code → localhost:2222 → Proxy → VM:22
 ```
 
 **Pros:**
+
 - No changes to VM configuration
 - Works with any existing VM
 
 **Cons:**
+
 - Requires additional software (socat, ssh tunnel, or custom proxy)
 - Complex setup for each testing session
 - Must configure proxy with target VM's IP for each test
@@ -71,11 +83,12 @@ Claude Code → localhost:2222 → Proxy → VM:22
 
 Configure test/development VMs to run SSH on port 2222 (or another non-blocked port) in addition to or instead of port 22.
 
-```
+```text
 Claude Code → VM:2222 → sshd
 ```
 
 **Pros:**
+
 - Simple, standard SSH configuration change
 - Works within existing sandbox restrictions
 - No additional software or proxies required
@@ -85,6 +98,7 @@ Claude Code → VM:2222 → sshd
 - Provides minor security benefit (reduces automated scanning)
 
 **Cons:**
+
 - Requires VM image/startup script modification
 - Non-standard port may confuse users initially
 - Requires firewall rule for port 2222
@@ -98,10 +112,12 @@ Claude Code → VM:2222 → sshd
 Use websocket-based SSH that tunnels over HTTPS.
 
 **Pros:**
+
 - Works through almost any firewall
 - Uses standard HTTPS port
 
 **Cons:**
+
 - Requires additional software on VM (websockify, gotty, or similar)
 - More complex setup and maintenance
 - Performance overhead
@@ -115,11 +131,13 @@ Use websocket-based SSH that tunnels over HTTPS.
 Use GCP's Identity-Aware Proxy to tunnel SSH over HTTPS.
 
 **Pros:**
+
 - Secure by design (no external IP needed)
 - Works through firewalls
 - Google-supported solution
 
 **Cons:**
+
 - Requires `gcloud` CLI or IAP API integration
 - May not work from Claude Code sandbox (IAP itself may be blocked)
 - GCP-specific, doesn't generalize to AWS/Azure
@@ -132,10 +150,12 @@ Use GCP's Identity-Aware Proxy to tunnel SSH over HTTPS.
 Use a mock SSH server for unit tests, accept that integration tests require manual verification.
 
 **Pros:**
+
 - Clean separation of unit and integration tests
 - Mock server can run on any port locally
 
 **Cons:**
+
 - Doesn't solve integration testing problem
 - SSH-related features remain difficult to test end-to-end
 - Mocks may drift from real behavior
@@ -148,7 +168,8 @@ Should cloudcoop standardize on a non-standard SSH port (e.g., 2222) for ALL VMs
 
 ### Arguments For
 
-1. **Security through obscurity**: Automated scanners and bots target port 22. Using a non-standard port reduces noise and opportunistic attacks.
+1. **Security through obscurity**: Automated scanners and bots target port 22. Using a non-standard
+   port reduces noise and opportunistic attacks.
 
 2. **Consistent behavior**: Same configuration for dev, test, and production simplifies operations.
 
@@ -174,6 +195,7 @@ Should cloudcoop standardize on a non-standard SSH port (e.g., 2222) for ALL VMs
 **Use non-standard ports for test/development VMs only. Keep production VMs on port 22.**
 
 Rationale:
+
 - Test VMs are ephemeral and used in controlled environments
 - Production VMs benefit from standard tooling
 - The security benefit is minimal for production (proper firewall rules are more important)

@@ -12,7 +12,9 @@ A terminal UI for managing sandboxed AI coding agents on cloud VMs.
 
 ## Overview
 
-cloudcoop provisions and manages cloud VMs configured as secure sandboxes for running multiple AI coding agents (Claude Code, Aider, Gemini CLI, etc.). Each agent runs in its own tmux session with full development tooling.
+cloudcoop provisions and manages cloud VMs configured as secure sandboxes for running multiple AI
+coding agents (Claude Code, Aider, Gemini CLI, etc.). Each agent runs in its own tmux session with
+full development tooling.
 
 **Key features:**
 
@@ -24,7 +26,7 @@ cloudcoop provisions and manages cloud VMs configured as secure sandboxes for ru
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Your Workstation                                               │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -94,7 +96,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup details.
 
 ## TUI Interface
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop                                           v0.1.0     │
 ├─────────────────────────────────────────────────────────────────┤

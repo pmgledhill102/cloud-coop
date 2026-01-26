@@ -6,7 +6,8 @@ Accepted
 
 ## Context
 
-We need to choose how to provision the GCP Compute Engine VM that hosts Claude Code agents. The VM will be used intermittently (during active development sessions) rather than 24/7.
+We need to choose how to provision the GCP Compute Engine VM that hosts Claude Code agents. The
+VM will be used intermittently (during active development sessions) rather than 24/7.
 
 Cost efficiency is important, but so is preserving state across sessions.
 
@@ -23,11 +24,13 @@ This provides ~70% cost savings while running, with automatic state preservation
 Standard VM provisioning with guaranteed availability.
 
 **Pros:**
+
 - No preemption risk
 - Guaranteed availability
 - Simpler mental model
 
 **Cons:**
+
 - Full price (~$280/month for c4a-highcpu-16 if running 24/7)
 - Paying premium for availability that isn't needed for dev workloads
 
@@ -36,10 +39,12 @@ Standard VM provisioning with guaranteed availability.
 Spot pricing with instance deletion on preemption.
 
 **Pros:**
+
 - ~70% cost savings
 - Lowest compute cost
 
 **Cons:**
+
 - Instance deleted on preemption (need to recreate)
 - Boot disk deleted by default (data loss without separate persistent disk)
 - More complex recovery process
@@ -49,6 +54,7 @@ Spot pricing with instance deletion on preemption.
 Spot pricing with instance stop (not delete) on preemption, plus persistent boot disk.
 
 **Pros:**
+
 - ~70% cost savings while running
 - Instance stops on preemption (not deleted)
 - Boot disk survives (all state preserved)
@@ -56,6 +62,7 @@ Spot pricing with instance stop (not delete) on preemption, plus persistent boot
 - Simple restart: `gcloud compute instances start`
 
 **Cons:**
+
 - Still subject to preemption during work (30-second warning)
 - May need to restart and resume if preempted mid-task
 
@@ -64,9 +71,11 @@ Spot pricing with instance stop (not delete) on preemption, plus persistent boot
 Older preemptible VM model (max 24-hour lifetime).
 
 **Pros:**
+
 - Similar cost savings to spot
 
 **Cons:**
+
 - Legacy model, spot is the replacement
 - Forced termination after 24 hours
 - Less flexible than spot

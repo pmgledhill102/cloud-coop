@@ -6,7 +6,8 @@ Accepted
 
 ## Context
 
-cloudcoop needs a configuration file format for storing user preferences, VM configurations, agent settings, and project defaults. The format must be:
+cloudcoop needs a configuration file format for storing user preferences, VM configurations, agent
+settings, and project defaults. The format must be:
 
 - Human-readable and hand-editable
 - Support comments for documentation
@@ -18,6 +19,7 @@ cloudcoop needs a configuration file format for storing user preferences, VM con
 Use **TOML** (Tom's Obvious Minimal Language) as the configuration file format.
 
 Configuration files will be named `cloudcoop.toml` and located at:
+
 - `~/.config/cloudcoop/cloudcoop.toml` (user defaults)
 - `./cloudcoop.toml` (project-specific overrides)
 
@@ -28,12 +30,14 @@ Configuration files will be named `cloudcoop.toml` and located at:
 YAML is widely used in cloud/DevOps tooling (Kubernetes, Docker Compose, GitHub Actions).
 
 **Pros:**
+
 - Very familiar to cloud/DevOps users
 - Human-readable with good support for complex structures
 - Supports comments
 - Multi-document support
 
 **Cons:**
+
 - Whitespace-sensitive syntax leads to subtle, hard-to-debug errors
 - Complex specification with many edge cases
 - "Norway problem" and other type coercion surprises (`yes` becomes boolean)
@@ -44,12 +48,14 @@ YAML is widely used in cloud/DevOps tooling (Kubernetes, Docker Compose, GitHub 
 JSON is universal and has stdlib support in Go.
 
 **Pros:**
+
 - No external dependencies (encoding/json in stdlib)
 - Universal format, excellent tooling
 - Unambiguous parsing
 - Good for machine-generated config
 
 **Cons:**
+
 - No comments - critical limitation for configuration files
 - Verbose syntax (quotes on all keys, trailing comma restrictions)
 - Poor experience for hand-editing
@@ -60,6 +66,7 @@ JSON is universal and has stdlib support in Go.
 TOML is designed specifically for configuration files, used by Rust (Cargo.toml), Hugo, GoReleaser, and many Go tools.
 
 **Pros:**
+
 - Designed for configuration files - clear, unambiguous syntax
 - Supports comments (essential for documenting config)
 - No whitespace sensitivity
@@ -69,6 +76,7 @@ TOML is designed specifically for configuration files, used by Rust (Cargo.toml)
 - Maps cleanly to Go structs
 
 **Cons:**
+
 - Less familiar to some developers than YAML
 - Deeply nested structures can become verbose
 - Smaller ecosystem than YAML/JSON

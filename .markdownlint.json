@@ -1,8 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
   "default": true,
-  "MD013": false,
-  "MD040": false,
+  "MD013": {
+    "line_length": 120,
+    "heading_line_length": 120,
+    "code_block_line_length": 200,
+    "tables": false
+  },
   "MD033": {
     "allowed_elements": [
       "details",
@@ -29,10 +33,11 @@
     "maximum": 2
   },
   "MD026": {
-    "punctuation": ".,;:!?"
+    "punctuation": ".,;:!"
   },
-  "MD029": false,
-  "MD036": false,
+  "MD029": {
+    "style": "one_or_ordered"
+  },
   "MD030": {
     "ul_single": 1,
     "ol_single": 1,
@@ -49,9 +54,10 @@
     "style": "backtick"
   },
   "MD049": {
-    "style": "underscore"
+    "style": "asterisk"
   },
   "MD050": {
     "style": "asterisk"
-  }
+  },
+  "MD060": false
 }

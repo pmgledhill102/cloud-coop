@@ -5,6 +5,7 @@ A terminal-based user interface for managing AI coding agent sandboxes.
 ## Overview
 
 The TUI provides a simple interface to:
+
 1. Verify prerequisites and setup status
 2. Manage VM lifecycle (create, start, stop, resize)
 3. Monitor and manage agent sessions
@@ -12,6 +13,7 @@ The TUI provides a simple interface to:
 ## Implementation Approach
 
 Per ADR-0011 and ADR-0013:
+
 - **Language:** Go with Bubbletea (TUI) + Cobra (CLI)
 - **Cloud operations:** Native Go SDKs (not gcloud CLI)
 - **Remote commands:** Go SSH library for programmatic commands
@@ -19,7 +21,7 @@ Per ADR-0011 and ADR-0013:
 
 ## User Interface Concept
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  cloudcoop                                           v0.1.0     │
 ├─────────────────────────────────────────────────────────────────┤
@@ -69,7 +71,7 @@ Check and display the status of required infrastructure:
 
 During initial setup or when creating a new VM, help users select cost-effective regions:
 
-```
+```text
 Available regions (sorted by spot price):
   [1] europe-north1-b  (Finland)     $0.0891/hr  ← cheapest
   [2] europe-north2-a  (Stockholm)   $0.0912/hr
@@ -81,6 +83,7 @@ Select region [1-5]:
 ```
 
 Implementation:
+
 - Query GCP Compute Engine pricing via Cloud Billing API or live pricing data
 - Filter by machine type compatibility (e.g., c4a ARM instances)
 - Show spot/preemptible pricing (primary use case)
@@ -99,6 +102,7 @@ instance, err := client.Get(ctx, &computepb.GetInstanceRequest{...})
 ```
 
 Display:
+
 - Instance name and zone
 - Current status (RUNNING, STOPPED, TERMINATED, etc.)
 - Machine type (e.g., c4a-highcpu-16)
@@ -129,7 +133,7 @@ Post-action: Confirm stopped, show disk-only cost estimate.
 
 Change machine type (requires stopped VM):
 
-```
+```text
 Current: c4a-highcpu-16 (16 vCPU, 32GB) - ~$0.12/hr spot
 Available sizes:
   [1] arm-8cpu-16gb   ( 8 vCPU, 16GB) - ~$0.06/hr spot
@@ -149,7 +153,7 @@ Pre-check: VM must be stopped (offer to stop if running).
 
 Create a new VM when none exists. Shows size selection menu:
 
-```
+```text
 Create VM:
   Select machine size:
   ► [Small]   c4a-highcpu-4   ( 4 vCPU,  8GB)
@@ -196,7 +200,7 @@ Configuration: Machine sizes are configurable via `vm.machine_sizes` in cloudcoo
 
 Delete a stopped VM (requires confirmation):
 
-```
+```text
 Delete VM "claude-sandbox"?
   ⚠️  This cannot be undone. All data on the boot disk will be lost.
 
@@ -225,6 +229,7 @@ output, err := sshClient.Run(`tmux list-windows -t agents -F '#{window_index}|#{
 ```
 
 Display:
+
 - Window/pane index
 - Session name (e.g., "agent-1", "issue-142")
 - Agent type (claude, aider, etc.)
@@ -239,6 +244,7 @@ err := sshClient.Run(fmt.Sprintf(`tmux new-window -t agents -n %s '%s'`, name, a
 ```
 
 Options:
+
 - Select agent type (Claude, Aider, etc.)
 - Specify working directory
 - Session mode:
@@ -250,7 +256,7 @@ Options:
 
 Start or stop multiple agents at once:
 
-```
+```text
 Start agents:
   Agent count: [12]
   Session mode: ○ Fresh  ● Continue  ○ Pick
@@ -268,6 +274,7 @@ for i := 1; i <= count; i++ {
 ```
 
 Stop all agents:
+
 ```go
 err := sshClient.Run(`tmux kill-session -t agents`)
 ```
@@ -300,7 +307,7 @@ Alternative: Direct SSH with IAP ProxyCommand for users with configured SSH keys
 
 View output/activity logs for agents:
 
-```
+```text
 View logs:
   Agent: ○ All  ● Agent 3  ○ Agent 5
   Mode:  ● Follow (live)  ○ Historical (last 100 lines)
@@ -317,6 +324,7 @@ sshClient.Run(fmt.Sprintf(`docker logs -f --tail 100 agent-%d`, index))
 ```
 
 Options:
+
 - View logs for specific agent or all agents
 - Follow mode (live streaming) vs historical view
 - Configurable line limit for historical view
@@ -343,7 +351,7 @@ Actions are context-sensitive based on VM state:
 
 Optional expanded view showing real-time agent activity:
 
-```
+```text
 ┌─ Agent 1: issue-142 ─────────────────────────────────────────┐
 │ Type: Claude Code                                            │
 │ Working on: go-gin service implementation                    │
@@ -377,6 +385,7 @@ for range ticker.C {
 ```
 
 State captured:
+
 - Active tmux windows and their names
 - Agent process status (active/idle)
 - Working directory per agent
@@ -385,11 +394,12 @@ State captured:
 #### 6.2 Session Recovery After Preemption
 
 When VM restarts after spot preemption:
+
 1. Detect previous session state from boot disk
 2. Offer to restore previous agent configuration
 3. Start agents in "continue" mode to resume work
 
-```
+```text
 Previous session detected (stopped 15 minutes ago):
   - 12 agents were running
   - Last snapshot: 2024-01-15 10:45:00
@@ -399,9 +409,12 @@ Previous session detected (stopped 15 minutes ago):
 
 ### 7. Terminal Configuration (Post-MVP)
 
-> **Note:** This feature is out of scope for MVP. The core workflow uses tmux window navigation directly (`Ctrl-B 1-9`, `Ctrl-B w` for picker). See `cloud-coop-40i` for future tracking.
+> **Note:** This feature is out of scope for MVP. The core workflow uses tmux window navigation
+> directly (`Ctrl-B 1-9`, `Ctrl-B w` for picker). See `cloud-coop-40i` for future tracking.
 
-Generate optimized terminal emulator configuration for multi-agent viewing. Would create config files or shell scripts to launch terminal with pre-configured panes, each connected to a different agent session.
+Generate optimized terminal emulator configuration for multi-agent viewing. Would create config
+files or shell scripts to launch terminal with pre-configured panes, each connected to a
+different agent session.
 
 ## Non-Functional Requirements
 
@@ -434,4 +447,5 @@ Generate optimized terminal emulator configuration for multi-agent viewing. Woul
 - Integration with issue tracker (GitHub Issues, Linear, etc.)
 - Multi-VM support for different projects
 - AWS and Azure provider support
-- **VM metadata tagging**: Tag created VMs with cloudcoop version, creation timestamp, and config hash for identification, upgrade detection, and diagnostics (see cc-s7h)
+- **VM metadata tagging**: Tag created VMs with cloudcoop version, creation timestamp, and config
+  hash for identification, upgrade detection, and diagnostics (see cc-s7h)

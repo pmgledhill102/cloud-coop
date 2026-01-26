@@ -4,7 +4,7 @@ This directory contains test fixtures and data files used by tests throughout th
 
 ## Directory Structure
 
-```
+```text
 testdata/
   fixtures/           # JSON, YAML, and other data files for tests
   golden/             # Expected output files for golden tests

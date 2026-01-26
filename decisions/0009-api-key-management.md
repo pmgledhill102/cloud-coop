@@ -17,12 +17,14 @@ AI coding agents require API keys or authentication tokens to communicate with t
 | OpenAI Codex | OPENAI_API_KEY |
 
 These keys are sensitive:
+
 - They grant access to paid API services
 - They may have usage limits/quotas
 - Compromise could lead to unexpected bills or abuse
 - Some keys grant access beyond just the AI API
 
-The sandbox VM runs with `--dangerously-skip-permissions`, meaning agents can read any file on the VM. We need to balance security with usability.
+The sandbox VM runs with `--dangerously-skip-permissions`, meaning agents can read any file on the
+VM. We need to balance security with usability.
 
 ## Decision
 
@@ -41,11 +43,13 @@ Never store raw API keys directly on the VM filesystem.
 Store API keys in files on the VM (e.g., `~/.anthropic/api_key`, environment in `.bashrc`).
 
 **Pros:**
+
 - Simple setup
 - Works immediately after VM start
 - No external dependencies
 
 **Cons:**
+
 - **Keys exposed to all processes on VM** - agents with guardrails off can read them
 - Keys persist on disk - survive VM stop/start
 - If VM is compromised, keys are compromised
@@ -67,12 +71,14 @@ AcceptEnv ANTHROPIC_API_KEY OPENAI_API_KEY
 ```
 
 **Pros:**
+
 - Keys never written to VM disk
 - Keys only present during active SSH session
 - Revoke locally = revoked everywhere
 - Works with any agent using environment variables
 
 **Cons:**
+
 - Keys in memory on VM during session (still readable by processes)
 - Must have keys on local machine
 - SSH session must remain active
@@ -91,6 +97,7 @@ claude auth login
 ```
 
 **Pros:**
+
 - **No raw API keys anywhere** - uses delegated tokens
 - Tokens scoped to specific permissions
 - Revocable from provider dashboard without changing keys
@@ -98,6 +105,7 @@ claude auth login
 - Provider handles token refresh
 
 **Cons:**
+
 - Requires browser access from VM (can use SSH tunnel)
 - Not all agents support it
 - Token still stored on VM (but more limited than raw API key)
@@ -121,6 +129,7 @@ export ANTHROPIC_API_KEY=$(gcloud secrets versions access latest --secret=anthro
 ```
 
 **Pros:**
+
 - Keys never on local machine or VM disk
 - Centralized management and rotation
 - Audit log of all access
@@ -128,6 +137,7 @@ export ANTHROPIC_API_KEY=$(gcloud secrets versions access latest --secret=anthro
 - Works for headless/automated scenarios
 
 **Cons:**
+
 - Additional GCP cost (~$0.03/10,000 access operations)
 - VM needs secretmanager IAM permissions
 - Key in memory once fetched
@@ -145,12 +155,14 @@ gcloud auth application-default login --no-browser
 ```
 
 **Pros:**
+
 - No keys at all
 - Uses existing IAM permissions
 - Automatic token refresh
 - Fully audited
 
 **Cons:**
+
 - Only works for Google Cloud services
 - Not applicable to Anthropic, OpenAI, GitHub, etc.
 
@@ -168,6 +180,7 @@ claude --dangerously-skip-permissions
 ```
 
 **Supported by:**
+
 - Claude Code ✓
 - GitHub Copilot ✓
 - Gemini CLI ✓ (via gcloud auth)
@@ -183,6 +196,7 @@ export ANTHROPIC_API_KEY=$(gcloud secrets versions access latest --secret=anthro
 ```
 
 **Use for:**
+
 - Aider
 - Raw API scripts
 - Headless automation
@@ -195,6 +209,7 @@ ssh -o SendEnv=ANTHROPIC_API_KEY claude-sandbox
 ```
 
 **Use for:**
+
 - Initial testing
 - Temporary sessions
 - When Secret Manager not yet configured
@@ -205,7 +220,7 @@ ssh -o SendEnv=ANTHROPIC_API_KEY claude-sandbox
 
 The TUI should handle authentication status:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Authentication Status                                          │
 │  ────────────────────                                           │
@@ -273,12 +288,15 @@ ssh -L 8080:localhost:8080 -L 8000:localhost:8000 claude-sandbox \
 
 ### Residual Risk
 
-Even with best practices, keys/tokens are in memory during active sessions. An agent running with `--dangerously-skip-permissions` could theoretically:
+Even with best practices, keys/tokens are in memory during active sessions. An agent running with
+`--dangerously-skip-permissions` could theoretically:
+
 - Read environment variables
 - Access agent config files
 - Exfiltrate tokens
 
 **Mitigations:**
+
 - Use scoped tokens with minimal permissions
 - Monitor for unusual API usage patterns
 - Rotate tokens regularly

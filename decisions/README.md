@@ -22,7 +22,8 @@ This directory contains Architecture Decision Records (ADRs) for cloudcoop.
 
 ## About ADRs
 
-Architecture Decision Records capture important architectural decisions made during the design and implementation of a system. Each ADR describes:
+Architecture Decision Records capture important architectural decisions made during the design and
+implementation of a system. Each ADR describes:
 
 - **Context**: The situation and forces at play
 - **Decision**: What was decided
