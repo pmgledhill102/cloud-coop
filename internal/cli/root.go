@@ -38,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
 	rootCmd.AddCommand(sshCmd)
+	rootCmd.AddCommand(agentsCmd)
 }
 
 // Execute runs the root command.
