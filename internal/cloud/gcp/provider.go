@@ -18,7 +18,7 @@ import (
 type Provider struct {
 	project string
 	zone    string
-	client  *compute.InstancesClient
+	client  instancesClient
 }
 
 // New creates a new GCP provider.
@@ -32,8 +32,17 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 	return &Provider{
 		project: project,
 		zone:    zone,
-		client:  client,
+		client:  &realInstancesClient{client: client},
 	}, nil
+}
+
+// newWithClient creates a provider with a custom client (for testing).
+func newWithClient(project, zone string, client instancesClient) *Provider {
+	return &Provider{
+		project: project,
+		zone:    zone,
+		client:  client,
+	}
 }
 
 // Name returns the provider name.
