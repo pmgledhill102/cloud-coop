@@ -16,6 +16,15 @@ import (
 // DefaultTimeout is the default SSH connection timeout.
 const DefaultTimeout = 5 * time.Second
 
+// Runner executes commands on a remote host via SSH.
+// This interface allows for mocking in tests.
+type Runner interface {
+	// Run executes a command and returns combined stdout/stderr.
+	Run(cmd string) (string, error)
+	// Close closes the SSH connection.
+	Close() error
+}
+
 // Config contains SSH connection configuration.
 type Config struct {
 	Host    string
@@ -24,12 +33,15 @@ type Config struct {
 	Timeout time.Duration
 }
 
-// Client wraps an SSH connection.
+// Client wraps an SSH connection and implements Runner.
 type Client struct {
 	conn *ssh.Client
 	host string
 	user string
 }
+
+// Ensure Client implements Runner.
+var _ Runner = (*Client)(nil)
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig(host, user string) Config {

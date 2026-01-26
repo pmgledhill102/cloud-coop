@@ -139,6 +139,60 @@ VM:
 
 The TUI should display your VM's status. Press `r` to refresh, `q` to quit.
 
+## Step 6: Configure SSH Access
+
+cloudcoop uses SSH to execute commands on the VM. You need:
+
+1. **An SSH key** - cloudcoop looks for keys in this order:
+   - SSH agent (recommended) - keys loaded via `ssh-add`
+   - `~/.ssh/id_ed25519`
+   - `~/.ssh/id_rsa`
+   - `~/.ssh/id_ecdsa`
+
+2. **Firewall access** - The VM must allow SSH (port 22) from your IP.
+
+### Generate an SSH Key (if needed)
+
+```bash
+ssh-keygen -t ed25519 -C "your-email@example.com"
+```
+
+### Add Key to SSH Agent (recommended)
+
+```bash
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+```
+
+### Configure GCP Firewall
+
+For VMs with external IPs, ensure SSH access is allowed:
+
+```bash
+# Check existing firewall rules
+gcloud compute firewall-rules list --filter="name~ssh" --project=$PROJECT_ID
+
+# Create rule if needed (allows SSH from anywhere - restrict for production)
+gcloud compute firewall-rules create allow-ssh \
+  --project=$PROJECT_ID \
+  --direction=INGRESS \
+  --priority=1000 \
+  --network=default \
+  --action=ALLOW \
+  --rules=tcp:22 \
+  --source-ranges=0.0.0.0/0
+```
+
+For production, restrict `--source-ranges` to your IP or use IAP tunneling.
+
+### Test SSH Connectivity
+
+```bash
+./bin/cloudcoop ssh hostname
+```
+
+Expected output: the VM's hostname.
+
 ## Troubleshooting
 
 ### "Configuration not found"
@@ -166,6 +220,41 @@ Either the VM name or zone is incorrect. Verify with:
 ```bash
 gcloud compute instances list --project=$PROJECT_ID
 ```
+
+### "No SSH authentication methods available"
+
+cloudcoop couldn't find any SSH keys. Either:
+
+1. Start SSH agent and add your key:
+   ```bash
+   eval "$(ssh-agent -s)"
+   ssh-add ~/.ssh/id_ed25519
+   ```
+
+2. Or ensure you have an unencrypted key at `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, or `~/.ssh/id_ecdsa`.
+
+### "Connection refused" or SSH timeout
+
+1. Check the VM is running:
+   ```bash
+   ./bin/cloudcoop status
+   ```
+
+2. Check firewall allows SSH from your IP:
+   ```bash
+   gcloud compute firewall-rules list --filter="name~ssh" --project=$PROJECT_ID
+   ```
+
+3. Verify SSH works via gcloud:
+   ```bash
+   gcloud compute ssh $VM_NAME --zone=$ZONE --project=$PROJECT_ID
+   ```
+
+### "VM has no external IP address"
+
+The VM doesn't have a public IP. Either:
+- Add an external IP to the VM in GCP Console
+- Use IAP tunneling (not yet supported by cloudcoop)
 
 ## Creating a Test VM (Optional)
 
