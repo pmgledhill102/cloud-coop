@@ -70,6 +70,8 @@ type VMCreateConfig struct {
 	Network string
 	// Tags are network tags for firewall rules.
 	Tags []string
+	// SSHPort is the port SSH should listen on (default: 22).
+	SSHPort int
 }
 
 // Provider defines the interface for cloud provider operations.

@@ -268,6 +268,7 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 			Spot:        cfg.VM.Spot,
 			Network:     cfg.VM.Network,
 			Tags:        cfg.VM.Tags,
+			SSHPort:     cfg.SSH.Port,
 		}
 
 		if err := provider.CreateVM(ctx, createCfg); err != nil {

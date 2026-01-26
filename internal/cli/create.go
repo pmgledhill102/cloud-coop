@@ -87,10 +87,11 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		Spot:        cfg.VM.Spot,
 		Network:     cfg.VM.Network,
 		Tags:        cfg.VM.Tags,
+		SSHPort:     cfg.SSH.Port,
 	}
 
 	// Create the VM
-	fmt.Printf("Creating VM %s (size: %s, machine: %s)...\n", cfg.VM.Name, createSize, machineType)
+	fmt.Printf("Creating VM %s (size: %s, machine: %s, ssh port: %d)...\n", cfg.VM.Name, createSize, machineType, cfg.SSH.Port)
 	log.Debug("creating VM",
 		"name", createCfg.Name,
 		"machineType", createCfg.MachineType,
@@ -99,6 +100,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		"spot", createCfg.Spot,
 		"network", createCfg.Network,
 		"tags", createCfg.Tags,
+		"sshPort", createCfg.SSHPort,
 	)
 
 	if err := provider.CreateVM(ctx, createCfg); err != nil {
