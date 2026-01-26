@@ -30,9 +30,23 @@ This shows:
 	RunE: runStatus,
 }
 
+// ProviderFactory creates a cloud provider from configuration.
+// This is a package-level variable to allow test injection.
+type ProviderFactory func(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error)
+
+// ConfigLoader loads the application configuration.
+// This is a package-level variable to allow test injection.
+type ConfigLoader func() (*config.Config, error)
+
+// providerFactory is the active provider factory, defaults to createProviderImpl.
+var providerFactory ProviderFactory = createProviderImpl
+
+// configLoader is the active config loader, defaults to config.Load.
+var configLoader ConfigLoader = config.Load
+
 func runStatus(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := configLoader()
 	if err != nil {
 		return handleConfigError(err)
 	}
@@ -63,7 +77,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// createProvider creates a cloud provider using the configured factory.
 func createProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
+	return providerFactory(ctx, cfg)
+}
+
+// createProviderImpl is the default provider factory implementation.
+func createProviderImpl(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
 	switch cfg.Cloud.Provider {
 	case "gcp":
 		p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)

@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
 )
 
@@ -24,7 +23,7 @@ If the VM is in a transitional state (starting/stopping), an error is returned.`
 
 func runStart(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := configLoader()
 	if err != nil {
 		return handleConfigError(err)
 	}
