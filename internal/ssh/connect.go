@@ -1,0 +1,68 @@
+package ssh
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+)
+
+// ConnectOptions contains options for interactive SSH connection.
+type ConnectOptions struct {
+	Host        string // VM host (IP or hostname)
+	User        string // SSH username
+	Port        int    // SSH port (default: 22)
+	WindowIndex int    // tmux window index to attach to
+}
+
+// ConnectInteractive shells out to SSH for an interactive terminal session.
+// It attaches to the specified tmux window in the "agents" session.
+// This function blocks until the SSH session ends.
+func ConnectInteractive(opts ConnectOptions) error {
+	port := opts.Port
+	if port == 0 {
+		port = 22
+	}
+
+	// Build the tmux attach command
+	// First select the window, then attach to the session
+	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", opts.WindowIndex)
+
+	// Build SSH command
+	// -t forces pseudo-terminal allocation (required for tmux)
+	// -p specifies port
+	args := []string{
+		"-t", // Force PTY allocation
+		"-p", fmt.Sprintf("%d", port),
+		fmt.Sprintf("%s@%s", opts.User, opts.Host),
+		tmuxCmd,
+	}
+
+	cmd := exec.Command("ssh", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Run the command - this blocks until SSH session ends
+	err := cmd.Run()
+	if err != nil {
+		// Check if it's just an exit status from the remote command
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Exit code 1 often means tmux session/window not found
+			if exitErr.ExitCode() == 1 {
+				return fmt.Errorf("failed to attach to tmux window %d (session may not exist)", opts.WindowIndex)
+			}
+		}
+		return fmt.Errorf("SSH connection failed: %w", err)
+	}
+
+	return nil
+}
+
+// CheckSSHAvailable verifies that the ssh command is available.
+func CheckSSHAvailable() error {
+	_, err := exec.LookPath("ssh")
+	if err != nil {
+		return fmt.Errorf("ssh command not found - please install OpenSSH client")
+	}
+	return nil
+}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"os/user"
 	"time"
 
@@ -314,6 +315,50 @@ func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 	}
 }
 
+// connectToAgent creates a command to connect to an agent session interactively.
+// It uses tea.ExecProcess to shell out to SSH and resume the TUI after.
+func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) tea.Cmd {
+	// Get IP address for SSH
+	ip := vmInfo.ExternalIP
+	if ip == "" {
+		ip = vmInfo.InternalIP
+	}
+
+	// Determine SSH user
+	sshUser := cfg.SSH.User
+	if sshUser == "" {
+		if u, err := user.Current(); err == nil {
+			sshUser = u.Username
+		}
+	}
+
+	// Determine port
+	port := cfg.SSH.Port
+	if port == 0 {
+		port = 22
+	}
+
+	// Build the tmux attach command
+	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
+
+	// Build SSH command with -t for PTY allocation
+	c := exec.Command("ssh", "-t",
+		"-p", fmt.Sprintf("%d", port),
+		fmt.Sprintf("%s@%s", sshUser, ip),
+		tmuxCmd,
+	)
+
+	// Use tea.ExecProcess to run the command and resume TUI after
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return connectFinishedMsg{err: err}
+	})
+}
+
+// connectFinishedMsg is sent when an interactive connect session ends.
+type connectFinishedMsg struct {
+	err error
+}
+
 // killAgent kills an agent session on the VM.
 func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
 	return func() tea.Msg {
@@ -432,6 +477,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.confirmingKill = true
 				}
 			}
+		case "c", "C":
+			// Connect to selected agent (only when VM is running, agents exist, and no operation in progress)
+			if m.canModifyAgents() && m.agents != nil && len(m.agents.Sessions) > 0 {
+				if m.selectedAgentIdx < len(m.agents.Sessions) {
+					selected := m.agents.Sessions[m.selectedAgentIdx]
+					return m, connectToAgent(m.cfg, m.vmInfo, selected.Index)
+				}
+			}
 		case "up":
 			// Move selection up
 			if m.agents != nil && len(m.agents.Sessions) > 0 && m.selectedAgentIdx > 0 {
@@ -541,6 +594,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agents != nil && m.selectedAgentIdx >= len(m.agents.Sessions)-1 {
 			m.selectedAgentIdx = max(0, len(m.agents.Sessions)-2)
 		}
+		return m, fetchAgents(m.cfg, m.vmInfo)
+
+	case connectFinishedMsg:
+		// Connection ended - refresh agents list in case state changed
+		if msg.err != nil {
+			// Don't show error for normal disconnect
+			// Only show errors that indicate actual problems
+			if exitErr, ok := msg.err.(*exec.ExitError); ok {
+				if exitErr.ExitCode() != 0 {
+					m.agentsErr = msg.err
+				}
+			}
+		}
+		// Refresh agents list after returning from connect
+		m.agentsLoading = true
 		return m, fetchAgents(m.cfg, m.vmInfo)
 	}
 
@@ -804,7 +872,7 @@ func (m Model) renderHelp() string {
 			if !m.agentsLoading {
 				actions = append(actions, "A: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
-					actions = append(actions, "K: kill agent", "↑/↓: select")
+					actions = append(actions, "C: connect", "K: kill agent", "↑/↓: select")
 				}
 			}
 		}

@@ -97,6 +97,7 @@ knownhosts
 testdata
 testutil
 subtests
+testuser
 
 # Misc
 pmgledhill
