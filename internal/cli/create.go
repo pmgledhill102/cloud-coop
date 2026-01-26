@@ -80,14 +80,15 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	// Build create config
 	createCfg := cloud.VMCreateConfig{
-		Name:        cfg.VM.Name,
-		MachineType: machineType,
-		DiskSizeGB:  cfg.VM.DiskSizeGB,
-		Image:       cfg.VM.Image,
-		Spot:        cfg.VM.Spot,
-		Network:     cfg.VM.Network,
-		Tags:        cfg.VM.Tags,
-		SSHPort:     cfg.SSH.Port,
+		Name:           cfg.VM.Name,
+		MachineType:    machineType,
+		DiskSizeGB:     cfg.VM.DiskSizeGB,
+		Image:          cfg.VM.Image,
+		Spot:           cfg.VM.Spot,
+		Network:        cfg.VM.Network,
+		Tags:           cfg.VM.Tags,
+		SSHPort:        cfg.SSH.Port,
+		ServiceAccount: cfg.Cloud.GCP.ServiceAccount,
 	}
 
 	// Create the VM

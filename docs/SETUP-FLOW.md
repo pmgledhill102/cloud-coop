@@ -272,7 +272,7 @@ provider = "gcp"
 [cloud.gcp]
 project = "cloudcoop-sandbox-abc123"
 zone = "europe-north2-a"
-service_account = "cloudcoop@cloudcoop-sandbox-abc123.iam.gserviceaccount.com"
+service_account = "cloudcoop-vm@cloudcoop-sandbox-abc123.iam.gserviceaccount.com"
 
 [vm]
 name = "claude-sandbox"
@@ -287,6 +287,72 @@ ip_allowlist_mode = "disabled"
 default = "claude"
 installed = ["claude"]
 ```
+
+## Manual Service Account Setup (Required)
+
+Before creating a VM, you must create a dedicated service account with minimal permissions.
+This is required for security (see [SECURITY.md](SECURITY.md)).
+
+### 1. Create the Service Account
+
+```bash
+# Set your project ID
+PROJECT_ID="your-gcp-project-id"
+
+# Create the service account
+gcloud iam service-accounts create cloudcoop-vm \
+  --project="${PROJECT_ID}" \
+  --display-name="cloudcoop VM service account"
+```
+
+### 2. Grant Minimal Permissions
+
+Grant only the permissions the VM actually needs:
+
+```bash
+# Allow writing logs to Cloud Logging
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:cloudcoop-vm@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/logging.logWriter"
+
+# Allow writing metrics to Cloud Monitoring
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:cloudcoop-vm@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/monitoring.metricWriter"
+
+# Optional: Allow pulling container images from Artifact Registry
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:cloudcoop-vm@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.reader"
+
+# Optional: Allow accessing specific secrets (if needed)
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:cloudcoop-vm@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+### 3. Update Configuration
+
+Add the service account to your config file:
+
+```toml
+[cloud.gcp]
+project = "your-gcp-project-id"
+zone = "us-central1-a"
+service_account = "cloudcoop-vm@your-gcp-project-id.iam.gserviceaccount.com"
+```
+
+### Important: What NOT to Grant
+
+Do NOT grant these permissions to the VM service account:
+
+- `roles/compute.*` - VM should not modify infrastructure
+- `roles/iam.*` - VM should not modify IAM
+- `roles/storage.*` - VM should not access arbitrary buckets
+- `roles/editor` or `roles/owner` - Never grant broad permissions
+
+The default Compute Engine service account has Editor permissions by default, which is why
+cloudcoop requires a dedicated service account.
 
 ## Resetting Setup
 

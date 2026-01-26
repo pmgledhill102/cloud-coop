@@ -127,6 +127,11 @@ func (p *Provider) StopVM(ctx context.Context, name string) error {
 
 // CreateVM creates a new VM with the given configuration.
 func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) error {
+	// Require service account for security (see docs/SECURITY.md)
+	if config.ServiceAccount == "" {
+		return fmt.Errorf("service_account is required in config for security; see docs/SETUP-FLOW.md")
+	}
+
 	// Build the machine type URL
 	machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", p.zone, config.MachineType)
 
@@ -179,6 +184,13 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 			Items: config.Tags,
 		}
 	}
+
+	// Attach service account with cloud-platform scope
+	// This provides OAuth tokens for the configured service account
+	instance.ServiceAccounts = []*computepb.ServiceAccount{{
+		Email:  ptr(config.ServiceAccount),
+		Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
+	}}
 
 	// Add startup script to configure SSH port if non-standard
 	if config.SSHPort > 0 && config.SSHPort != 22 {

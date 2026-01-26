@@ -13,8 +13,9 @@ func testConfig() *config.Config {
 		Cloud: config.CloudConfig{
 			Provider: "gcp",
 			GCP: config.GCPConfig{
-				Project: "test-project",
-				Zone:    "us-central1-a",
+				Project:        "test-project",
+				Zone:           "us-central1-a",
+				ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
 			},
 		},
 		VM: config.VMConfig{

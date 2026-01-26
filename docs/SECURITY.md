@@ -19,21 +19,29 @@ The sandbox is designed to:
 
 ### 1. GCP Service Account (Least Privilege)
 
-The VM runs under a dedicated service account with minimal permissions:
+cloudcoop **requires** a dedicated service account for VMs. The `cloud.gcp.service_account`
+configuration is mandatory and VM creation will fail without it. This prevents VMs from inheriting
+the overly-permissive default Compute Engine service account (which has Editor permissions).
+
+The VM should run under a dedicated service account with minimal permissions:
 
 ```text
-✅ Allowed:
-- artifactregistry.reader      # Pull container images
-- logging.logWriter            # Write logs to Cloud Logging
-- monitoring.metricWriter      # Write metrics
-- secretmanager.secretAccessor # Access specific secrets only
+✅ Recommended Permissions:
+- roles/logging.logWriter            # Write logs to Cloud Logging
+- roles/monitoring.metricWriter      # Write metrics
+- roles/artifactregistry.reader      # Pull container images (optional)
+- roles/secretmanager.secretAccessor # Access specific secrets (optional)
 
-❌ NOT Allowed:
-- compute.admin                # Cannot create/delete VMs
-- iam.admin                    # Cannot modify IAM
-- storage.admin                # Cannot access arbitrary buckets
-- billing.*                    # Cannot affect billing
+❌ NOT Allowed (Never Grant These):
+- roles/compute.*              # Cannot create/delete VMs
+- roles/iam.*                  # Cannot modify IAM
+- roles/storage.*              # Cannot access arbitrary buckets
+- roles/billing.*              # Cannot affect billing
+- roles/editor                 # Overly broad permissions
+- roles/owner                  # Full project access
 ```
+
+See [SETUP-FLOW.md](SETUP-FLOW.md#manual-service-account-setup-required) for setup instructions.
 
 ### 2. Network Isolation
 
@@ -172,7 +180,7 @@ gcloud alpha monitoring policies create \
 
 ## Security Checklist
 
-- [ ] Service account has minimal permissions
+- [x] Service account has minimal permissions (enforced by config validation)
 - [ ] IAP enabled for SSH access
 - [ ] No external IP (or restricted firewall)
 - [ ] API key stored in Secret Manager

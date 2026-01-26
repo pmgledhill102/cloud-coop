@@ -63,7 +63,7 @@ func TestConfig_Validate(t *testing.T) {
 			cfg: Config{
 				Cloud: CloudConfig{
 					Provider: "gcp",
-					GCP:      GCPConfig{Project: "proj", Zone: "zone-a"},
+					GCP:      GCPConfig{Project: "proj", Zone: "zone-a", ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
 				},
 				VM: VMConfig{Name: "vm-1"},
 			},
@@ -74,7 +74,7 @@ func TestConfig_Validate(t *testing.T) {
 			cfg: Config{
 				Cloud: CloudConfig{
 					Provider: "gcp",
-					GCP:      GCPConfig{Zone: "zone-a"},
+					GCP:      GCPConfig{Zone: "zone-a", ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
 				},
 				VM: VMConfig{Name: "vm-1"},
 			},
@@ -85,7 +85,18 @@ func TestConfig_Validate(t *testing.T) {
 			cfg: Config{
 				Cloud: CloudConfig{
 					Provider: "gcp",
-					GCP:      GCPConfig{Project: "proj"},
+					GCP:      GCPConfig{Project: "proj", ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
+				},
+				VM: VMConfig{Name: "vm-1"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing service account",
+			cfg: Config{
+				Cloud: CloudConfig{
+					Provider: "gcp",
+					GCP:      GCPConfig{Project: "proj", Zone: "zone-a"},
 				},
 				VM: VMConfig{Name: "vm-1"},
 			},
@@ -96,7 +107,7 @@ func TestConfig_Validate(t *testing.T) {
 			cfg: Config{
 				Cloud: CloudConfig{
 					Provider: "gcp",
-					GCP:      GCPConfig{Project: "proj", Zone: "zone-a"},
+					GCP:      GCPConfig{Project: "proj", Zone: "zone-a", ServiceAccount: "sa@proj.iam.gserviceaccount.com"},
 				},
 			},
 			wantErr: true,
@@ -156,8 +167,9 @@ func TestConfig_Save(t *testing.T) {
 		Cloud: CloudConfig{
 			Provider: "gcp",
 			GCP: GCPConfig{
-				Project: "my-project",
-				Zone:    "us-west1-a",
+				Project:        "my-project",
+				Zone:           "us-west1-a",
+				ServiceAccount: "sa@my-project.iam.gserviceaccount.com",
 			},
 		},
 		VM: VMConfig{
@@ -235,6 +247,12 @@ func TestConfig_SetValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			key:     "cloud.gcp.service_account",
+			value:   "sa@my-project.iam.gserviceaccount.com",
+			check:   func(c *Config) bool { return c.Cloud.GCP.ServiceAccount == "sa@my-project.iam.gserviceaccount.com" },
+			wantErr: false,
+		},
+		{
 			key:     "vm.name",
 			value:   "test-vm",
 			check:   func(c *Config) bool { return c.VM.Name == "test-vm" },
@@ -297,8 +315,9 @@ func TestConfig_GetValue(t *testing.T) {
 		Cloud: CloudConfig{
 			Provider: "gcp",
 			GCP: GCPConfig{
-				Project: "my-project",
-				Zone:    "us-central1-a",
+				Project:        "my-project",
+				Zone:           "us-central1-a",
+				ServiceAccount: "sa@my-project.iam.gserviceaccount.com",
 			},
 		},
 		VM: VMConfig{
@@ -321,6 +340,7 @@ func TestConfig_GetValue(t *testing.T) {
 		{"cloud.provider", "gcp", false},
 		{"cloud.gcp.project", "my-project", false},
 		{"cloud.gcp.zone", "us-central1-a", false},
+		{"cloud.gcp.service_account", "sa@my-project.iam.gserviceaccount.com", false},
 		{"vm.name", "test-vm", false},
 		{"ssh.port", "2222", false},
 		{"ssh.user", "ubuntu", false},
@@ -348,7 +368,7 @@ func TestAllKeys(t *testing.T) {
 	}
 
 	// Check that some expected keys are present
-	expected := []string{"cloud.provider", "cloud.gcp.project", "vm.name", "ssh.port"}
+	expected := []string{"cloud.provider", "cloud.gcp.project", "cloud.gcp.service_account", "vm.name", "ssh.port"}
 	for _, exp := range expected {
 		found := false
 		for _, k := range keys {
