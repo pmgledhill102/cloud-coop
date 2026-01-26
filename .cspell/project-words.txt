@@ -1,182 +1,159 @@
-# Cloud Coop Project Dictionary
-# Add project-specific words here (one per line)
-
-# Project name
-cloudcoop
-toml
-tomlq
-taplo
-
-# Go ecosystem
-golang
-golangci
-govulncheck
-gosec
-securego
-vulns
-gopkg
-gofmt
-goimports
-goreleaser
-bubbletea
-lipgloss
-charmbracelet
-zerolog
-slog
-cobra
-spf13
-
-# Cloud providers
-gcloud
-gcloud
-gsutil
-gsutil
-
-# Infrastructure
-tmux
-iterm
-ghostty
-kitty
-dockerfiles
-dockerfile
-
-# Shells
-tcsh
-ksh
-
-# Technical terms
-precommit
-pre-commit
-readonly
-codeowners
-dependabot
-codecov
-actionlint
-shellcheck
-yamllint
-markdownlint
-hadolint
-editorconfig
-gitignore
-gitattributes
-prettierrc
-prettierignore
 
 # Abbreviations and acronyms
-amd64
-arm64
-darwin
-linux
-macos
-stdin
-stdout
-stderr
-envvars
-ldflags
-cgo
-
+# Add project-specific words here (one per line)
+# Anthropic
+# Azure
+# Cloud Coop Project Dictionary
+# Cloud providers
+# Cloud/Infra terms
+# Code terms
 # Common Go terms
-struct
-structs
+# GCP specific
+# Geographic
+# GitHub Actions
+# Go build
+# Go ecosystem
+# GoReleaser
+# Infrastructure
+# Language tooling
+# Linters
+# Misc
+# Placeholder patterns
+# Project name
+# Shells
+# SSH/Networking
+# Technical terms
+# Testing
+actionlint
+amd64
+anthropics
+apiv
+apperrors
+arm64
+axion
+axxxx
+bubbletea
+carryforward
+cgo
+changelog
+charmbracelet
+clippy
+cloudcoop
+cobra
+codecov
+codeowners
+computepb
+covermode
+coverprofile
+darwin
+dependabot
+dockerfile
+dockerfiles
+dorny
+dpsv
+editorconfig
+envvars
+errcheck
+errorf
 func
 funcs
+gcloud
+ghostty
+gitattributes
+gitignore
+goarch
+gofmt
+goimports
+golang
+golangci
+golint
+gomod
+googleapi
+goos
+gopkg
+goreleaser
 goroutine
 goroutines
-mutex
-waitgroup
-errcheck
+gosec
+gosimple
 govet
-staticcheck
-ineffassign
-misspell
-revive
-
-# SSH/Networking
-sshd
-pubkey
-openssh
-knownhosts
-VMIP
-
-# Testing
-testdata
-testutil
-subtests
-testuser
-
-# Misc
-pmgledhill
-noreply
-semver
-changelog
-refactor
-
-# GCP specific
+govulncheck
+gsutil
+hadolint
+hamina
 highcpu
-preemptible
-axion
+hotspot
+imgs
+incpatch
+ineffassign
+iterm
+kitty
+knownhosts
+ksh
+ktlint
+laravel
+ldflags
+linux
+lipgloss
+ludeeus
+macos
+markdownlint
+misspell
+mutex
+mypy
+noreply
+openssh
 oslogin
-computepb
-secretmanager
-googleapi
-apiv
-
-# Cloud/Infra terms
+pipx
+pmgledhill
+pre-commit
+precommit
+preemptible
+prettierignore
+prettierrc
+pubkey
+pulumi
+readonly
+refactor
+reviewdog
+revive
+rubocop
+rustup
 sandboxed
 sandboxing
-tfstate
-hotspot
-pulumi
-
-# Language tooling
-pipx
-mypy
-rustup
-clippy
-temurin
-ktlint
 scalafmt
-rubocop
-laravel
-
-# Code terms
-errorf
-gosimple
-unittests
-carryforward
-unmarshals
-tview
-wrapf
-stdlib
-apperrors
-
-# Geographic
-hamina
-
-# Azure
-dpsv
-
-# Anthropic
-anthropics
-
-# Go build
-goarch
-goos
-gomod
-coverprofile
-covermode
-
-# Linters
-golint
-
-# GitHub Actions
-dorny
-reviewdog
-ludeeus
 scandir
-
-# GoReleaser
-incpatch
-
-# Placeholder patterns
-axxxx
+secretmanager
+securego
+semver
+shellcheck
+slog
+spf13
+sshd
+staticcheck
+stderr
+stdin
+stdlib
+stdout
+struct
+structs
+subtests
+taplo
+tcsh
+temurin
+testdata
+testuser
+testutil
+tfstate
+tmux
+toml
+tomlq
+tview
+unittests
+unmarshals
+VMIP
+vulns
+waitgroup
+wrapf
+yamllint
+zerolog

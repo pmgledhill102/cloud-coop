@@ -1,5 +1,9 @@
 # cloudcoop
 
+<p align="center">
+  <img src="imgs/cloud-coop-banner.png" alt="cloudcoop banner" width="600">
+</p>
+
 [![Tests](https://github.com/cloud-coop/cloudcoop/actions/workflows/test.yml/badge.svg)](https://github.com/cloud-coop/cloudcoop/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/cloud-coop/cloudcoop/branch/main/graph/badge.svg)](https://codecov.io/gh/cloud-coop/cloudcoop)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cloud-coop/cloudcoop)](https://goreportcard.com/report/github.com/cloud-coop/cloudcoop)
