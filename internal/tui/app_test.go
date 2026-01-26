@@ -388,7 +388,7 @@ func TestRenderHelp_ConfirmationMode(t *testing.T) {
 	}
 }
 
-func TestKeyC_Connect(t *testing.T) {
+func TestKey_LowercaseC_Connect(t *testing.T) {
 	// Setup model with agents to connect to
 	m := Model{
 		cfg:    &config.Config{SSH: config.SSHConfig{Port: 22}},
@@ -402,33 +402,33 @@ func TestKeyC_Connect(t *testing.T) {
 		selectedAgentIdx: 1, // Select agent-1
 	}
 
-	// Simulate pressing 'C'
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}}
+	// Simulate pressing 'c' (lowercase for connect)
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	_, cmd := m.Update(msg)
 
 	// Should return a command (the ExecProcess command)
 	if cmd == nil {
-		t.Error("pressing C should return a command")
+		t.Error("pressing c should return a command")
 	}
 }
 
-func TestKeyC_NotAllowedWhenNoAgents(t *testing.T) {
+func TestKey_LowercaseC_NotAllowedWhenNoAgents(t *testing.T) {
 	m := Model{
 		cfg:    &config.Config{},
 		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
 		agents: &agent.ListResult{Sessions: []agent.Session{}}, // No agents
 	}
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	_, cmd := m.Update(msg)
 
 	// Should NOT return a command
 	if cmd != nil {
-		t.Error("pressing C with no agents should not return a command")
+		t.Error("pressing c with no agents should not return a command")
 	}
 }
 
-func TestKeyC_NotAllowedWhenVMStopped(t *testing.T) {
+func TestKey_LowercaseC_NotAllowedWhenVMStopped(t *testing.T) {
 	m := Model{
 		cfg:    &config.Config{},
 		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusStopped},
@@ -437,12 +437,12 @@ func TestKeyC_NotAllowedWhenVMStopped(t *testing.T) {
 		},
 	}
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
 	_, cmd := m.Update(msg)
 
 	// Should NOT return a command
 	if cmd != nil {
-		t.Error("pressing C when VM stopped should not return a command")
+		t.Error("pressing c when VM stopped should not return a command")
 	}
 }
 
@@ -481,9 +481,9 @@ func TestRenderHelp_ShowsConnectAction(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include connect action
-	if !containsString(help, "C: connect") {
-		t.Error("help should show 'C: connect'")
+	// Should include connect action (lowercase c)
+	if !containsString(help, "c: connect") {
+		t.Error("help should show 'c: connect'")
 	}
 }
 

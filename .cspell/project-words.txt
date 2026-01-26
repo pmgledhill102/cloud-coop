@@ -155,5 +155,6 @@ VMIP
 vulns
 waitgroup
 wrapf
+xlarge
 yamllint
 zerolog

@@ -13,6 +13,8 @@ type instancesClient interface {
 	Get(ctx context.Context, req *computepb.GetInstanceRequest) (*computepb.Instance, error)
 	Start(ctx context.Context, req *computepb.StartInstanceRequest) (operation, error)
 	Stop(ctx context.Context, req *computepb.StopInstanceRequest) (operation, error)
+	Insert(ctx context.Context, req *computepb.InsertInstanceRequest) (operation, error)
+	Delete(ctx context.Context, req *computepb.DeleteInstanceRequest) (operation, error)
 	Close() error
 }
 
@@ -40,6 +42,22 @@ func (r *realInstancesClient) Start(ctx context.Context, req *computepb.StartIns
 
 func (r *realInstancesClient) Stop(ctx context.Context, req *computepb.StopInstanceRequest) (operation, error) {
 	op, err := r.client.Stop(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &realOperation{op: op}, nil
+}
+
+func (r *realInstancesClient) Insert(ctx context.Context, req *computepb.InsertInstanceRequest) (operation, error) {
+	op, err := r.client.Insert(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &realOperation{op: op}, nil
+}
+
+func (r *realInstancesClient) Delete(ctx context.Context, req *computepb.DeleteInstanceRequest) (operation, error) {
+	op, err := r.client.Delete(ctx, req)
 	if err != nil {
 		return nil, err
 	}

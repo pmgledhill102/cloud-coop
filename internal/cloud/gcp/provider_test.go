@@ -406,6 +406,225 @@ func TestExtractMachineTypeName(t *testing.T) {
 	}
 }
 
+func TestProvider_CreateVM(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     cloud.VMCreateConfig
+		mock       *mockInstancesClient
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{
+			name: "successful create",
+			config: cloud.VMCreateConfig{
+				Name:        "new-vm",
+				MachineType: "c4a-highcpu-4",
+				DiskSizeGB:  50,
+				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Spot:        true,
+				Network:     "default",
+				Tags:        []string{"cloudcoop"},
+			},
+			mock: &mockInstancesClient{},
+		},
+		{
+			name: "create without tags",
+			config: cloud.VMCreateConfig{
+				Name:        "no-tags-vm",
+				MachineType: "e2-micro",
+				DiskSizeGB:  10,
+				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Spot:        false,
+				Network:     "default",
+			},
+			mock: &mockInstancesClient{},
+		},
+		{
+			name: "insert error",
+			config: cloud.VMCreateConfig{
+				Name:        "error-vm",
+				MachineType: "c4a-highcpu-4",
+				DiskSizeGB:  50,
+				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Network:     "default",
+			},
+			mock: &mockInstancesClient{
+				insertError: errors.New("insert failed"),
+			},
+			wantErr:    true,
+			wantErrMsg: "create instance error-vm",
+		},
+		{
+			name: "wait error",
+			config: cloud.VMCreateConfig{
+				Name:        "wait-error-vm",
+				MachineType: "c4a-highcpu-4",
+				DiskSizeGB:  50,
+				Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+				Network:     "default",
+			},
+			mock: &mockInstancesClient{
+				waitError: errors.New("operation failed"),
+			},
+			wantErr:    true,
+			wantErrMsg: "wait for create wait-error-vm",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newWithClient("test-project", "test-zone", tt.mock)
+			err := p.CreateVM(context.Background(), tt.config)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CreateVM() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr {
+				if tt.wantErrMsg != "" && !contains(err.Error(), tt.wantErrMsg) {
+					t.Errorf("CreateVM() error = %v, want containing %q", err, tt.wantErrMsg)
+				}
+				return
+			}
+
+			if !tt.mock.insertCalled {
+				t.Error("Insert() was not called")
+			}
+
+			req := tt.mock.lastInsertReq
+			if req.GetProject() != "test-project" {
+				t.Errorf("Insert() project = %q, want %q", req.GetProject(), "test-project")
+			}
+			if req.GetZone() != "test-zone" {
+				t.Errorf("Insert() zone = %q, want %q", req.GetZone(), "test-zone")
+			}
+
+			inst := req.GetInstanceResource()
+			if inst.GetName() != tt.config.Name {
+				t.Errorf("Instance name = %q, want %q", inst.GetName(), tt.config.Name)
+			}
+		})
+	}
+}
+
+func TestProvider_CreateVM_SpotScheduling(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:        "spot-vm",
+		MachineType: "c4a-highcpu-4",
+		DiskSizeGB:  50,
+		Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Spot:        true,
+		Network:     "default",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	scheduling := inst.GetScheduling()
+	if scheduling == nil {
+		t.Fatal("Scheduling is nil, expected spot configuration")
+	}
+	if scheduling.GetProvisioningModel() != "SPOT" {
+		t.Errorf("ProvisioningModel = %q, want %q", scheduling.GetProvisioningModel(), "SPOT")
+	}
+	if scheduling.GetInstanceTerminationAction() != "STOP" {
+		t.Errorf("InstanceTerminationAction = %q, want %q", scheduling.GetInstanceTerminationAction(), "STOP")
+	}
+}
+
+func TestProvider_CreateVM_NetworkTags(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:        "tagged-vm",
+		MachineType: "c4a-highcpu-4",
+		DiskSizeGB:  50,
+		Image:       "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:     "default",
+		Tags:        []string{"cloudcoop", "ssh-allowed"},
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	tags := inst.GetTags()
+	if tags == nil {
+		t.Fatal("Tags is nil, expected network tags")
+	}
+	if len(tags.GetItems()) != 2 {
+		t.Errorf("Tags count = %d, want 2", len(tags.GetItems()))
+	}
+}
+
+func TestProvider_DeleteVM(t *testing.T) {
+	tests := []struct {
+		name       string
+		vmName     string
+		mock       *mockInstancesClient
+		wantErr    bool
+		wantErrMsg string
+	}{
+		{
+			name:   "successful delete",
+			vmName: "test-vm",
+			mock:   &mockInstancesClient{},
+		},
+		{
+			name:   "delete error",
+			vmName: "error-vm",
+			mock: &mockInstancesClient{
+				deleteError: errors.New("delete failed"),
+			},
+			wantErr:    true,
+			wantErrMsg: "delete instance error-vm",
+		},
+		{
+			name:   "wait error",
+			vmName: "wait-error-vm",
+			mock: &mockInstancesClient{
+				waitError: errors.New("operation failed"),
+			},
+			wantErr:    true,
+			wantErrMsg: "wait for delete wait-error-vm",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newWithClient("test-project", "test-zone", tt.mock)
+			err := p.DeleteVM(context.Background(), tt.vmName)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("DeleteVM() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr {
+				if tt.wantErrMsg != "" && !contains(err.Error(), tt.wantErrMsg) {
+					t.Errorf("DeleteVM() error = %v, want containing %q", err, tt.wantErrMsg)
+				}
+				return
+			}
+
+			if !tt.mock.deleteCalled {
+				t.Error("Delete() was not called")
+			}
+			if tt.mock.lastDeleteReq.GetInstance() != tt.vmName {
+				t.Errorf("Delete() called with instance = %q, want %q", tt.mock.lastDeleteReq.GetInstance(), tt.vmName)
+			}
+		})
+	}
+}
+
 func TestProviderInterface(t *testing.T) {
 	// Ensure Provider implements cloud.Provider
 	var _ cloud.Provider = (*Provider)(nil)

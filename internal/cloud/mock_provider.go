@@ -23,6 +23,12 @@ type MockProvider struct {
 	// StopVMError is returned by StopVM().
 	StopVMError error
 
+	// CreateVMError is returned by CreateVM().
+	CreateVMError error
+
+	// DeleteVMError is returned by DeleteVM().
+	DeleteVMError error
+
 	// CallLog records method calls for verification.
 	CallLog []MockCall
 }
@@ -85,6 +91,22 @@ func (m *MockProvider) StopVM(ctx context.Context, name string) error {
 	return m.StopVMError
 }
 
+// CreateVM returns the configured error (nil for success).
+func (m *MockProvider) CreateVM(ctx context.Context, config VMCreateConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CallLog = append(m.CallLog, MockCall{Method: "CreateVM", Args: []interface{}{config}})
+	return m.CreateVMError
+}
+
+// DeleteVM returns the configured error (nil for success).
+func (m *MockProvider) DeleteVM(ctx context.Context, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CallLog = append(m.CallLog, MockCall{Method: "DeleteVM", Args: []interface{}{name}})
+	return m.DeleteVMError
+}
+
 // WithVMInfo sets the VMInfo response and returns the mock for chaining.
 func (m *MockProvider) WithVMInfo(info *VMInfo) *MockProvider {
 	m.VMInfoResponse = info
@@ -115,6 +137,18 @@ func (m *MockProvider) WithStartVMError(err error) *MockProvider {
 // WithStopVMError sets the StopVM error and returns the mock for chaining.
 func (m *MockProvider) WithStopVMError(err error) *MockProvider {
 	m.StopVMError = err
+	return m
+}
+
+// WithCreateVMError sets the CreateVM error and returns the mock for chaining.
+func (m *MockProvider) WithCreateVMError(err error) *MockProvider {
+	m.CreateVMError = err
+	return m
+}
+
+// WithDeleteVMError sets the DeleteVM error and returns the mock for chaining.
+func (m *MockProvider) WithDeleteVMError(err error) *MockProvider {
+	m.DeleteVMError = err
 	return m
 }
 

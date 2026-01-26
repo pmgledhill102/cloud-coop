@@ -125,6 +125,93 @@ func (p *Provider) StopVM(ctx context.Context, name string) error {
 	return nil
 }
 
+// CreateVM creates a new VM with the given configuration.
+func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) error {
+	// Build the machine type URL
+	machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", p.zone, config.MachineType)
+
+	// Build the instance specification
+	instance := &computepb.Instance{
+		Name:        &config.Name,
+		MachineType: &machineTypeURL,
+		Disks: []*computepb.AttachedDisk{
+			{
+				Boot:       ptr(true),
+				AutoDelete: ptr(false), // Per ADR-0003: preserve disk across stops
+				InitializeParams: &computepb.AttachedDiskInitializeParams{
+					SourceImage: &config.Image,
+					DiskSizeGb:  &config.DiskSizeGB,
+					DiskType:    ptr(fmt.Sprintf("zones/%s/diskTypes/pd-balanced", p.zone)),
+				},
+			},
+		},
+		NetworkInterfaces: []*computepb.NetworkInterface{
+			{
+				Network: ptr(fmt.Sprintf("global/networks/%s", config.Network)),
+				AccessConfigs: []*computepb.AccessConfig{
+					{
+						Name: ptr("External NAT"),
+						Type: ptr("ONE_TO_ONE_NAT"),
+					},
+				},
+			},
+		},
+	}
+
+	// Configure spot instance with STOP on preemption (per ADR-0003)
+	if config.Spot {
+		instance.Scheduling = &computepb.Scheduling{
+			ProvisioningModel:         ptr("SPOT"),
+			InstanceTerminationAction: ptr("STOP"),
+		}
+	}
+
+	// Add network tags if specified
+	if len(config.Tags) > 0 {
+		instance.Tags = &computepb.Tags{
+			Items: config.Tags,
+		}
+	}
+
+	op, err := p.client.Insert(ctx, &computepb.InsertInstanceRequest{
+		Project:          p.project,
+		Zone:             p.zone,
+		InstanceResource: instance,
+	})
+	if err != nil {
+		return fmt.Errorf("create instance %s: %w", config.Name, err)
+	}
+
+	// Wait for operation to complete
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for create %s: %w", config.Name, err)
+	}
+
+	return nil
+}
+
+// DeleteVM deletes a VM by name.
+func (p *Provider) DeleteVM(ctx context.Context, name string) error {
+	op, err := p.client.Delete(ctx, &computepb.DeleteInstanceRequest{
+		Project:  p.project,
+		Zone:     p.zone,
+		Instance: name,
+	})
+	if err != nil {
+		return fmt.Errorf("delete instance %s: %w", name, err)
+	}
+
+	// Wait for operation to complete
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for delete %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// ptr returns a pointer to the given value.
+func ptr[T any](v T) *T { return &v }
+
 // Close closes the provider's clients.
 func (p *Provider) Close() error {
 	if p.client != nil {

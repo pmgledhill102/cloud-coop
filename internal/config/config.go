@@ -47,7 +47,13 @@ type GCPConfig struct {
 
 // VMConfig contains VM settings.
 type VMConfig struct {
-	Name string `toml:"name"`
+	Name         string            `toml:"name"`
+	DiskSizeGB   int64             `toml:"disk_size_gb"`  // Boot disk size in GB (default: 50)
+	Image        string            `toml:"image"`         // Boot disk image (default: Ubuntu 24.04 ARM)
+	Spot         bool              `toml:"spot"`          // Use spot/preemptible instances
+	Network      string            `toml:"network"`       // VPC network name (default: "default")
+	Tags         []string          `toml:"tags"`          // Network tags for firewall rules
+	MachineSizes map[string]string `toml:"machine_sizes"` // Size name -> machine type mapping
 }
 
 // DefaultConfigPath returns the default user config file path.
@@ -97,6 +103,23 @@ func LoadFile(path string) (*Config, error) {
 	}
 	if cfg.SSH.Port == 0 {
 		cfg.SSH.Port = 22
+	}
+	if cfg.VM.DiskSizeGB == 0 {
+		cfg.VM.DiskSizeGB = 50
+	}
+	if cfg.VM.Image == "" {
+		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64"
+	}
+	if cfg.VM.Network == "" {
+		cfg.VM.Network = "default"
+	}
+	if cfg.VM.MachineSizes == nil {
+		cfg.VM.MachineSizes = map[string]string{
+			"small":  "c4a-highcpu-4",
+			"medium": "c4a-highcpu-8",
+			"large":  "c4a-highcpu-16",
+			"xlarge": "c4a-highcpu-32",
+		}
 	}
 
 	return &cfg, nil
