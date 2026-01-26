@@ -104,3 +104,166 @@ func parseIndex(s string, index *int) (bool, error) {
 	*index = n
 	return true, nil
 }
+
+// ErrNoSession indicates the tmux session does not exist.
+var ErrNoSession = errors.New("no agents session exists")
+
+// ErrWindowNotFound indicates the specified tmux window was not found.
+var ErrWindowNotFound = errors.New("window not found")
+
+// ErrActiveProcess indicates a window has an active process running.
+var ErrActiveProcess = errors.New("window has active process")
+
+// CreateSessionOptions contains options for creating a new agent session.
+type CreateSessionOptions struct {
+	Name    string // window name (auto-generated if empty)
+	Command string // command to run (uses "bash" if empty)
+}
+
+// CreateSession creates a new tmux window in the agents session.
+// If no agents session exists, it creates the session first.
+func CreateSession(runner ssh.Runner, opts CreateSessionOptions) (*Session, error) {
+	// Default command to bash if not specified
+	command := opts.Command
+	if command == "" {
+		command = "bash"
+	}
+
+	// Check if session exists first
+	listResult, err := ListSessions(runner)
+	if err != nil && !errors.Is(err, ErrTmuxNotInstalled) {
+		return nil, err
+	}
+	if errors.Is(err, ErrTmuxNotInstalled) {
+		return nil, err
+	}
+
+	var windowIndex int
+	if listResult.NoSession {
+		// Create new session with the first window
+		name := opts.Name
+		if name == "" {
+			name = "agent-0"
+		}
+		// Quote the command to handle spaces
+		cmd := "tmux new-session -d -s agents -n " + shellEscape(name) + " " + shellEscape(command)
+		_, err := runner.Run(cmd)
+		if err != nil {
+			return nil, err
+		}
+		windowIndex = 0
+	} else {
+		// Find next available window index
+		maxIndex := -1
+		for _, s := range listResult.Sessions {
+			if s.Index > maxIndex {
+				maxIndex = s.Index
+			}
+		}
+		windowIndex = maxIndex + 1
+
+		// Generate name if not provided
+		name := opts.Name
+		if name == "" {
+			name = "agent-" + itoa(windowIndex)
+		}
+
+		// Create new window in existing session
+		cmd := "tmux new-window -t agents -n " + shellEscape(name) + " " + shellEscape(command)
+		_, err := runner.Run(cmd)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Return the created session info
+	return &Session{
+		Index:   windowIndex,
+		Name:    opts.Name,
+		Command: command,
+	}, nil
+}
+
+// KillSessionOptions contains options for killing an agent session.
+type KillSessionOptions struct {
+	Index int  // window index to kill
+	Force bool // kill even if there's an active process
+}
+
+// KillSession kills a tmux window in the agents session.
+func KillSession(runner ssh.Runner, opts KillSessionOptions) error {
+	// First verify the window exists and check for active process
+	listResult, err := ListSessions(runner)
+	if err != nil {
+		return err
+	}
+
+	if listResult.NoSession {
+		return ErrNoSession
+	}
+
+	// Find the session with the given index
+	var found *Session
+	for _, s := range listResult.Sessions {
+		if s.Index == opts.Index {
+			found = &s
+			break
+		}
+	}
+
+	if found == nil {
+		return ErrWindowNotFound
+	}
+
+	// Check if there's an active process (not just a shell)
+	if !opts.Force && isActiveProcess(found.Command) {
+		return ErrActiveProcess
+	}
+
+	// Kill the window
+	cmd := "tmux kill-window -t agents:" + itoa(opts.Index)
+	_, err = runner.Run(cmd)
+	if err != nil {
+		// Check if the error is because the window doesn't exist
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "can't find") || strings.Contains(errStr, "not found") {
+			return ErrWindowNotFound
+		}
+		return err
+	}
+
+	return nil
+}
+
+// isActiveProcess returns true if the command indicates an active process
+// (not just an idle shell).
+func isActiveProcess(command string) bool {
+	// Common shell commands that indicate idle state
+	idleCommands := []string{"bash", "sh", "zsh", "fish", "ksh", "csh", "tcsh", "dash"}
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
+	for _, idle := range idleCommands {
+		if cmdLower == idle {
+			return false
+		}
+	}
+	return true
+}
+
+// shellEscape escapes a string for safe use in shell commands.
+func shellEscape(s string) string {
+	// Use single quotes and escape any single quotes in the string
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// itoa converts an integer to a string (simple implementation to avoid fmt import).
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
+}

@@ -13,9 +13,15 @@ import (
 
 // Config represents the cloudcoop configuration.
 type Config struct {
-	Cloud CloudConfig `toml:"cloud"`
-	VM    VMConfig    `toml:"vm"`
-	SSH   SSHConfig   `toml:"ssh"`
+	Cloud  CloudConfig  `toml:"cloud"`
+	VM     VMConfig     `toml:"vm"`
+	SSH    SSHConfig    `toml:"ssh"`
+	Agents AgentsConfig `toml:"agents"`
+}
+
+// AgentsConfig contains settings for agent sessions.
+type AgentsConfig struct {
+	DefaultCommand string `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
 }
 
 // SSHConfig contains SSH connection settings.
