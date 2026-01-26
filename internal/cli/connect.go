@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"strconv"
 	"time"
 
@@ -92,34 +91,19 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get IP address for SSH
-	ip := vmInfo.ExternalIP
-	if ip == "" {
-		ip = vmInfo.InternalIP
-	}
-	if ip == "" {
+	// Resolve SSH connection parameters using helpers
+	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
 		return nil
 	}
 
-	// Determine SSH user
-	sshUser := cfg.SSH.User
-	if sshUser == "" {
-		if u, err := user.Current(); err == nil {
-			sshUser = u.Username
-		}
-	}
+	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 	// First verify the window exists using Go SSH client
 	log.Debug("verifying agent window exists", "index", index)
-	sshCfg := ssh.Config{
-		Host:    ip,
-		User:    sshUser,
-		Port:    cfg.SSH.Port,
-		Timeout: ssh.DefaultTimeout,
-	}
 
-	client, err := ssh.NewClient(sshCfg)
+	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
 	if err != nil {
 		return fmt.Errorf("SSH connection failed: %w", err)
 	}

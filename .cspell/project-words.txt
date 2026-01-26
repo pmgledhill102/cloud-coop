@@ -96,6 +96,7 @@ sshd
 pubkey
 openssh
 knownhosts
+VMIP
 
 # Testing
 testdata
