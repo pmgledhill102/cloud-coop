@@ -10,6 +10,8 @@ taplo
 # Go ecosystem
 golang
 golangci
+govulncheck
+gosec
 gopkg
 gofmt
 goimports
