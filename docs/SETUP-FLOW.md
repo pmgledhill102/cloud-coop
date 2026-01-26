@@ -168,10 +168,16 @@ If creating new project:
 │  [✓] Created VM: claude-sandbox                                 │
 │  [✓] Attached service account                                   │
 │  [✓] Configured spot instance with STOP on preemption          │
+│  [✓] Added cloudcoop metadata (version, timestamp)             │
 │  [░░░░░░░░░░░░░░░░░░░] Waiting for VM to start...              │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**VM Metadata:** cloudcoop adds metadata labels to VMs it creates:
+- `cloudcoop-version`: Version that created the VM (for upgrade detection)
+- `cloudcoop-created`: Creation timestamp
+- `cloudcoop-config-hash`: Config hash (to detect when reconfiguration needed)
 
 ### Stage 5: VM Provisioning
 

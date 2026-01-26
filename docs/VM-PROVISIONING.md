@@ -110,6 +110,30 @@ Key flags explained:
 | `--tags=claude-sandbox` | For firewall rules targeting |
 | `--metadata=enable-oslogin=TRUE` | Use OS Login for SSH key management |
 
+### VM Metadata (cloudcoop-managed VMs)
+
+When cloudcoop creates VMs, it adds metadata labels for identification and upgrade detection:
+
+| Metadata Key | Example Value | Purpose |
+|--------------|---------------|---------|
+| `cloudcoop-version` | `v0.1.0` | Version of cloudcoop that created the VM |
+| `cloudcoop-created` | `2024-01-15T10:30:00Z` | ISO timestamp of creation |
+| `cloudcoop-config-hash` | `a1b2c3d4` | Hash of config for upgrade detection |
+
+This metadata enables:
+- **Identification**: Detect if a VM was created by cloudcoop vs manually
+- **Upgrade workflows**: Detect missing tools/config when cloudcoop version advances
+- **Multi-VM support**: Identify which VMs belong to cloudcoop
+- **Diagnostics**: `cloudcoop doctor` can verify VM state matches expectations
+
+To manually add cloudcoop metadata to an existing VM:
+
+```bash
+gcloud compute instances add-metadata claude-sandbox \
+  --zone=europe-north2-a \
+  --metadata=cloudcoop-version=v0.1.0,cloudcoop-created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
 ### Alternative: On-Demand Instance
 
 For guaranteed availability (no preemption):
