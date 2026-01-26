@@ -50,10 +50,11 @@ var (
 
 // Model represents the TUI application state.
 type Model struct {
-	width   int
-	height  int
-	ready   bool
-	loading bool
+	width     int
+	height    int
+	ready     bool
+	loading   bool
+	operation string // "", "starting", "stopping"
 
 	cfg     *config.Config
 	cfgErr  error
@@ -80,6 +81,16 @@ type vmInfoMsg struct {
 	info    *cloud.VMInfo
 	err     error
 	cleanup func()
+}
+
+// vmStartMsg is sent when VM start completes.
+type vmStartMsg struct {
+	err error
+}
+
+// vmStopMsg is sent when VM stop completes.
+type vmStopMsg struct {
+	err error
 }
 
 // loadConfig loads the configuration file.
@@ -119,6 +130,66 @@ func fetchVMInfo(cfg *config.Config) tea.Cmd {
 	}
 }
 
+// startVM starts the VM asynchronously.
+func startVM(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		var provider cloud.Provider
+		var cleanup func()
+
+		switch cfg.Cloud.Provider {
+		case "gcp":
+			p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
+			if err != nil {
+				return vmStartMsg{err: fmt.Errorf("create GCP provider: %w", err)}
+			}
+			provider = p
+			cleanup = func() { _ = p.Close() }
+		default:
+			return vmStartMsg{err: fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)}
+		}
+		defer cleanup()
+
+		if err := provider.StartVM(ctx, cfg.VM.Name); err != nil {
+			return vmStartMsg{err: fmt.Errorf("start VM: %w", err)}
+		}
+
+		return vmStartMsg{}
+	}
+}
+
+// stopVM stops the VM asynchronously.
+func stopVM(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		var provider cloud.Provider
+		var cleanup func()
+
+		switch cfg.Cloud.Provider {
+		case "gcp":
+			p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
+			if err != nil {
+				return vmStopMsg{err: fmt.Errorf("create GCP provider: %w", err)}
+			}
+			provider = p
+			cleanup = func() { _ = p.Close() }
+		default:
+			return vmStopMsg{err: fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)}
+		}
+		defer cleanup()
+
+		if err := provider.StopVM(ctx, cfg.VM.Name); err != nil {
+			return vmStopMsg{err: fmt.Errorf("stop VM: %w", err)}
+		}
+
+		return vmStopMsg{}
+	}
+}
+
 // Init initializes the TUI application.
 func (m Model) Init() tea.Cmd {
 	return loadConfig
@@ -136,9 +207,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "r":
 			// Refresh VM status
-			if m.cfg != nil && m.cfgErr == nil {
+			if m.cfg != nil && m.cfgErr == nil && m.operation == "" {
 				m.loading = true
 				return m, fetchVMInfo(m.cfg)
+			}
+		case "s", "S":
+			// Start VM (only when stopped and no operation in progress)
+			if m.cfg != nil && m.cfgErr == nil && m.vmInfo != nil &&
+				m.vmInfo.Status == cloud.VMStatusStopped && m.operation == "" {
+				m.operation = "starting"
+				return m, startVM(m.cfg)
+			}
+		case "t", "T":
+			// Stop VM (only when running and no operation in progress)
+			if m.cfg != nil && m.cfgErr == nil && m.vmInfo != nil &&
+				m.vmInfo.Status == cloud.VMStatusRunning && m.operation == "" {
+				m.operation = "stopping"
+				return m, stopVM(m.cfg)
 			}
 		}
 
@@ -173,6 +258,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.cleanup = msg.cleanup
 		}
+
+	case vmStartMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.vmErr = msg.err
+			return m, nil
+		}
+		// Refresh VM status after successful start
+		m.loading = true
+		return m, fetchVMInfo(m.cfg)
+
+	case vmStopMsg:
+		m.operation = ""
+		if msg.err != nil {
+			m.vmErr = msg.err
+			return m, nil
+		}
+		// Refresh VM status after successful stop
+		m.loading = true
+		return m, fetchVMInfo(m.cfg)
 	}
 
 	return m, nil
@@ -190,6 +295,10 @@ func (m Model) View() string {
 	var content string
 	if m.cfgErr != nil {
 		content = m.renderConfigError()
+	} else if m.operation == "starting" {
+		content = boxStyle.Render("Starting VM... ◐")
+	} else if m.operation == "stopping" {
+		content = boxStyle.Render("Stopping VM... ◑")
 	} else if m.loading {
 		content = boxStyle.Render("Loading VM status...")
 	} else if m.vmErr != nil {
@@ -198,7 +307,7 @@ func (m Model) View() string {
 		content = m.renderVMStatus()
 	}
 
-	help := helpStyle.Render("q: quit • r: refresh • ?: help")
+	help := m.renderHelp()
 
 	return fmt.Sprintf("\n%s\n%s\n\n%s\n\n%s\n",
 		title,
@@ -313,4 +422,29 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 	default:
 		return string(status)
 	}
+}
+
+func (m Model) renderHelp() string {
+	// Base actions always available
+	actions := []string{"q: quit", "r: refresh"}
+
+	// Add context-sensitive actions based on VM state
+	if m.vmInfo != nil && m.operation == "" {
+		switch m.vmInfo.Status {
+		case cloud.VMStatusStopped:
+			actions = append(actions, "S: start")
+		case cloud.VMStatusRunning:
+			actions = append(actions, "T: stop")
+		}
+	}
+
+	var result string
+	for i, action := range actions {
+		if i > 0 {
+			result += " • "
+		}
+		result += action
+	}
+
+	return helpStyle.Render(result)
 }
