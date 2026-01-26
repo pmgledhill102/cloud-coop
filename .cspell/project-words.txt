@@ -12,6 +12,8 @@ golang
 golangci
 govulncheck
 gosec
+securego
+vulns
 gopkg
 gofmt
 goimports
