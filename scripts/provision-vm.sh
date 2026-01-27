@@ -503,9 +503,19 @@ apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 # AWS CLI
 # ============================================
 report_progress "Installing AWS CLI"
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+# Detect architecture for correct binary
+AWS_ARCH="x86_64"
+if [ "$(uname -m)" = "aarch64" ]; then
+    AWS_ARCH="aarch64"
+fi
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
 unzip -qo /tmp/awscliv2.zip -d /tmp
-/tmp/aws/install
+# Use --update if already installed (idempotent)
+if [ -d /usr/local/aws-cli ]; then
+    /tmp/aws/install --update
+else
+    /tmp/aws/install
+fi
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
 # ============================================
