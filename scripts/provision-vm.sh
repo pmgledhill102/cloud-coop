@@ -21,7 +21,7 @@ LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
 # Total number of provisioning steps (for progress reporting)
-TOTAL_STEPS=35
+TOTAL_STEPS=36
 CURRENT_STEP=0
 
 # Create required directories
@@ -90,10 +90,66 @@ export DEBIAN_FRONTEND=noninteractive
 # Wait for cloud-init to complete
 cloud-init status --wait || true
 
+# Wait for apt locks (unattended-upgrades may be running on fresh VMs)
+wait_for_apt() {
+    local max_wait=300  # 5 minutes max
+    local waited=0
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+          fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+          fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+        if [ $waited -ge $max_wait ]; then
+            echo "Timeout waiting for apt locks (waited ${max_wait}s)"
+            # Try to kill unattended-upgrades if it's the culprit
+            pkill -9 unattended-upgr 2>/dev/null || true
+            sleep 2
+            break
+        fi
+        echo "Waiting for apt lock (${waited}s)..."
+        sleep 5
+        waited=$((waited + 5))
+    done
+}
+
+# ============================================
+# Configure GCE APT Mirror (3x faster downloads)
+# ============================================
+report_progress "Configuring GCE apt mirror"
+
+# Detect GCP region from metadata
+GCP_ZONE=$(curl -sH "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/zone 2>/dev/null | cut -d/ -f4)
+GCP_REGION=$(echo "$GCP_ZONE" | sed 's/-[a-z]$//')
+
+if [ -n "$GCP_REGION" ]; then
+    echo "Detected GCP region: $GCP_REGION"
+    # Use GCE-internal Ubuntu mirror for faster ARM64 downloads
+    GCE_MIRROR="${GCP_REGION}.gce.ports.ubuntu.com"
+
+    # Test if GCE mirror is reachable
+    if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
+        echo "Using GCE mirror: $GCE_MIRROR"
+        # Replace ports.ubuntu.com with GCE mirror in sources (idempotent)
+        # Only replace if not already using a GCE mirror
+        # Handle both legacy sources.list and new deb822 .sources format
+        if ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
+            sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
+        fi
+        for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$f" ] && ! grep -q "gce.ports.ubuntu.com" "$f" 2>/dev/null; then
+                sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$f" 2>/dev/null || true
+            fi
+        done
+    else
+        echo "GCE mirror not reachable, using default ports.ubuntu.com"
+    fi
+else
+    echo "Not running on GCP, using default mirrors"
+fi
+
 # ============================================
 # System Updates
 # ============================================
 report_progress "Updating system packages"
+wait_for_apt
 apt-get update
 apt-get upgrade -y
 
@@ -169,7 +225,10 @@ apt-get install -y gh
 # Docker
 # ============================================
 report_progress "Installing Docker"
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+# Use --batch --yes to avoid TTY prompts, and only create if needed
+if [ ! -f /usr/share/keyrings/docker-archive-keyring.gpg ]; then
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+fi
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -209,16 +268,42 @@ npm install -g \
 # ============================================
 # Python
 # ============================================
-report_progress "Installing Python ${PYTHON_VERSION}"
-add-apt-repository -y ppa:deadsnakes/ppa
-apt-get update
-apt-get install -y \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-venv \
-    python${PYTHON_VERSION}-dev
+report_progress "Installing Python"
 
-update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
-update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
+# Try deadsnakes PPA for specific Python version, fall back to system Python
+# deadsnakes may not support newest Ubuntu versions
+SYSTEM_PYTHON_VERSION=$(python3 --version 2>/dev/null | grep -oP '\d+\.\d+' || echo "")
+
+if [ -n "$SYSTEM_PYTHON_VERSION" ]; then
+    echo "System Python version: $SYSTEM_PYTHON_VERSION"
+fi
+
+# Check if deadsnakes supports this Ubuntu release BEFORE adding the PPA
+UBUNTU_CODENAME=$(lsb_release -cs)
+DEADSNAKES_RELEASE_URL="https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu/dists/${UBUNTU_CODENAME}/Release"
+
+if curl -sI "$DEADSNAKES_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    echo "deadsnakes PPA supports Ubuntu $UBUNTU_CODENAME"
+    add-apt-repository -y ppa:deadsnakes/ppa
+    apt-get update
+    # Try to install requested Python version
+    if apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev 2>/dev/null; then
+        echo "Installed Python ${PYTHON_VERSION} from deadsnakes"
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
+        update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
+    else
+        echo "Python ${PYTHON_VERSION} not available, using system Python $SYSTEM_PYTHON_VERSION"
+        PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
+        apt-get install -y python3-venv python3-dev || true
+    fi
+else
+    echo "deadsnakes PPA does not support Ubuntu $UBUNTU_CODENAME, using system Python $SYSTEM_PYTHON_VERSION"
+    PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
+    # Ensure venv and dev packages are installed for system Python
+    apt-get install -y python3-venv python3-dev || true
+fi
+
+echo "Using Python version: $(python3 --version)"
 
 # Install uv (fast Python package manager)
 report_progress "Installing uv package manager"
@@ -297,10 +382,25 @@ rustup component add clippy rustfmt
 # Java (Temurin)
 # ============================================
 report_progress "Installing Java ${JAVA_VERSION}"
-wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptium.list
-apt-get update
-apt-get install -y temurin-${JAVA_VERSION}-jdk
+# Try Adoptium Temurin first, fall back to OpenJDK if not available
+UBUNTU_CODENAME=$(lsb_release -cs)
+ADOPTIUM_AVAILABLE=false
+
+# Check if Adoptium supports this Ubuntu version
+if curl -sI "https://packages.adoptium.net/artifactory/deb/dists/${UBUNTU_CODENAME}/Release" 2>/dev/null | grep -q "200 OK"; then
+    ADOPTIUM_AVAILABLE=true
+fi
+
+if [ "$ADOPTIUM_AVAILABLE" = true ]; then
+    echo "Installing Temurin JDK from Adoptium"
+    wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --batch --yes --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
+    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/adoptium.list
+    apt-get update
+    apt-get install -y temurin-${JAVA_VERSION}-jdk || apt-get install -y openjdk-${JAVA_VERSION}-jdk
+else
+    echo "Adoptium does not support Ubuntu ${UBUNTU_CODENAME}, using OpenJDK"
+    apt-get install -y openjdk-${JAVA_VERSION}-jdk
+fi
 
 # Maven
 apt-get install -y maven
@@ -308,7 +408,7 @@ apt-get install -y maven
 # Gradle
 report_progress "Installing Gradle ${GRADLE_VERSION}"
 wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip
-unzip -q /tmp/gradle.zip -d /opt
+unzip -qo /tmp/gradle.zip -d /opt
 ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
 rm /tmp/gradle.zip
 
@@ -337,8 +437,10 @@ apt-get install -y \
     libffi-dev \
     libgdbm-dev
 
-git clone https://github.com/rbenv/rbenv.git /opt/rbenv
-git clone https://github.com/rbenv/ruby-build.git /opt/rbenv/plugins/ruby-build
+if [ ! -d /opt/rbenv ]; then
+    git clone https://github.com/rbenv/rbenv.git /opt/rbenv
+    git clone https://github.com/rbenv/ruby-build.git /opt/rbenv/plugins/ruby-build
+fi
 
 export PATH="/opt/rbenv/bin:/opt/rbenv/shims:$PATH"
 eval "$(rbenv init -)"
@@ -353,18 +455,27 @@ gem install bundler rubocop
 # ============================================
 # PHP
 # ============================================
-report_progress "Installing PHP ${PHP_VERSION}"
-add-apt-repository -y ppa:ondrej/php
-apt-get update
-apt-get install -y \
-    php${PHP_VERSION} \
-    php${PHP_VERSION}-cli \
-    php${PHP_VERSION}-common \
-    php${PHP_VERSION}-curl \
-    php${PHP_VERSION}-mbstring \
-    php${PHP_VERSION}-xml \
-    php${PHP_VERSION}-zip \
-    php${PHP_VERSION}-sodium
+report_progress "Installing PHP"
+# Try ondrej/php PPA for specific version, fall back to system PHP
+UBUNTU_CODENAME=$(lsb_release -cs)
+ONDREJ_RELEASE_URL="https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${UBUNTU_CODENAME}/Release"
+
+if curl -sI "$ONDREJ_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    echo "ondrej/php PPA supports Ubuntu $UBUNTU_CODENAME"
+    add-apt-repository -y ppa:ondrej/php
+    apt-get update
+    if apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-common \
+        php${PHP_VERSION}-curl php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml \
+        php${PHP_VERSION}-zip php${PHP_VERSION}-sodium 2>/dev/null; then
+        echo "Installed PHP ${PHP_VERSION} from ondrej/php"
+    else
+        echo "PHP ${PHP_VERSION} not available, using system PHP"
+        apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
+    fi
+else
+    echo "ondrej/php PPA does not support Ubuntu $UBUNTU_CODENAME, using system PHP"
+    apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
+fi
 
 # Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -384,7 +495,7 @@ apt-get install -y dotnet-sdk-${DOTNET_VERSION} || apt-get install -y dotnet-sdk
 # ============================================
 report_progress "Installing Google Cloud CLI"
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/cloud.google.gpg
 apt-get update
 apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 
@@ -392,9 +503,19 @@ apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 # AWS CLI
 # ============================================
 report_progress "Installing AWS CLI"
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-unzip -q /tmp/awscliv2.zip -d /tmp
-/tmp/aws/install
+# Detect architecture for correct binary
+AWS_ARCH="x86_64"
+if [ "$(uname -m)" = "aarch64" ]; then
+    AWS_ARCH="aarch64"
+fi
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
+unzip -qo /tmp/awscliv2.zip -d /tmp
+# Use --update if already installed (idempotent)
+if [ -d /usr/local/aws-cli ]; then
+    /tmp/aws/install --update
+else
+    /tmp/aws/install
+fi
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
 # ============================================
@@ -407,7 +528,7 @@ curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 # Terraform
 # ============================================
 report_progress "Installing Terraform"
-wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+wget -O- https://apt.releases.hashicorp.com/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
 apt-get update
 apt-get install -y terraform
@@ -416,7 +537,7 @@ apt-get install -y terraform
 # Kubernetes Tools
 # ============================================
 report_progress "Installing Kubernetes tools"
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 apt-get update
 apt-get install -y kubectl
@@ -438,10 +559,18 @@ apt-get install -y \
     default-mysql-client \
     redis-tools
 
-wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-apt-get update
-apt-get install -y mongodb-mongosh || true
+# MongoDB mongosh - check if repo supports this Ubuntu version
+MONGODB_RELEASE_URL="https://repo.mongodb.org/apt/ubuntu/dists/${UBUNTU_CODENAME}/mongodb-org/7.0/Release"
+if curl -sI "$MONGODB_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
+        wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+    fi
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu ${UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+    apt-get update
+    apt-get install -y mongodb-mongosh || true
+else
+    echo "MongoDB repo does not support Ubuntu ${UBUNTU_CODENAME}, skipping mongosh"
+fi
 
 # ============================================
 # Additional CLI Tools
@@ -488,7 +617,7 @@ rm /tmp/dive.deb
 report_progress "Installing security tools"
 
 # Trivy
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/trivy.gpg
 echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | tee /etc/apt/sources.list.d/trivy.list
 apt-get update
 apt-get install -y trivy
