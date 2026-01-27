@@ -52,6 +52,19 @@ type VMInfo struct {
 	ExternalIP string
 	// InternalIP is the private IP address.
 	InternalIP string
+
+	// CloudcoopVersion is the version of cloudcoop that created this VM.
+	// Empty if not a cloudcoop-managed VM.
+	CloudcoopVersion string
+	// CloudcoopCreated is the ISO timestamp when cloudcoop created this VM.
+	CloudcoopCreated string
+	// CloudcoopConfigHash is a hash of the config used to create this VM.
+	CloudcoopConfigHash string
+}
+
+// IsManagedByCloudcoop returns true if this VM was created by cloudcoop.
+func (v *VMInfo) IsManagedByCloudcoop() bool {
+	return v.CloudcoopVersion != ""
 }
 
 // VMCreateConfig contains configuration for creating a new VM.

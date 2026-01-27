@@ -13,6 +13,14 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
+	"github.com/cloud-coop/cloudcoop/internal/version"
+)
+
+// Metadata keys for cloudcoop-managed VMs.
+const (
+	metadataKeyVersion    = "cloudcoop-version"
+	metadataKeyCreated    = "cloudcoop-created"
+	metadataKeyConfigHash = "cloudcoop-config-hash"
 )
 
 // Provider implements cloud.Provider for GCP.
@@ -91,6 +99,20 @@ func (p *Provider) GetVMInfo(ctx context.Context, name string) (*cloud.VMInfo, e
 		info.InternalIP = ni.GetNetworkIP()
 		if len(ni.AccessConfigs) > 0 {
 			info.ExternalIP = ni.AccessConfigs[0].GetNatIP()
+		}
+	}
+
+	// Extract cloudcoop metadata if present
+	if metadata := instance.GetMetadata(); metadata != nil {
+		for _, item := range metadata.GetItems() {
+			switch item.GetKey() {
+			case metadataKeyVersion:
+				info.CloudcoopVersion = item.GetValue()
+			case metadataKeyCreated:
+				info.CloudcoopCreated = item.GetValue()
+			case metadataKeyConfigHash:
+				info.CloudcoopConfigHash = item.GetValue()
+			}
 		}
 	}
 
@@ -260,11 +282,31 @@ systemctl start ssh.service
 		startupScript += provisioning.StripShebang(provisionScript)
 	}
 
+	// Build cloudcoop metadata for VM identification and upgrade detection
+	configHash := version.ConfigHash(fmt.Sprintf(
+		"%s|%s|%d|%s|%v|%s|%v|%d|%s|%s",
+		config.Name, config.MachineType, config.DiskSizeGB, config.Image,
+		config.Spot, config.Network, config.Tags, config.SSHPort,
+		config.ServiceAccount, config.ProvisionScriptURL,
+	))
+
 	instance.Metadata = &computepb.Metadata{
 		Items: []*computepb.Items{
 			{
 				Key:   ptr("startup-script"),
 				Value: ptr(startupScript),
+			},
+			{
+				Key:   ptr(metadataKeyVersion),
+				Value: ptr(version.Short()),
+			},
+			{
+				Key:   ptr(metadataKeyCreated),
+				Value: ptr(version.CreatedTimestamp()),
+			},
+			{
+				Key:   ptr(metadataKeyConfigHash),
+				Value: ptr(configHash),
 			},
 		},
 	}

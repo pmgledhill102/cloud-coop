@@ -3,48 +3,50 @@ package cli
 import (
 	"bytes"
 	"testing"
+
+	"github.com/cloud-coop/cloudcoop/internal/version"
 )
 
 func TestSetVersionInfo(t *testing.T) {
 	// Save original values
-	origVersion := version
-	origCommit := commit
-	origBuildTime := buildTime
+	origVersion := version.Version
+	origCommit := version.Commit
+	origBuildTime := version.BuildTime
 	defer func() {
-		version = origVersion
-		commit = origCommit
-		buildTime = origBuildTime
+		version.Version = origVersion
+		version.Commit = origCommit
+		version.BuildTime = origBuildTime
 	}()
 
 	// Test setting version info
 	SetVersionInfo("1.2.3", "abc123", "2025-01-01T00:00:00Z")
 
-	if version != "1.2.3" {
-		t.Errorf("version = %q, want %q", version, "1.2.3")
+	if version.Version != "1.2.3" {
+		t.Errorf("version = %q, want %q", version.Version, "1.2.3")
 	}
-	if commit != "abc123" {
-		t.Errorf("commit = %q, want %q", commit, "abc123")
+	if version.Commit != "abc123" {
+		t.Errorf("commit = %q, want %q", version.Commit, "abc123")
 	}
-	if buildTime != "2025-01-01T00:00:00Z" {
-		t.Errorf("buildTime = %q, want %q", buildTime, "2025-01-01T00:00:00Z")
+	if version.BuildTime != "2025-01-01T00:00:00Z" {
+		t.Errorf("buildTime = %q, want %q", version.BuildTime, "2025-01-01T00:00:00Z")
 	}
 }
 
 func TestVersionCmd(t *testing.T) {
 	// Save original values
-	origVersion := version
-	origCommit := commit
-	origBuildTime := buildTime
+	origVersion := version.Version
+	origCommit := version.Commit
+	origBuildTime := version.BuildTime
 	defer func() {
-		version = origVersion
-		commit = origCommit
-		buildTime = origBuildTime
+		version.Version = origVersion
+		version.Commit = origCommit
+		version.BuildTime = origBuildTime
 	}()
 
 	// Set test values
-	version = "test-version"
-	commit = "test-commit"
-	buildTime = "test-time"
+	version.Version = "test-version"
+	version.Commit = "test-commit"
+	version.BuildTime = "test-time"
 
 	// Capture output
 	buf := new(bytes.Buffer)
