@@ -257,14 +257,13 @@ if [ -n "$SYSTEM_PYTHON_VERSION" ]; then
     echo "System Python version: $SYSTEM_PYTHON_VERSION"
 fi
 
-# Check if deadsnakes supports this Ubuntu release
+# Check if deadsnakes supports this Ubuntu release BEFORE adding the PPA
 UBUNTU_CODENAME=$(lsb_release -cs)
-if add-apt-repository -y ppa:deadsnakes/ppa 2>&1 | grep -q "does not have a Release file"; then
-    echo "deadsnakes PPA does not support Ubuntu $UBUNTU_CODENAME, using system Python $SYSTEM_PYTHON_VERSION"
-    PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
-    # Ensure venv and dev packages are installed for system Python
-    apt-get install -y python3-venv python3-dev || true
-else
+DEADSNAKES_RELEASE_URL="https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu/dists/${UBUNTU_CODENAME}/Release"
+
+if curl -sI "$DEADSNAKES_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    echo "deadsnakes PPA supports Ubuntu $UBUNTU_CODENAME"
+    add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update
     # Try to install requested Python version
     if apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev 2>/dev/null; then
@@ -276,6 +275,11 @@ else
         PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
         apt-get install -y python3-venv python3-dev || true
     fi
+else
+    echo "deadsnakes PPA does not support Ubuntu $UBUNTU_CODENAME, using system Python $SYSTEM_PYTHON_VERSION"
+    PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
+    # Ensure venv and dev packages are installed for system Python
+    apt-get install -y python3-venv python3-dev || true
 fi
 
 echo "Using Python version: $(python3 --version)"
@@ -431,11 +435,11 @@ gem install bundler rubocop
 report_progress "Installing PHP"
 # Try ondrej/php PPA for specific version, fall back to system PHP
 UBUNTU_CODENAME=$(lsb_release -cs)
+ONDREJ_RELEASE_URL="https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${UBUNTU_CODENAME}/Release"
 
-if add-apt-repository -y ppa:ondrej/php 2>&1 | grep -q "does not have a Release file"; then
-    echo "ondrej/php PPA does not support Ubuntu $UBUNTU_CODENAME, using system PHP"
-    apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
-else
+if curl -sI "$ONDREJ_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    echo "ondrej/php PPA supports Ubuntu $UBUNTU_CODENAME"
+    add-apt-repository -y ppa:ondrej/php
     apt-get update
     if apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-common \
         php${PHP_VERSION}-curl php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml \
@@ -445,6 +449,9 @@ else
         echo "PHP ${PHP_VERSION} not available, using system PHP"
         apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
     fi
+else
+    echo "ondrej/php PPA does not support Ubuntu $UBUNTU_CODENAME, using system PHP"
+    apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
 fi
 
 # Composer
