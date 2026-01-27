@@ -2,17 +2,56 @@
 # VM Provisioning Script - Installs all development tooling for Claude Code agents
 # Run as root via startup-script metadata or manually after VM creation
 #
-# This script installs all tools required to work with the discord-bot-test-suite
-# repository, including all languages, linters, and CI tools from pre-commit hooks.
+# This script implements the cloudcoop provisioning contract (ADR-0021):
+# - Status reporting to /var/run/cloudcoop/provision-status
+# - Progress reporting to /var/run/cloudcoop/provision-progress
+# - Idempotent design (safe to re-run for retry/refresh/resume)
+#
+# Status values: pending | running | completed | failed
 
 set -e
 
-LOG_FILE="/var/log/claude-sandbox-provision.log"
+# ============================================
+# Cloudcoop Contract: Status & Progress Reporting
+# ============================================
+STATUS_DIR="/var/run/cloudcoop"
+STATUS_FILE="$STATUS_DIR/provision-status"
+PROGRESS_FILE="$STATUS_DIR/provision-progress"
+LOG_DIR="/var/log/cloudcoop"
+LOG_FILE="$LOG_DIR/provision.log"
+
+# Total number of provisioning steps (for progress reporting)
+TOTAL_STEPS=34
+CURRENT_STEP=0
+
+# Create required directories
+mkdir -p "$STATUS_DIR" "$LOG_DIR"
+
+# Redirect output to log file
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=== Claude Sandbox VM Provisioning ==="
+# Error trap: capture failures and write to status file
+trap 'echo -e "failed\nStep $CURRENT_STEP/$TOTAL_STEPS: $CURRENT_TASK failed with exit code $?" > "$STATUS_FILE"; exit 1' ERR
+
+# Progress reporting function
+report_progress() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    CURRENT_TASK="$1"
+    echo "$CURRENT_STEP/$TOTAL_STEPS $CURRENT_TASK" > "$PROGRESS_FILE"
+    echo ""
+    echo "=== [$CURRENT_STEP/$TOTAL_STEPS] $CURRENT_TASK ==="
+}
+
+# Mark provisioning as running
+echo "running" > "$STATUS_FILE"
+echo "0/$TOTAL_STEPS Initializing" > "$PROGRESS_FILE"
+
+echo "=== Cloudcoop VM Provisioning ==="
 echo "Started at: $(date)"
 echo "Hostname: $(hostname)"
+echo "Status file: $STATUS_FILE"
+echo "Progress file: $PROGRESS_FILE"
+echo "Log file: $LOG_FILE"
 
 # ============================================
 # Load versions from config file (if available)
@@ -54,14 +93,14 @@ cloud-init status --wait || true
 # ============================================
 # System Updates
 # ============================================
-echo "=== Updating system packages ==="
+report_progress "Updating system packages"
 apt-get update
 apt-get upgrade -y
 
 # ============================================
 # Core System Packages (from Anthropic devcontainer + CI requirements)
 # ============================================
-echo "=== Installing core system packages ==="
+report_progress "Installing core system packages"
 apt-get install -y \
     apt-transport-https \
     ca-certificates \
@@ -101,7 +140,7 @@ apt-get install -y \
 # ============================================
 # git-delta (from Anthropic devcontainer)
 # ============================================
-echo "=== Installing git-delta ${DELTA_VERSION} ==="
+report_progress "Installing git-delta ${DELTA_VERSION}"
 ARCH=$(dpkg --print-architecture)
 wget -q "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" -O /tmp/git-delta.deb
 dpkg -i /tmp/git-delta.deb || apt-get install -f -y
@@ -110,7 +149,7 @@ rm /tmp/git-delta.deb
 # ============================================
 # ripgrep and fd-find
 # ============================================
-echo "=== Installing ripgrep and fd-find ==="
+report_progress "Installing ripgrep and fd-find"
 apt-get install -y ripgrep fd-find
 
 # fd is installed as fdfind on Ubuntu - create symlink
@@ -119,7 +158,7 @@ ln -sf "$(which fdfind)" /usr/local/bin/fd
 # ============================================
 # GitHub CLI
 # ============================================
-echo "=== Installing GitHub CLI ==="
+report_progress "Installing GitHub CLI"
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
 chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
@@ -129,7 +168,7 @@ apt-get install -y gh
 # ============================================
 # Docker
 # ============================================
-echo "=== Installing Docker ==="
+report_progress "Installing Docker"
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
@@ -151,7 +190,7 @@ systemctl restart docker
 # ============================================
 # Node.js (Claude Code runtime + JS/TS services)
 # ============================================
-echo "=== Installing Node.js ${NODE_VERSION} ==="
+report_progress "Installing Node.js ${NODE_VERSION}"
 curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
 apt-get install -y nodejs
 
@@ -170,7 +209,7 @@ npm install -g \
 # ============================================
 # Python
 # ============================================
-echo "=== Installing Python ${PYTHON_VERSION} ==="
+report_progress "Installing Python ${PYTHON_VERSION}"
 add-apt-repository -y ppa:deadsnakes/ppa
 apt-get update
 apt-get install -y \
@@ -198,7 +237,7 @@ pip3 install --break-system-packages \
 # ============================================
 # Go
 # ============================================
-echo "=== Installing Go ${GO_VERSION} ==="
+report_progress "Installing Go ${GO_VERSION}"
 wget -q "https://go.dev/dl/go${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" -O /tmp/go.tar.gz
 rm -rf /usr/local/go
 tar -C /usr/local -xzf /tmp/go.tar.gz
@@ -215,7 +254,7 @@ export GOPATH=/root/go
 export PATH=$PATH:$GOPATH/bin
 
 # Install Go tools (golangci-lint v2 from pre-commit)
-echo "=== Installing golangci-lint ${GOLANGCI_LINT_VERSION} ==="
+report_progress "Installing golangci-lint ${GOLANGCI_LINT_VERSION}"
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin ${GOLANGCI_LINT_VERSION}
 
 go install github.com/go-delve/delve/cmd/dlv@latest
@@ -223,7 +262,7 @@ go install github.com/go-delve/delve/cmd/dlv@latest
 # ============================================
 # actionlint (GitHub Actions linting - from pre-commit)
 # ============================================
-echo "=== Installing actionlint ${ACTIONLINT_VERSION} ==="
+report_progress "Installing actionlint ${ACTIONLINT_VERSION}"
 wget -q "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_$(dpkg --print-architecture).tar.gz" -O /tmp/actionlint.tar.gz
 tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
 chmod +x /usr/local/bin/actionlint
@@ -232,22 +271,22 @@ rm /tmp/actionlint.tar.gz
 # ============================================
 # hadolint (Dockerfile linting - from pre-commit)
 # ============================================
-echo "=== Installing hadolint ${HADOLINT_VERSION} ==="
+report_progress "Installing hadolint ${HADOLINT_VERSION}"
 HADOLINT_ARCH=$(dpkg --print-architecture)
 if [ "$HADOLINT_ARCH" = "amd64" ]; then HADOLINT_ARCH="x86_64"; fi
 wget -q "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" -O /usr/local/bin/hadolint
 chmod +x /usr/local/bin/hadolint
 
 # ============================================
-# shellcheck (Shell linting - from pre-commit)
+# ShellCheck (Shell linting - from pre-commit)
 # ============================================
-echo "=== Installing shellcheck ==="
+report_progress "Installing ShellCheck"
 apt-get install -y shellcheck
 
 # ============================================
 # Rust
 # ============================================
-echo "=== Installing Rust ${RUST_VERSION} ==="
+report_progress "Installing Rust ${RUST_VERSION}"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
 source "$HOME/.cargo/env"
 rustup component add clippy rustfmt
@@ -255,7 +294,7 @@ rustup component add clippy rustfmt
 # ============================================
 # Java (Temurin)
 # ============================================
-echo "=== Installing Java ${JAVA_VERSION} ==="
+report_progress "Installing Java ${JAVA_VERSION}"
 wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
 echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptium.list
 apt-get update
@@ -265,7 +304,7 @@ apt-get install -y temurin-${JAVA_VERSION}-jdk
 apt-get install -y maven
 
 # Gradle
-echo "=== Installing Gradle ${GRADLE_VERSION} ==="
+report_progress "Installing Gradle ${GRADLE_VERSION}"
 wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip
 unzip -q /tmp/gradle.zip -d /opt
 ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
@@ -274,7 +313,7 @@ rm /tmp/gradle.zip
 # ============================================
 # Scala / sbt
 # ============================================
-echo "=== Installing sbt ${SBT_VERSION} ==="
+report_progress "Installing sbt ${SBT_VERSION}"
 wget -q "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz" -O /tmp/sbt.tgz
 tar -xzf /tmp/sbt.tgz -C /opt
 ln -sf /opt/sbt/bin/sbt /usr/local/bin/sbt
@@ -283,7 +322,7 @@ rm /tmp/sbt.tgz
 # ============================================
 # Ruby
 # ============================================
-echo "=== Installing Ruby ${RUBY_VERSION} ==="
+report_progress "Installing Ruby ${RUBY_VERSION}"
 # Use rbenv for version management
 apt-get install -y \
     autoconf \
@@ -312,7 +351,7 @@ gem install bundler rubocop
 # ============================================
 # PHP
 # ============================================
-echo "=== Installing PHP ${PHP_VERSION} ==="
+report_progress "Installing PHP ${PHP_VERSION}"
 add-apt-repository -y ppa:ondrej/php
 apt-get update
 apt-get install -y \
@@ -331,8 +370,8 @@ curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
 # ============================================
 # .NET
 # ============================================
-echo "=== Installing .NET ${DOTNET_VERSION} ==="
-wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
+report_progress "Installing .NET ${DOTNET_VERSION}"
+wget "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb
 dpkg -i /tmp/packages-microsoft-prod.deb
 rm /tmp/packages-microsoft-prod.deb
 apt-get update
@@ -341,7 +380,7 @@ apt-get install -y dotnet-sdk-${DOTNET_VERSION} || apt-get install -y dotnet-sdk
 # ============================================
 # Google Cloud CLI
 # ============================================
-echo "=== Installing Google Cloud CLI ==="
+report_progress "Installing Google Cloud CLI"
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 apt-get update
@@ -350,7 +389,7 @@ apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 # ============================================
 # AWS CLI
 # ============================================
-echo "=== Installing AWS CLI ==="
+report_progress "Installing AWS CLI"
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
 unzip -q /tmp/awscliv2.zip -d /tmp
 /tmp/aws/install
@@ -359,13 +398,13 @@ rm -rf /tmp/aws /tmp/awscliv2.zip
 # ============================================
 # Azure CLI
 # ============================================
-echo "=== Installing Azure CLI ==="
+report_progress "Installing Azure CLI"
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # ============================================
 # Terraform
 # ============================================
-echo "=== Installing Terraform ==="
+report_progress "Installing Terraform"
 wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
 apt-get update
@@ -374,7 +413,7 @@ apt-get install -y terraform
 # ============================================
 # Kubernetes Tools
 # ============================================
-echo "=== Installing Kubernetes tools ==="
+report_progress "Installing Kubernetes tools"
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 apt-get update
@@ -391,7 +430,7 @@ rm /tmp/k9s.tar.gz
 # ============================================
 # Database Clients
 # ============================================
-echo "=== Installing database clients ==="
+report_progress "Installing database clients"
 apt-get install -y \
     postgresql-client \
     default-mysql-client \
@@ -405,7 +444,7 @@ apt-get install -y mongodb-mongosh || true
 # ============================================
 # Additional CLI Tools
 # ============================================
-echo "=== Installing additional CLI tools ==="
+report_progress "Installing additional CLI tools"
 
 # yq (YAML processor - used in CI)
 wget -q "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)" -O /usr/local/bin/yq
@@ -423,13 +462,13 @@ go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 cp /root/go/bin/grpcurl /usr/local/bin/ 2>/dev/null || true
 
 # Beads (bd) - Issue tracking
-echo "=== Installing Beads (bd) ==="
+echo "Installing Beads (bd)"
 curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash || true
 
 # ============================================
 # Container Tools
 # ============================================
-echo "=== Installing container tools ==="
+report_progress "Installing container tools"
 
 # crane (container registry tool)
 go install github.com/google/go-containerregistry/cmd/crane@latest
@@ -444,7 +483,7 @@ rm /tmp/dive.deb
 # ============================================
 # Security Scanning Tools
 # ============================================
-echo "=== Installing security tools ==="
+report_progress "Installing security tools"
 
 # Trivy
 wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg
@@ -458,13 +497,13 @@ pip3 install --break-system-packages semgrep
 # ============================================
 # ZSH Configuration (from Anthropic devcontainer)
 # ============================================
-echo "=== Configuring ZSH ==="
+report_progress "Configuring ZSH"
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
 
 # ============================================
 # Create sandbox user
 # ============================================
-echo "=== Creating sandbox user ==="
+report_progress "Creating sandbox user"
 if ! id "sandbox" &>/dev/null; then
     useradd -m -s /bin/zsh sandbox
     usermod -aG docker sandbox
@@ -480,7 +519,7 @@ chown -R sandbox:sandbox /home/sandbox/
 # ============================================
 # Create workspace directories
 # ============================================
-echo "=== Creating workspace directories ==="
+report_progress "Creating workspace directories"
 mkdir -p /workspaces
 for i in $(seq 1 16); do
     mkdir -p /workspaces/agent-$i
@@ -610,7 +649,7 @@ chown sandbox:sandbox /home/sandbox/.gitconfig
 # ============================================
 # Cleanup
 # ============================================
-echo "=== Cleaning up ==="
+report_progress "Cleaning up"
 apt-get autoremove -y
 apt-get clean
 rm -rf /var/lib/apt/lists/*
@@ -618,9 +657,15 @@ rm -rf /var/lib/apt/lists/*
 # ============================================
 # Summary
 # ============================================
+
+# Mark provisioning as completed
+echo "completed" > "$STATUS_FILE"
+echo "$TOTAL_STEPS/$TOTAL_STEPS Provisioning complete" > "$PROGRESS_FILE"
+
 echo ""
 echo "=== Provisioning Complete ==="
 echo "Finished at: $(date)"
+echo "Status: completed (written to $STATUS_FILE)"
 echo ""
 echo "Installed versions:"
 echo "  - Node.js    : $(node --version 2>/dev/null || echo 'N/A')"
