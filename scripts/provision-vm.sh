@@ -357,10 +357,25 @@ rustup component add clippy rustfmt
 # Java (Temurin)
 # ============================================
 report_progress "Installing Java ${JAVA_VERSION}"
-wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --batch --yes --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptium.list
-apt-get update
-apt-get install -y temurin-${JAVA_VERSION}-jdk
+# Try Adoptium Temurin first, fall back to OpenJDK if not available
+UBUNTU_CODENAME=$(lsb_release -cs)
+ADOPTIUM_AVAILABLE=false
+
+# Check if Adoptium supports this Ubuntu version
+if curl -sI "https://packages.adoptium.net/artifactory/deb/dists/${UBUNTU_CODENAME}/Release" 2>/dev/null | grep -q "200 OK"; then
+    ADOPTIUM_AVAILABLE=true
+fi
+
+if [ "$ADOPTIUM_AVAILABLE" = true ]; then
+    echo "Installing Temurin JDK from Adoptium"
+    wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --batch --yes --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
+    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/adoptium.list
+    apt-get update
+    apt-get install -y temurin-${JAVA_VERSION}-jdk || apt-get install -y openjdk-${JAVA_VERSION}-jdk
+else
+    echo "Adoptium does not support Ubuntu ${UBUNTU_CODENAME}, using OpenJDK"
+    apt-get install -y openjdk-${JAVA_VERSION}-jdk
+fi
 
 # Maven
 apt-get install -y maven
