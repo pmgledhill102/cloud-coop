@@ -21,7 +21,7 @@ LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
 # Total number of provisioning steps (for progress reporting)
-TOTAL_STEPS=35
+TOTAL_STEPS=36
 CURRENT_STEP=0
 
 # Create required directories
@@ -89,6 +89,35 @@ export DEBIAN_FRONTEND=noninteractive
 
 # Wait for cloud-init to complete
 cloud-init status --wait || true
+
+# ============================================
+# Configure GCE APT Mirror (3x faster downloads)
+# ============================================
+report_progress "Configuring GCE apt mirror"
+
+# Detect GCP region from metadata
+GCP_ZONE=$(curl -sH "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/zone 2>/dev/null | cut -d/ -f4)
+GCP_REGION=$(echo "$GCP_ZONE" | sed 's/-[a-z]$//')
+
+if [ -n "$GCP_REGION" ]; then
+    echo "Detected GCP region: $GCP_REGION"
+    # Use GCE-internal Ubuntu mirror for faster ARM64 downloads
+    GCE_MIRROR="${GCP_REGION}.gce.ports.ubuntu.com"
+
+    # Test if GCE mirror is reachable
+    if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
+        echo "Using GCE mirror: $GCE_MIRROR"
+        # Replace ports.ubuntu.com with GCE mirror in sources
+        # Handle both legacy sources.list and new deb822 .sources format
+        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
+        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list.d/*.list 2>/dev/null || true
+        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+    else
+        echo "GCE mirror not reachable, using default ports.ubuntu.com"
+    fi
+else
+    echo "Not running on GCP, using default mirrors"
+fi
 
 # ============================================
 # System Updates
