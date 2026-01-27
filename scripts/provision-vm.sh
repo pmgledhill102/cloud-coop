@@ -68,14 +68,12 @@ else
 fi
 
 # Default versions (overridden by versions.env if present)
-# These match the discord-bot-test-suite CI requirements
+# Note: Python, PHP, Java, Docker use Ubuntu 25.04 system defaults
 NODE_VERSION="${NODE_VERSION:-24}"
 GO_VERSION="${GO_VERSION:-1.25.3}"
-PYTHON_VERSION="${PYTHON_VERSION:-3.14}"
 RUST_VERSION="${RUST_VERSION:-1.93}"
 JAVA_VERSION="${JAVA_VERSION:-21}"
 RUBY_VERSION="${RUBY_VERSION:-3.4}"
-PHP_VERSION="${PHP_VERSION:-8.5}"
 DOTNET_VERSION="${DOTNET_VERSION:-10.0}"
 GRADLE_VERSION="${GRADLE_VERSION:-8.12}"
 SBT_VERSION="${SBT_VERSION:-1.10.6}"
@@ -222,16 +220,11 @@ apt-get update
 apt-get install -y gh
 
 # ============================================
-# Docker
+# Docker (using Ubuntu system packages)
 # ============================================
 report_progress "Installing Docker"
-# Use --batch --yes to avoid TTY prompts, and only create if needed
-if [ ! -f /usr/share/keyrings/docker-archive-keyring.gpg ]; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-fi
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+# Use system Docker (27.5 on Ubuntu 25.04) - no external repo needed
+apt-get install -y docker.io docker-compose-v2 docker-buildx
 
 systemctl enable docker
 systemctl start docker
@@ -266,43 +259,12 @@ npm install -g \
     markdownlint-cli2
 
 # ============================================
-# Python
+# Python (using Ubuntu system Python)
 # ============================================
 report_progress "Installing Python"
 
-# Try deadsnakes PPA for specific Python version, fall back to system Python
-# deadsnakes may not support newest Ubuntu versions
-SYSTEM_PYTHON_VERSION=$(python3 --version 2>/dev/null | grep -oP '\d+\.\d+' || echo "")
-
-if [ -n "$SYSTEM_PYTHON_VERSION" ]; then
-    echo "System Python version: $SYSTEM_PYTHON_VERSION"
-fi
-
-# Check if deadsnakes supports this Ubuntu release BEFORE adding the PPA
-UBUNTU_CODENAME=$(lsb_release -cs)
-DEADSNAKES_RELEASE_URL="https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu/dists/${UBUNTU_CODENAME}/Release"
-
-if curl -sI "$DEADSNAKES_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
-    echo "deadsnakes PPA supports Ubuntu $UBUNTU_CODENAME"
-    add-apt-repository -y ppa:deadsnakes/ppa
-    apt-get update
-    # Try to install requested Python version
-    if apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev 2>/dev/null; then
-        echo "Installed Python ${PYTHON_VERSION} from deadsnakes"
-        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
-        update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
-    else
-        echo "Python ${PYTHON_VERSION} not available, using system Python $SYSTEM_PYTHON_VERSION"
-        PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
-        apt-get install -y python3-venv python3-dev || true
-    fi
-else
-    echo "deadsnakes PPA does not support Ubuntu $UBUNTU_CODENAME, using system Python $SYSTEM_PYTHON_VERSION"
-    PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
-    # Ensure venv and dev packages are installed for system Python
-    apt-get install -y python3-venv python3-dev || true
-fi
-
+# Use system Python (3.13 on Ubuntu 25.04) - no external PPA needed
+apt-get install -y python3-full python3-venv python3-dev python3-pip
 echo "Using Python version: $(python3 --version)"
 
 # Install uv (fast Python package manager)
@@ -379,28 +341,11 @@ source "$HOME/.cargo/env"
 rustup component add clippy rustfmt
 
 # ============================================
-# Java (Temurin)
+# Java (using Ubuntu system OpenJDK)
 # ============================================
 report_progress "Installing Java ${JAVA_VERSION}"
-# Try Adoptium Temurin first, fall back to OpenJDK if not available
-UBUNTU_CODENAME=$(lsb_release -cs)
-ADOPTIUM_AVAILABLE=false
-
-# Check if Adoptium supports this Ubuntu version
-if curl -sI "https://packages.adoptium.net/artifactory/deb/dists/${UBUNTU_CODENAME}/Release" 2>/dev/null | grep -q "200 OK"; then
-    ADOPTIUM_AVAILABLE=true
-fi
-
-if [ "$ADOPTIUM_AVAILABLE" = true ]; then
-    echo "Installing Temurin JDK from Adoptium"
-    wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --batch --yes --dearmor | tee /etc/apt/keyrings/adoptium.gpg > /dev/null
-    echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb ${UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/adoptium.list
-    apt-get update
-    apt-get install -y temurin-${JAVA_VERSION}-jdk || apt-get install -y openjdk-${JAVA_VERSION}-jdk
-else
-    echo "Adoptium does not support Ubuntu ${UBUNTU_CODENAME}, using OpenJDK"
-    apt-get install -y openjdk-${JAVA_VERSION}-jdk
-fi
+# Use system OpenJDK (equivalent to Temurin) - no external repo needed
+apt-get install -y openjdk-${JAVA_VERSION}-jdk
 
 # Maven
 apt-get install -y maven
@@ -453,29 +398,11 @@ rbenv global ${RUBY_VERSION}.0 2>/dev/null || rbenv global ${RUBY_VERSION}.1 2>/
 gem install bundler rubocop
 
 # ============================================
-# PHP
+# PHP (using Ubuntu system PHP)
 # ============================================
 report_progress "Installing PHP"
-# Try ondrej/php PPA for specific version, fall back to system PHP
-UBUNTU_CODENAME=$(lsb_release -cs)
-ONDREJ_RELEASE_URL="https://ppa.launchpadcontent.net/ondrej/php/ubuntu/dists/${UBUNTU_CODENAME}/Release"
-
-if curl -sI "$ONDREJ_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
-    echo "ondrej/php PPA supports Ubuntu $UBUNTU_CODENAME"
-    add-apt-repository -y ppa:ondrej/php
-    apt-get update
-    if apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-common \
-        php${PHP_VERSION}-curl php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml \
-        php${PHP_VERSION}-zip php${PHP_VERSION}-sodium 2>/dev/null; then
-        echo "Installed PHP ${PHP_VERSION} from ondrej/php"
-    else
-        echo "PHP ${PHP_VERSION} not available, using system PHP"
-        apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
-    fi
-else
-    echo "ondrej/php PPA does not support Ubuntu $UBUNTU_CODENAME, using system PHP"
-    apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
-fi
+# Use system PHP (8.4 on Ubuntu 25.04) - no external PPA needed
+apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
 
 # Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -560,6 +487,7 @@ apt-get install -y \
     redis-tools
 
 # MongoDB mongosh - check if repo supports this Ubuntu version
+UBUNTU_CODENAME=$(lsb_release -cs)
 MONGODB_RELEASE_URL="https://repo.mongodb.org/apt/ubuntu/dists/${UBUNTU_CODENAME}/mongodb-org/7.0/Release"
 if curl -sI "$MONGODB_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
     if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
