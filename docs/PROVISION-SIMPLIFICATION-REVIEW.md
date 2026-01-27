@@ -24,7 +24,7 @@ The script installs 15+ version-pinned components, many from external PPAs or di
 | **Rust** | 1.93 (rustup) | 1.84 | **Keep rustup** - too far behind, rustup is standard |
 | **Ruby** | 3.4 (rbenv) | 3.3 | **Consider system** - one minor version behind |
 | **ShellCheck** | apt | apt | Already using system |
-| **Docker** | docker.com | 27.5 | **Consider system** - Ubuntu's Docker 27.5 is current |
+| **Docker** | docker.com | 27.5 | **Use system** - Ubuntu's Docker 27.5 is current |
 
 ### Components That Need External Sources
 
@@ -68,9 +68,9 @@ The script installs 15+ version-pinned components, many from external PPAs or di
    - Removes: 20 lines of repo detection/fallback code
    - Risk: None - OpenJDK 21 is equivalent to Temurin
 
-4. **Docker**: Consider using Ubuntu's Docker 27.5
-   - Removes: Docker GPG/repo setup
-   - Risk: Minor version differences, but Ubuntu tracks closely
+4. **Docker**: Use Ubuntu's Docker 27.5
+   - Removes: Docker GPG/repo setup (~15 lines)
+   - Risk: None - Ubuntu 27.5 is current
 
 ### Medium Impact
 
@@ -141,7 +141,58 @@ For each component, score based on:
 | Rust | High | Good | Low | Keep rustup |
 | Ruby | Low | Poor | High | Consider system |
 | Node | High | Good | Low | Keep NodeSource |
-| Docker | Low | Good | Medium | Consider system |
+| Docker | Low | Good | Medium | **Use system** |
+
+## Alternative: Homebrew
+
+[Homebrew](https://brew.sh/) on Linux could simplify tool installation further,
+especially for dev tools that need PPAs or direct downloads.
+
+### Tools Available via Homebrew
+
+| Tool | Brew Formula | Benefit |
+|------|--------------|---------|
+| go | `go` | Always current, no manual download |
+| node | `node` | No NodeSource repo needed |
+| python | `python@3.x` | No deadsnakes PPA |
+| ruby | `ruby` | No rbenv compile time |
+| golangci-lint | `golangci-lint` | Direct install |
+| hadolint | `hadolint` | Direct install |
+| actionlint | `actionlint` | Direct install |
+| git-delta | `git-delta` | Direct install |
+| ripgrep | `ripgrep` | Direct install |
+| fd | `fd` | Direct install |
+| yq | `yq` | Direct install |
+| k9s | `k9s` | Direct install |
+| helm | `helm` | No k8s repo needed |
+
+### Trade-offs
+
+**Pros:**
+
+- Single package manager for dev tools
+- Always has recent versions (no PPA availability issues)
+- No sudo needed for installs
+- Same commands work on macOS dev machines
+
+**Cons:**
+
+- Adds ~500MB+ install footprint
+- Non-standard paths (`/home/linuxbrew/.linuxbrew`)
+- Some tools compile from source (slower initial install)
+- Still need apt for: Docker, cloud CLIs, system packages
+
+### Hybrid Approach
+
+```bash
+# apt: system packages, Docker, cloud CLIs
+apt-get install -y docker.io python3 php openjdk-21-jdk ruby ...
+
+# brew: language runtimes needing latest versions, linting tools, CLI utilities
+brew install go node golangci-lint actionlint hadolint git-delta yq k9s helm
+```
+
+This eliminates PPA fallback logic while keeping authoritative sources for infrastructure.
 
 ## Next Steps
 
@@ -155,3 +206,4 @@ For each component, score based on:
 
 - [Ubuntu 25.04 Release Notes](https://linuxiac.com/ubuntu-25-04-plucky-puffin-released/)
 - [Ubuntu Python Availability](https://documentation.ubuntu.com/ubuntu-for-developers/reference/availability/python/)
+- [Homebrew Formulae](https://formulae.brew.sh/formula/)

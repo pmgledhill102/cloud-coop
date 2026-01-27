@@ -97,6 +97,7 @@ ktlint
 laravel
 ldflags
 linux
+linuxbrew
 lipgloss
 ludeeus
 macos
