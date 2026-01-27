@@ -90,6 +90,26 @@ export DEBIAN_FRONTEND=noninteractive
 # Wait for cloud-init to complete
 cloud-init status --wait || true
 
+# Wait for apt locks (unattended-upgrades may be running on fresh VMs)
+wait_for_apt() {
+    local max_wait=300  # 5 minutes max
+    local waited=0
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+          fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
+          fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+        if [ $waited -ge $max_wait ]; then
+            echo "Timeout waiting for apt locks (waited ${max_wait}s)"
+            # Try to kill unattended-upgrades if it's the culprit
+            pkill -9 unattended-upgr 2>/dev/null || true
+            sleep 2
+            break
+        fi
+        echo "Waiting for apt lock (${waited}s)..."
+        sleep 5
+        waited=$((waited + 5))
+    done
+}
+
 # ============================================
 # Configure GCE APT Mirror (3x faster downloads)
 # ============================================
@@ -129,6 +149,7 @@ fi
 # System Updates
 # ============================================
 report_progress "Updating system packages"
+wait_for_apt
 apt-get update
 apt-get upgrade -y
 
