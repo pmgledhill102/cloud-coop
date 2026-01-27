@@ -416,8 +416,10 @@ apt-get install -y \
     libffi-dev \
     libgdbm-dev
 
-git clone https://github.com/rbenv/rbenv.git /opt/rbenv
-git clone https://github.com/rbenv/ruby-build.git /opt/rbenv/plugins/ruby-build
+if [ ! -d /opt/rbenv ]; then
+    git clone https://github.com/rbenv/rbenv.git /opt/rbenv
+    git clone https://github.com/rbenv/ruby-build.git /opt/rbenv/plugins/ruby-build
+fi
 
 export PATH="/opt/rbenv/bin:/opt/rbenv/shims:$PATH"
 eval "$(rbenv init -)"
