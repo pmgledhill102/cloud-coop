@@ -87,6 +87,8 @@ imgs
 incpatch
 ineffassign
 iterm
+keybind
+keybindings
 kitty
 knownhosts
 ksh
@@ -103,6 +105,7 @@ mutex
 mypy
 noreply
 openssh
+osascript
 oslogin
 pipx
 pmgledhill
@@ -121,6 +124,7 @@ rubocop
 rustup
 sandboxed
 sandboxing
+scpt
 scalafmt
 scandir
 secretmanager

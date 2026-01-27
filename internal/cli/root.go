@@ -43,6 +43,7 @@ func init() {
 	rootCmd.AddCommand(agentsCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(provisionCmd)
+	rootCmd.AddCommand(terminalCmd)
 }
 
 // Execute runs the root command.
