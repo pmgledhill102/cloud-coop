@@ -55,6 +55,7 @@ DOTNET_VERSION="${DOTNET_VERSION:-10.0}"
 KUBECTL_VERSION="${KUBECTL_VERSION:-1.30}"
 
 export DEBIAN_FRONTEND=noninteractive
+export HOME=/root
 
 # Wait for cloud-init and apt locks
 cloud-init status --wait || true
