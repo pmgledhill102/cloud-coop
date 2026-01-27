@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (Revised 2026-01-27)
 
 ## Context
 
@@ -13,9 +13,26 @@ Cost efficiency is important, but so is preserving state across sessions.
 
 ## Decision
 
-Use spot instances with `--instance-termination-action=STOP` combined with a persistent boot disk (`--boot-disk-auto-delete=no`).
+Use spot instances with `--instance-termination-action=STOP` and default disk auto-delete behavior (`--boot-disk-auto-delete=yes`).
 
 This provides ~70% cost savings while running, with automatic state preservation when preempted or manually stopped.
+
+### Key Insight: Auto-Delete Only Triggers on DELETE, Not STOP
+
+GCP's disk auto-delete mechanism only evaluates when an instance is **deleted**, not when it's stopped:
+
+- **Instance STOP** (manual or preemption): Disks remain attached. Auto-delete is NOT triggered.
+- **Instance DELETE**: Auto-delete is evaluated. Disks with `auto-delete=true` are deleted with the instance.
+
+Since spot instances use `STOP` on preemption (not `DELETE`), disks are automatically preserved
+across preemption events regardless of the auto-delete setting. The auto-delete setting only
+affects what happens during explicit instance deletion.
+
+This means we can use the simpler default (`auto-delete=true`) and get:
+
+- Disk preserved on preemption (STOP action)
+- Disk preserved on manual stop
+- Disk automatically cleaned up on explicit delete (no orphaned resources)
 
 ## Options Considered
 
@@ -51,15 +68,17 @@ Spot pricing with instance deletion on preemption.
 
 ### Option 3: Spot Instances with STOP on Preemption (Chosen)
 
-Spot pricing with instance stop (not delete) on preemption, plus persistent boot disk.
+Spot pricing with instance stop (not delete) on preemption. Boot disk uses default auto-delete
+behavior (deleted with instance), which is safe because STOP action doesn't trigger auto-delete.
 
 **Pros:**
 
 - ~70% cost savings while running
 - Instance stops on preemption (not deleted)
-- Boot disk survives (all state preserved)
+- Boot disk survives stops/preemption (auto-delete only triggers on DELETE, not STOP)
 - Same behavior as manual stop
 - Simple restart: `gcloud compute instances start`
+- No orphaned disks on explicit VM deletion
 
 **Cons:**
 
@@ -88,6 +107,8 @@ Older preemptible VM model (max 24-hour lifetime).
 - When stopped (preempted or manual), only pay for disk: ~$5/month
 - Restart is simple: `gcloud compute instances start`
 - Claude Code `--continue` resumes previous session seamlessly
+- No orphaned disks: auto-delete cleans up on explicit VM deletion
+- Simpler code: no manual disk deletion required
 
 ### Negative
 
@@ -100,3 +121,10 @@ Older preemptible VM model (max 24-hour lifetime).
 - Preemption behavior identical to manual stop from state perspective
 - Shutdown hook can cleanly save git state within 25-second window
 - Typical preemption frequency is low (hours to days between events)
+
+## Revision History
+
+- **2026-01-27**: Revised to use `auto-delete=true` (default) instead of `auto-delete=false`.
+  Research confirmed that auto-delete only triggers on instance DELETE, not STOP. Since spot
+  preemption uses STOP action, disks are preserved regardless of auto-delete setting. Using the
+  default simplifies code by eliminating manual disk deletion.

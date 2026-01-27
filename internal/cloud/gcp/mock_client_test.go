@@ -78,30 +78,6 @@ func (m *mockInstancesClient) Close() error {
 	return m.closeError
 }
 
-// mockDisksClient is a mock implementation of disksClient for testing.
-type mockDisksClient struct {
-	deleteError   error
-	waitError     error
-	closeError    error
-	deleteCalled  bool
-	closeCalled   bool
-	lastDeleteReq *computepb.DeleteDiskRequest
-}
-
-func (m *mockDisksClient) Delete(ctx context.Context, req *computepb.DeleteDiskRequest) (operation, error) {
-	m.deleteCalled = true
-	m.lastDeleteReq = req
-	if m.deleteError != nil {
-		return nil, m.deleteError
-	}
-	return &mockOperation{waitError: m.waitError}, nil
-}
-
-func (m *mockDisksClient) Close() error {
-	m.closeCalled = true
-	return m.closeError
-}
-
 // mockOperation is a mock implementation of operation for testing.
 type mockOperation struct {
 	waitError error
