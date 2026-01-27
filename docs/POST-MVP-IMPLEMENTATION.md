@@ -14,19 +14,19 @@ over four progressive phases.
 
 **Strategic Direction:**
 
-1. **Security First** - Address critical SSH host key verification gap before expanding features
-2. **Complete GCP** - Finish documented but unimplemented GCP features (resize, firewall, metadata)
-3. **Multi-Cloud** - Expand to AWS and Azure using existing provider interface design
-4. **Advanced Features** - Add sophisticated capabilities (API key management, session recovery)
+1. **Server Build Complete** - Integrate VM provisioning and agent setup (SETUP-FLOW Stage 5-6)
+2. **Security Foundation** - Address SSH host key verification and code quality
+3. **GCP Feature Complete** - Finish resize, firewall, metadata features
+4. **Multi-Cloud & Advanced** - AWS/Azure providers, terminal config generator, session recovery
 
 **Timeline Overview:**
 
 | Phase | Focus | Complexity |
 |-------|-------|------------|
-| 1 | Security & Quality Foundation | 3-4 weeks |
-| 2 | GCP Feature Completion | 4-6 weeks |
-| 3 | Multi-Cloud Expansion | 8-12 weeks |
-| 4 | Advanced Features | 6-8 weeks |
+| 1 | VM Provisioning & Agent Setup | 3-4 weeks |
+| 2 | Security & Quality Foundation | 2-3 weeks |
+| 3 | GCP Feature Completion | 4-6 weeks |
+| 4 | Multi-Cloud & Advanced Features | 10-14 weeks |
 
 ---
 
@@ -47,11 +47,13 @@ Based on the comprehensive MVP review (2026-01-26):
 
 ### Key Gaps
 
-1. **Security:** SSH host key verification falls back to `InsecureIgnoreHostKey()` (gosec G106)
-2. **Features:** VM Resize, Dynamic IP Firewall, VM Metadata not implemented
-3. **Multi-Cloud:** AWS and Azure interfaces designed but not implemented
-4. **API Keys:** No OAuth, Secret Manager, or SSH forwarding for agent authentication
-5. **Testing:** CLI 19%, SSH 5.5%, TUI 20.8% coverage
+1. **VM Provisioning:** SETUP-FLOW.md Stage 5 (install tools, agents) not integrated into TUI
+2. **Agent Authentication:** SETUP-FLOW.md Stage 6 (OAuth for Claude Code) not implemented
+3. **Agent Management Scripts:** provision-vm.sh has scripts but no TUI/CLI integration
+4. **Terminal Config:** Multi-session Ghostty/iTerm2 views not implemented (cc-3.1)
+5. **Security:** SSH host key verification falls back to `InsecureIgnoreHostKey()` (gosec G106)
+6. **Features:** VM Resize, Dynamic IP Firewall, VM Metadata not implemented
+7. **Multi-Cloud:** AWS and Azure interfaces designed but not implemented
 
 ### Technical Debt
 
@@ -73,11 +75,228 @@ Based on the comprehensive MVP review (2026-01-26):
 
 ---
 
-## Phase 1: Security & Quality Foundation
+## Phase 1: VM Provisioning & Agent Setup
+
+**Objective:** Complete the end-to-end VM setup experience documented in SETUP-FLOW.md.
+
+The current MVP can create VMs and manage their lifecycle, but the server-side setup is manual.
+The vision in SETUP-FLOW.md describes an automated provisioning flow that installs all development
+tooling and configures agents. The provision-vm.sh script already exists but isn't integrated.
+
+### 1.1 Integrate VM Provisioning Script
+
+**Current State:**
+
+- `scripts/provision-vm.sh` is a comprehensive 650-line script that installs:
+  - Development languages: Node.js, Go, Python, Rust, Java, Ruby, PHP, .NET
+  - Claude Code CLI (`@anthropic-ai/claude-code`)
+  - Linting tools: golangci-lint, eslint, prettier, ruff, etc.
+  - Container tools: Docker, crane, dive, trivy
+  - Cloud CLIs: gcloud, aws, az
+  - Database clients: PostgreSQL, MySQL, Redis, MongoDB
+  - Agent management scripts: `start-agents.sh`, `stop-agents.sh`, etc.
+
+**Missing:** The script exists but isn't invoked by cloudcoop.
+
+**Implementation:**
+
+1. **Startup Script Metadata** - Pass provision-vm.sh via GCP startup-script metadata:
+
+```go
+// During VM creation
+metadata := &computepb.Metadata{
+    Items: []*computepb.Items{
+        {Key: proto.String("startup-script"), Value: proto.String(provisionScript)},
+    },
+}
+```
+
+1. **Provisioning Status Display** - Show progress in TUI:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Provisioning VM (first run takes 5-10 minutes)                 │
+├─────────────────────────────────────────────────────────────────┤
+│  [✓] System packages                                            │
+│  [✓] Docker                                                     │
+│  [✓] Node.js 24                                                 │
+│  [░░░░░░░░░░] Claude Code CLI...                               │
+│  [ ] tmux configuration                                         │
+│  [ ] Workspace directories                                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+1. **Provisioning Verification** - SSH check for installed tools:
+
+```go
+func (p *Provisioner) CheckStatus(ctx context.Context) (ProvisionStatus, error) {
+    // Check if Claude Code is installed
+    _, err := p.ssh.Run("claude --version")
+    if err != nil {
+        return ProvisionStatusIncomplete, nil
+    }
+    return ProvisionStatusComplete, nil
+}
+```
+
+**Deliverables:**
+
+- [ ] Embed provision-vm.sh in binary or fetch from config
+- [ ] Pass startup-script metadata during VM creation
+- [ ] Add provisioning status check to TUI
+- [ ] Show provisioning progress on first connection
+- [ ] Add `cloudcoop provision` CLI command for re-provisioning
+
+**Success Criteria:**
+
+- New VM is fully provisioned automatically
+- TUI shows provisioning status
+- `claude --version` works on fresh VM
+
+### 1.2 Agent Authentication (SETUP-FLOW Stage 6)
+
+**Reference:** SETUP-FLOW.md Stage 6, ADR-0009
+
+The vision shows interactive agent authentication after provisioning:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Authenticate Claude Code:                                      │
+│                                                                 │
+│  Opening browser for authentication...                          │
+│  If browser doesn't open, visit:                                │
+│  https://console.anthropic.com/auth?callback=...               │
+│                                                                 │
+│  [Waiting for authentication...]                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+1. **SSH Tunnel for OAuth** - Forward localhost for OAuth callbacks:
+
+```bash
+ssh -L 8080:localhost:8080 claude-sandbox -t "claude auth login"
+```
+
+1. **Auth Status Check** - Verify authentication on connection:
+
+```go
+func (a *AuthChecker) CheckClaudeAuth(ctx context.Context) (AuthStatus, error) {
+    output, err := a.ssh.Run("claude auth status")
+    // Parse output for authentication state
+}
+```
+
+**Deliverables:**
+
+- [ ] Add SSH tunnel helper for OAuth flows
+- [ ] Check agent auth status on VM start
+- [ ] Show auth status in TUI infrastructure section
+- [ ] Add `cloudcoop auth` CLI command
+- [ ] Support re-authentication flow
+
+### 1.3 Agent Management Script Integration
+
+**Current State:**
+
+provision-vm.sh creates these scripts on the VM:
+
+- `start-agents.sh [count]` - Start N Claude agents in tmux
+- `stop-agents.sh` - Kill all agent sessions
+- `attach-agent.sh [number]` - Attach to specific agent
+- `list-agents.sh` - List running agents
+
+**Missing:** TUI doesn't invoke these scripts.
+
+**Integration:**
+
+```go
+// internal/agent/manager.go
+func (m *Manager) StartAgents(ctx context.Context, count int) error {
+    return m.ssh.Run(fmt.Sprintf("start-agents.sh %d", count))
+}
+
+func (m *Manager) StopAllAgents(ctx context.Context) error {
+    return m.ssh.Run("stop-agents.sh")
+}
+```
+
+**TUI Integration:**
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  Start Agents                                                   │
+├─────────────────────────────────────────────────────────────────┤
+│  How many agents? [12]                                          │
+│                                                                 │
+│  Agent type: ● Claude Code  ○ Aider  ○ Gemini CLI              │
+│                                                                 │
+│  [Start]  [Cancel]                                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Deliverables:**
+
+- [ ] Invoke start-agents.sh from TUI [A]dd action
+- [ ] Invoke stop-agents.sh from TUI bulk stop
+- [ ] Show agent count in status view
+- [ ] Add `cloudcoop agents start --count=N` CLI
+
+### 1.4 Terminal Config Generator (cc-3.1)
+
+**Reference:** TUI-REQUIREMENTS.md Section 7
+
+Generate terminal emulator configs for viewing multiple agent sessions simultaneously.
+
+**Ghostty Config:**
+
+```toml
+# ~/.config/ghostty/cloudcoop-12-agents.toml
+# Generated by: cloudcoop terminal-config --agents=12
+
+[window]
+title = "cloudcoop agents"
+
+# 3x4 grid of agent views
+[[window.split]]
+command = "ssh claude-sandbox -t 'tmux attach -t agents:agent-1'"
+
+[[window.split]]
+command = "ssh claude-sandbox -t 'tmux attach -t agents:agent-2'"
+# ... repeat for all agents
+```
+
+**iTerm2 AppleScript:**
+
+```applescript
+tell application "iTerm2"
+    tell current session of current tab of current window
+        split horizontally with default profile command "ssh claude-sandbox -t 'tmux attach -t agents:agent-1'"
+    end tell
+end tell
+```
+
+**Deliverables:**
+
+- [ ] Add `cloudcoop terminal-config` command
+- [ ] Generate Ghostty config (TOML)
+- [ ] Generate iTerm2 profile/AppleScript
+- [ ] Generate Kitty config
+- [ ] Support configurable grid layouts (2x2, 3x4, 4x4)
+
+**Success Criteria:**
+
+- `cloudcoop terminal-config --terminal=ghostty --agents=12` generates working config
+- User can open terminal with multi-pane agent view
+
+---
+
+## Phase 2: Security & Quality Foundation
 
 **Objective:** Establish a secure, maintainable codebase before adding new features.
 
-### 1.1 SSH Host Key Management (cc-xzi)
+### 2.1 SSH Host Key Management (cc-xzi)
 
 **Current Problem:**
 
@@ -140,7 +359,7 @@ func verifyHostKey(hostname string, remote net.Addr, key ssh.PublicKey) error {
 - Changed host keys abort with clear error message
 - Existing valid host keys work without prompts
 
-### 1.2 Refactor tui/app.go
+### 2.2 Refactor tui/app.go
 
 **Current State:** ~1000 LOC single file with large `Update()` function.
 
@@ -170,7 +389,7 @@ internal/tui/
 - All existing TUI tests pass
 - No functional changes to user experience
 
-### 1.3 Improve Test Coverage
+### 2.3 Improve Test Coverage
 
 **Current Coverage Gaps:**
 
@@ -213,11 +432,11 @@ internal/tui/
 
 ---
 
-## Phase 2: GCP Feature Completion
+## Phase 3: GCP Feature Completion
 
 **Objective:** Implement documented features in TUI-REQUIREMENTS.md that are not yet built.
 
-### 2.1 VM Resize
+### 3.1 VM Resize
 
 **Reference:** TUI-REQUIREMENTS.md Section 2.4
 
@@ -276,7 +495,7 @@ func (p *GCPProvider) ResizeVM(ctx context.Context, name, machineType string) er
 - User can select from configured sizes
 - README.md updated with resize feature
 
-### 2.2 Dynamic IP Firewall
+### 3.2 Dynamic IP Firewall
 
 **Reference:** ADR-0012 (Network Security for SSH Access)
 
@@ -320,7 +539,7 @@ func (p *GCPProvider) UpdateSSHFirewall(ctx context.Context, sourceRanges []stri
 - `manual` mode applies configured ranges
 - Status view shows firewall state
 
-### 2.3 VM Metadata Tagging (cc-s7h)
+### 3.3 VM Metadata Tagging (cc-s7h)
 
 **Purpose:** Tag VMs with cloudcoop metadata for identification and diagnostics.
 
@@ -358,7 +577,7 @@ metadata := &computepb.Metadata{
 - Status shows cloudcoop version mismatch warnings
 - Config hash helps detect drift
 
-### 2.4 Disk Auto-Delete Review (cc-l5v)
+### 3.4 Disk Auto-Delete Review (cc-l5v)
 
 **Context:** ADR-0003 specifies disk auto-delete behavior on VM deletion.
 
@@ -371,9 +590,9 @@ metadata := &computepb.Metadata{
 
 ---
 
-## Phase 3: Multi-Cloud Expansion
+## Phase 4: Multi-Cloud & Advanced Features
 
-**Objective:** Implement AWS and Azure providers per ADR-0010.
+**Objective:** Implement AWS and Azure providers per ADR-0010, plus advanced capabilities.
 
 ### Effort Estimate (from ADR-0010)
 
@@ -387,7 +606,7 @@ metadata := &computepb.Metadata{
 | Testing | ~2 days | ~2 days |
 | **Total** | ~11 days | ~11 days |
 
-### 3.1 AWS Provider
+### 4.1 AWS Provider
 
 **Service Mapping:**
 
@@ -438,7 +657,7 @@ func (p *AWSProvider) StartVM(ctx context.Context, name string) error {
 - [ ] Add AWS-specific machine type mappings
 - [ ] Integration tests with localstack
 
-### 3.2 Azure Provider
+### 4.2 Azure Provider
 
 **Service Mapping:**
 
@@ -487,7 +706,7 @@ func (p *AzureProvider) StartVM(ctx context.Context, name string) error {
 - [ ] Add Azure-specific machine type mappings
 - [ ] Integration tests with Azurite (where applicable)
 
-### 3.3 Machine Type Normalization
+### 4.3 Machine Type Normalization
 
 **Standard Types:**
 
@@ -507,13 +726,7 @@ aws = "c7g.4xlarge"
 azure = "Standard_D16pds_v6"
 ```
 
----
-
-## Phase 4: Advanced Features
-
-**Objective:** Add sophisticated capabilities for power users.
-
-### 4.1 API Key Management (ADR-0009)
+### 4.4 API Key Management (ADR-0009)
 
 **Tiered Approach:**
 
@@ -555,7 +768,7 @@ ANTHROPIC_API_KEY = "anthropic-api-key"
 - [ ] Auth status display in TUI
 - [ ] Per-agent auth configuration
 
-### 4.2 Session Recovery After Preemption
+### 4.5 Session Recovery After Preemption
 
 **Reference:** TUI-REQUIREMENTS.md Section 6.2
 
@@ -590,7 +803,7 @@ Previous session detected (stopped 15 minutes ago):
 - [ ] Add recovery detection on startup
 - [ ] Implement restore workflow
 
-### 4.3 Bulk Agent Operations
+### 4.6 Bulk Agent Operations
 
 **Reference:** TUI-REQUIREMENTS.md Section 3.3
 
@@ -612,7 +825,7 @@ Start agents:
 - [ ] Add keyboard shortcut [B] for bulk operations
 - [ ] Add `cloudcoop agents start --count=N` CLI
 
-### 4.4 Agent Logs Viewing
+### 4.7 Agent Logs Viewing
 
 **Reference:** TUI-REQUIREMENTS.md Section 3.6
 
@@ -635,38 +848,6 @@ sshClient.Run(fmt.Sprintf(`tmux capture-pane -t agents:%s -p -S -100`, index))
 - [ ] Add keyboard shortcut [L] for logs
 - [ ] Add `cloudcoop logs <agent>` CLI command
 
-### 4.5 Terminal Config Generator (cc-3.1, cc-atw)
-
-**Reference:** TUI-REQUIREMENTS.md Section 7
-
-**Supported Terminals:**
-
-| Terminal | Config Format | Status |
-|----------|---------------|--------|
-| Ghostty | TOML | Primary |
-| iTerm2 | AppleScript/Profiles | Planned |
-| Kitty | kitty.conf | Planned |
-
-**Generated Config Example (Ghostty):**
-
-```toml
-# ~/.config/ghostty/cloudcoop-agents.toml
-# Auto-generated by cloudcoop
-
-[[window.split]]
-command = "ssh claude-sandbox -t 'tmux attach -t agents:1'"
-
-[[window.split]]
-command = "ssh claude-sandbox -t 'tmux attach -t agents:2'"
-```
-
-**Deliverables:**
-
-- [ ] Ghostty config generator
-- [ ] iTerm2 config generator
-- [ ] Kitty config generator
-- [ ] CLI command `cloudcoop terminal-config`
-
 ---
 
 ## Risks and Mitigations
@@ -683,39 +864,52 @@ command = "ssh claude-sandbox -t 'tmux attach -t agents:2'"
 
 ## Success Metrics
 
-### Phase 1 Success
+### Phase 1 Success (VM Provisioning & Agent Setup)
+
+- [ ] New VM is automatically provisioned with all dev tools
+- [ ] Claude Code authenticates via OAuth tunnel
+- [ ] `start-agents.sh 12` invocable from TUI
+- [ ] Terminal configs generate for Ghostty, iTerm2, Kitty
+
+### Phase 2 Success (Security & Quality)
 
 - [ ] Zero gosec G106 findings (InsecureIgnoreHostKey)
 - [ ] tui/app.go under 300 LOC
 - [ ] CLI coverage ≥60%, SSH coverage ≥60%, TUI coverage ≥50%
 - [ ] All existing tests pass
 
-### Phase 2 Success
+### Phase 3 Success (GCP Feature Completion)
 
 - [ ] VM resize works from TUI and CLI
 - [ ] Dynamic IP firewall auto-updates on startup
 - [ ] New VMs have cloudcoop metadata
 - [ ] All TUI-REQUIREMENTS.md GCP features implemented
 
-### Phase 3 Success
+### Phase 4 Success (Multi-Cloud & Advanced)
 
 - [ ] `cloudcoop --cloud aws` works end-to-end
 - [ ] `cloudcoop --cloud azure` works end-to-end
-- [ ] Machine type normalization works across clouds
-- [ ] Documentation covers all three clouds
-
-### Phase 4 Success
-
 - [ ] OAuth flow works for Claude Code authentication
 - [ ] Session recovery works after spot preemption
 - [ ] Bulk operations start/stop 12 agents efficiently
-- [ ] Terminal configs generate for Ghostty, iTerm2, Kitty
 
 ---
 
 ## Appendix: Critical Files by Phase
 
-### Phase 1
+### Phase 1 (VM Provisioning & Agent Setup)
+
+| File | Purpose |
+|------|---------|
+| `scripts/provision-vm.sh` | Existing provisioning script (650 LOC) |
+| `config/versions.env` | Tool version configuration |
+| `internal/provisioner/provisioner.go` | New provisioning coordinator |
+| `internal/provisioner/status.go` | Provisioning status checks |
+| `internal/auth/tunnel.go` | SSH tunnel for OAuth |
+| `internal/agent/manager.go` | Agent start/stop/list operations |
+| `internal/terminal/generator.go` | Terminal config generators |
+
+### Phase 2 (Security & Quality)
 
 | File | Purpose |
 |------|---------|
@@ -726,7 +920,7 @@ command = "ssh claude-sandbox -t 'tmux attach -t agents:2'"
 | `internal/tui/commands.go` | Extracted command builders |
 | `internal/cli/*_test.go` | New CLI tests |
 
-### Phase 2
+### Phase 3 (GCP Feature Completion)
 
 | File | Purpose |
 |------|---------|
@@ -736,7 +930,7 @@ command = "ssh claude-sandbox -t 'tmux attach -t agents:2'"
 | `internal/tui/resize.go` | Resize screen |
 | `internal/cli/resize_cmd.go` | Resize CLI command |
 
-### Phase 3
+### Phase 4 (Multi-Cloud & Advanced)
 
 | File | Purpose |
 |------|---------|
@@ -745,24 +939,21 @@ command = "ssh claude-sandbox -t 'tmux attach -t agents:2'"
 | `internal/cloud/azure/provider.go` | Azure provider |
 | `internal/cloud/azure/vm.go` | Azure VM operations |
 | `internal/cloud/types.go` | Machine type mappings |
-
-### Phase 4
-
-| File | Purpose |
-|------|---------|
 | `internal/auth/oauth.go` | OAuth browser flow |
 | `internal/auth/secrets.go` | Secret Manager integration |
 | `internal/session/snapshot.go` | State capture |
 | `internal/session/recovery.go` | Session restore |
 | `internal/tui/bulk.go` | Bulk operations screen |
-| `internal/terminal/generator.go` | Config generators |
 
 ---
 
 ## References
 
+- [SETUP-FLOW.md](SETUP-FLOW.md) - First-run setup wizard (Stages 1-6)
 - [TUI-REQUIREMENTS.md](TUI-REQUIREMENTS.md) - Full TUI specification
 - [MVP-REVIEW-REPORT.md](MVP-REVIEW-REPORT.md) - Current state assessment
+- [provision-vm.sh](../scripts/provision-vm.sh) - Existing VM provisioning script (650 LOC)
+- [ADR-0003](../decisions/0003-instance-provisioning-model.md) - Instance Provisioning Model
 - [ADR-0009](../decisions/0009-api-key-management.md) - API Key Management
 - [ADR-0010](../decisions/0010-cloud-agnostic-design.md) - Cloud-Agnostic Design
 - [ADR-0012](../decisions/0012-dynamic-ip-firewall.md) - Dynamic IP Firewall
