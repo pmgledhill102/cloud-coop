@@ -21,6 +21,12 @@ type Config struct {
 	SSH          SSHConfig          `toml:"ssh"`
 	Agents       AgentsConfig       `toml:"agents"`
 	Provisioning ProvisioningConfig `toml:"provisioning"`
+	TUI          TUIConfig          `toml:"tui"`
+}
+
+// TUIConfig contains TUI-specific settings.
+type TUIConfig struct {
+	RefreshIntervalSec int `toml:"refresh_interval_sec"` // Auto-refresh interval during operations (default: 5)
 }
 
 // AgentsConfig contains settings for agent sessions.
@@ -131,6 +137,9 @@ func LoadFile(path string) (*Config, error) {
 	if cfg.Provisioning.ScriptURL == "" {
 		cfg.Provisioning.ScriptURL = "https://raw.githubusercontent.com/pmgledhill102/cloud-coop/main/scripts/provision-vm.sh"
 	}
+	if cfg.TUI.RefreshIntervalSec == 0 {
+		cfg.TUI.RefreshIntervalSec = 5
+	}
 
 	return &cfg, nil
 }
@@ -198,6 +207,15 @@ func (c *Config) SetValue(key, value string) error {
 		c.Agents.DefaultCommand = value
 	case "provisioning.script_url":
 		c.Provisioning.ScriptURL = value
+	case "tui.refresh_interval_sec":
+		interval, err := strconv.Atoi(value)
+		if err != nil {
+			return errors.New("tui.refresh_interval_sec must be a number")
+		}
+		if interval < 1 || interval > 300 {
+			return errors.New("tui.refresh_interval_sec must be between 1 and 300")
+		}
+		c.TUI.RefreshIntervalSec = interval
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -225,6 +243,8 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.Agents.DefaultCommand, nil
 	case "provisioning.script_url":
 		return c.Provisioning.ScriptURL, nil
+	case "tui.refresh_interval_sec":
+		return strconv.Itoa(c.TUI.RefreshIntervalSec), nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}
@@ -242,6 +262,7 @@ func AllKeys() []string {
 		"ssh.user",
 		"agents.default_command",
 		"provisioning.script_url",
+		"tui.refresh_interval_sec",
 	}
 }
 

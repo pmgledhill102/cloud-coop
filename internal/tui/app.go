@@ -83,6 +83,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case provisionStatusMsg:
 		return m.handleProvisionStatus(msg)
 
+	case refreshTickMsg:
+		return m.handleRefreshTick()
+
 	case vmStartMsg:
 		return m.handleVMStart(msg)
 

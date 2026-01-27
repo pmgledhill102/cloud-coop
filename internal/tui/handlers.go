@@ -37,7 +37,7 @@ func (m Model) handleSizeSelectionKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.selectingSize = false
 		machineType := m.cfg.VM.MachineSizes[m.sizeOptions[m.selectedSizeIdx]]
 		m.operation = "creating"
-		return m, createVM(m.cfg, machineType)
+		return m, tea.Batch(createVM(m.cfg, machineType), scheduleRefresh(m.cfg))
 	case "esc", "escape", "n", "N":
 		m.selectingSize = false
 	}
@@ -49,7 +49,7 @@ func (m Model) handleDeleteConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "y", "Y":
 		m.confirmingDelete = false
 		m.operation = "deleting"
-		return m, deleteVM(m.cfg)
+		return m, tea.Batch(deleteVM(m.cfg), scheduleRefresh(m.cfg))
 	case "n", "N", "esc", "escape":
 		m.confirmingDelete = false
 	}
@@ -61,7 +61,7 @@ func (m Model) handleKillConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "y", "Y":
 		m.confirmingKill = false
 		m.operation = "killing"
-		return m, killAgent(m.cfg, m.vmInfo, m.killTargetIndex)
+		return m, tea.Batch(killAgent(m.cfg, m.vmInfo, m.killTargetIndex), scheduleRefresh(m.cfg))
 	case "n", "N", "esc", "escape":
 		m.confirmingKill = false
 	}
@@ -83,17 +83,17 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "s", "S":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
 			m.operation = "starting"
-			return m, startVM(m.cfg)
+			return m, tea.Batch(startVM(m.cfg), scheduleRefresh(m.cfg))
 		}
 	case "t", "T":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusRunning {
 			m.operation = "stopping"
-			return m, stopVM(m.cfg)
+			return m, tea.Batch(stopVM(m.cfg), scheduleRefresh(m.cfg))
 		}
 	case "a", "A":
 		if m.canModifyAgents() {
 			m.operation = "adding"
-			return m, addAgent(m.cfg, m.vmInfo)
+			return m, tea.Batch(addAgent(m.cfg, m.vmInfo), scheduleRefresh(m.cfg))
 		}
 	case "K":
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
@@ -176,6 +176,10 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 	m.agentsErr = nil
 	m.provisionStatus = nil
 	m.provisionErr = nil
+	// Continue auto-refresh if operation is still in progress
+	if m.shouldAutoRefresh() {
+		return m, scheduleRefresh(m.cfg)
+	}
 	return m, nil
 }
 
@@ -190,6 +194,10 @@ func (m Model) handleProvisionStatus(msg provisionStatusMsg) (Model, tea.Cmd) {
 	m.provisionLoading = false
 	m.provisionStatus = msg.status
 	m.provisionErr = msg.err
+	// Continue auto-refresh if provisioning is still in progress
+	if m.shouldAutoRefresh() {
+		return m, scheduleRefresh(m.cfg)
+	}
 	return m, nil
 }
 
@@ -258,4 +266,35 @@ func (m Model) canModifyAgents() bool {
 		m.vmInfo.Status == cloud.VMStatusRunning && m.operation == "" &&
 		!m.agentsLoading && !m.provisionLoading &&
 		provisioning.IsProvisioningComplete(m.provisionStatus)
+}
+
+// shouldAutoRefresh returns true if auto-refresh should be active.
+// Auto-refresh is active during operations or while provisioning is in progress.
+func (m Model) shouldAutoRefresh() bool {
+	// Auto-refresh during operations (starting, stopping, creating, deleting, adding, killing)
+	if m.operation != "" {
+		return true
+	}
+	// Auto-refresh while provisioning is pending or running
+	if m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusRunning &&
+		m.provisionStatus != nil &&
+		(m.provisionStatus.Status == provisioning.StatusPending ||
+			m.provisionStatus.Status == provisioning.StatusRunning) {
+		return true
+	}
+	return false
+}
+
+// handleRefreshTick handles the periodic refresh timer.
+func (m Model) handleRefreshTick() (Model, tea.Cmd) {
+	// Auto-refresh during operations or provisioning
+	if m.shouldAutoRefresh() && !m.loading {
+		m.loading = true
+		return m, fetchVMInfo(m.cfg)
+	}
+	// If still in auto-refresh mode but already loading, reschedule
+	if m.shouldAutoRefresh() {
+		return m, scheduleRefresh(m.cfg)
+	}
+	return m, nil
 }

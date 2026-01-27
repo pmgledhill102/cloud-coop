@@ -56,6 +56,20 @@ type provisionStatusMsg struct {
 
 type connectFinishedMsg struct{ err error }
 
+// refreshTickMsg is sent periodically to trigger auto-refresh during operations.
+type refreshTickMsg struct{}
+
+// scheduleRefresh returns a command that sends a refreshTickMsg after the configured interval.
+func scheduleRefresh(cfg *config.Config) tea.Cmd {
+	interval := 5 * time.Second
+	if cfg != nil && cfg.TUI.RefreshIntervalSec > 0 {
+		interval = time.Duration(cfg.TUI.RefreshIntervalSec) * time.Second
+	}
+	return tea.Tick(interval, func(time.Time) tea.Msg {
+		return refreshTickMsg{}
+	})
+}
+
 // newProvider creates a cloud provider based on config.
 func newProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
 	switch cfg.Cloud.Provider {
