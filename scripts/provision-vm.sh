@@ -528,10 +528,18 @@ apt-get install -y \
     default-mysql-client \
     redis-tools
 
-wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-apt-get update
-apt-get install -y mongodb-mongosh || true
+# MongoDB mongosh - check if repo supports this Ubuntu version
+MONGODB_RELEASE_URL="https://repo.mongodb.org/apt/ubuntu/dists/${UBUNTU_CODENAME}/mongodb-org/7.0/Release"
+if curl -sI "$MONGODB_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
+    if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
+        wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+    fi
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu ${UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+    apt-get update
+    apt-get install -y mongodb-mongosh || true
+else
+    echo "MongoDB repo does not support Ubuntu ${UBUNTU_CODENAME}, skipping mongosh"
+fi
 
 # ============================================
 # Additional CLI Tools
