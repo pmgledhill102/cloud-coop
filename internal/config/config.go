@@ -129,7 +129,7 @@ func LoadFile(path string) (*Config, error) {
 		}
 	}
 	if cfg.Provisioning.ScriptURL == "" {
-		cfg.Provisioning.ScriptURL = "https://raw.githubusercontent.com/pmgledhill102/cloudcoop/main/scripts/provision-vm.sh"
+		cfg.Provisioning.ScriptURL = "https://raw.githubusercontent.com/pmgledhill102/cloud-coop/main/scripts/provision-vm.sh"
 	}
 
 	return &cfg, nil
