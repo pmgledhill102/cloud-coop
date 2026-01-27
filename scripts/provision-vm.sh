@@ -24,7 +24,7 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-TOTAL_STEPS=28
+TOTAL_STEPS=26
 CURRENT_STEP=0
 
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
@@ -134,14 +134,24 @@ apt-get install -y \
     clang-format
 
 # ============================================
+# Create sandbox user (needed for Homebrew)
+# ============================================
+report_progress "Creating sandbox user"
+if ! id "sandbox" &>/dev/null; then
+    useradd -m -s /bin/zsh sandbox
+    echo "sandbox ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sandbox
+fi
+
+# ============================================
 # Homebrew (package manager for dev tools)
 # ============================================
 report_progress "Installing Homebrew"
 if [ ! -d /home/linuxbrew/.linuxbrew ]; then
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Homebrew must be installed as non-root user
+    sudo -u sandbox bash -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 fi
 
-# Set up brew for this script
+# Set up brew path
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 
@@ -149,7 +159,8 @@ export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 # Dev Tools via Homebrew
 # ============================================
 report_progress "Installing dev tools via Homebrew"
-brew install \
+# Run brew as sandbox user (Homebrew recommends non-root)
+sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     go \
     node \
     ruby \
@@ -328,14 +339,10 @@ report_progress "Configuring ZSH"
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
 
 # ============================================
-# Create sandbox user
+# Configure sandbox user
 # ============================================
-report_progress "Creating sandbox user"
-if ! id "sandbox" &>/dev/null; then
-    useradd -m -s /bin/zsh sandbox
-    usermod -aG docker sandbox
-    echo "sandbox ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/sandbox
-fi
+report_progress "Configuring sandbox user"
+usermod -aG docker sandbox
 
 # Copy tools to sandbox user
 cp -r /root/.cargo /home/sandbox/ 2>/dev/null || true
