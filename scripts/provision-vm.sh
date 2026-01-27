@@ -107,11 +107,17 @@ if [ -n "$GCP_REGION" ]; then
     # Test if GCE mirror is reachable
     if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
         echo "Using GCE mirror: $GCE_MIRROR"
-        # Replace ports.ubuntu.com with GCE mirror in sources
+        # Replace ports.ubuntu.com with GCE mirror in sources (idempotent)
+        # Only replace if not already using a GCE mirror
         # Handle both legacy sources.list and new deb822 .sources format
-        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
-        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list.d/*.list 2>/dev/null || true
-        sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+        if ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
+            sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
+        fi
+        for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$f" ] && ! grep -q "gce.ports.ubuntu.com" "$f" 2>/dev/null; then
+                sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$f" 2>/dev/null || true
+            fi
+        done
     else
         echo "GCE mirror not reachable, using default ports.ubuntu.com"
     fi
@@ -238,16 +244,38 @@ npm install -g \
 # ============================================
 # Python
 # ============================================
-report_progress "Installing Python ${PYTHON_VERSION}"
-add-apt-repository -y ppa:deadsnakes/ppa
-apt-get update
-apt-get install -y \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-venv \
-    python${PYTHON_VERSION}-dev
+report_progress "Installing Python"
 
-update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
-update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
+# Try deadsnakes PPA for specific Python version, fall back to system Python
+# deadsnakes may not support newest Ubuntu versions
+SYSTEM_PYTHON_VERSION=$(python3 --version 2>/dev/null | grep -oP '\d+\.\d+' || echo "")
+
+if [ -n "$SYSTEM_PYTHON_VERSION" ]; then
+    echo "System Python version: $SYSTEM_PYTHON_VERSION"
+fi
+
+# Check if deadsnakes supports this Ubuntu release
+UBUNTU_CODENAME=$(lsb_release -cs)
+if add-apt-repository -y ppa:deadsnakes/ppa 2>&1 | grep -q "does not have a Release file"; then
+    echo "deadsnakes PPA does not support Ubuntu $UBUNTU_CODENAME, using system Python $SYSTEM_PYTHON_VERSION"
+    PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
+    # Ensure venv and dev packages are installed for system Python
+    apt-get install -y python3-venv python3-dev || true
+else
+    apt-get update
+    # Try to install requested Python version
+    if apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev 2>/dev/null; then
+        echo "Installed Python ${PYTHON_VERSION} from deadsnakes"
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
+        update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
+    else
+        echo "Python ${PYTHON_VERSION} not available, using system Python $SYSTEM_PYTHON_VERSION"
+        PYTHON_VERSION="$SYSTEM_PYTHON_VERSION"
+        apt-get install -y python3-venv python3-dev || true
+    fi
+fi
+
+echo "Using Python version: $(python3 --version)"
 
 # Install uv (fast Python package manager)
 report_progress "Installing uv package manager"
