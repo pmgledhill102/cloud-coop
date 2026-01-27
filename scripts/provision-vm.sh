@@ -7,6 +7,10 @@
 # - Progress reporting to /var/run/cloudcoop/provision-progress
 # - Idempotent design (safe to re-run for retry/refresh/resume)
 #
+# Package management strategy:
+# - Homebrew: dev tools, language runtimes, CLI utilities (always current)
+# - apt: system packages, Docker, cloud CLIs
+#
 # Status values: pending | running | completed | failed
 
 set -e
@@ -20,20 +24,13 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-# Total number of provisioning steps (for progress reporting)
-TOTAL_STEPS=36
+TOTAL_STEPS=28
 CURRENT_STEP=0
 
-# Create required directories
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
-
-# Redirect output to log file
 exec > >(tee -a "$LOG_FILE") 2>&1
-
-# Error trap: capture failures and write to status file
 trap 'echo -e "failed\nStep $CURRENT_STEP/$TOTAL_STEPS: $CURRENT_TASK failed with exit code $?" > "$STATUS_FILE"; exit 1' ERR
 
-# Progress reporting function
 report_progress() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     CURRENT_TASK="$1"
@@ -42,62 +39,33 @@ report_progress() {
     echo "=== [$CURRENT_STEP/$TOTAL_STEPS] $CURRENT_TASK ==="
 }
 
-# Mark provisioning as running
 echo "running" > "$STATUS_FILE"
 echo "0/$TOTAL_STEPS Initializing" > "$PROGRESS_FILE"
 
 echo "=== Cloudcoop VM Provisioning ==="
 echo "Started at: $(date)"
 echo "Hostname: $(hostname)"
-echo "Status file: $STATUS_FILE"
-echo "Progress file: $PROGRESS_FILE"
-echo "Log file: $LOG_FILE"
 
 # ============================================
-# Load versions from config file (if available)
+# Versions (for tools not managed by brew)
 # ============================================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSIONS_FILE="${SCRIPT_DIR}/../config/versions.env"
-
-if [ -f "$VERSIONS_FILE" ]; then
-    echo "Loading versions from $VERSIONS_FILE"
-    # shellcheck source=/dev/null
-    source "$VERSIONS_FILE"
-else
-    echo "No versions.env found, using defaults"
-fi
-
-# Default versions (overridden by versions.env if present)
-# Note: Python, PHP, Java, Docker use Ubuntu 25.04 system defaults
-NODE_VERSION="${NODE_VERSION:-24}"
-GO_VERSION="${GO_VERSION:-1.25.3}"
 RUST_VERSION="${RUST_VERSION:-1.93}"
 JAVA_VERSION="${JAVA_VERSION:-21}"
-RUBY_VERSION="${RUBY_VERSION:-3.4}"
 DOTNET_VERSION="${DOTNET_VERSION:-10.0}"
-GRADLE_VERSION="${GRADLE_VERSION:-8.12}"
-SBT_VERSION="${SBT_VERSION:-1.10.6}"
-DELTA_VERSION="${DELTA_VERSION:-0.18.2}"
-GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v2.8.0}"
-ACTIONLINT_VERSION="${ACTIONLINT_VERSION:-1.7.7}"
-HADOLINT_VERSION="${HADOLINT_VERSION:-2.12.0}"
 KUBECTL_VERSION="${KUBECTL_VERSION:-1.30}"
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Wait for cloud-init to complete
+# Wait for cloud-init and apt locks
 cloud-init status --wait || true
 
-# Wait for apt locks (unattended-upgrades may be running on fresh VMs)
 wait_for_apt() {
-    local max_wait=300  # 5 minutes max
+    local max_wait=300
     local waited=0
     while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
-          fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
-          fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+          fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
         if [ $waited -ge $max_wait ]; then
-            echo "Timeout waiting for apt locks (waited ${max_wait}s)"
-            # Try to kill unattended-upgrades if it's the culprit
+            echo "Timeout waiting for apt locks"
             pkill -9 unattended-upgr 2>/dev/null || true
             sleep 2
             break
@@ -109,121 +77,100 @@ wait_for_apt() {
 }
 
 # ============================================
-# Configure GCE APT Mirror (3x faster downloads)
+# Configure GCE APT Mirror
 # ============================================
 report_progress "Configuring GCE apt mirror"
 
-# Detect GCP region from metadata
 GCP_ZONE=$(curl -sH "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/zone 2>/dev/null | cut -d/ -f4)
 GCP_REGION=$(echo "$GCP_ZONE" | sed 's/-[a-z]$//')
 
 if [ -n "$GCP_REGION" ]; then
     echo "Detected GCP region: $GCP_REGION"
-    # Use GCE-internal Ubuntu mirror for faster ARM64 downloads
     GCE_MIRROR="${GCP_REGION}.gce.ports.ubuntu.com"
-
-    # Test if GCE mirror is reachable
     if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
         echo "Using GCE mirror: $GCE_MIRROR"
-        # Replace ports.ubuntu.com with GCE mirror in sources (idempotent)
-        # Only replace if not already using a GCE mirror
-        # Handle both legacy sources.list and new deb822 .sources format
         if ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
             sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
         fi
-        for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            if [ -f "$f" ] && ! grep -q "gce.ports.ubuntu.com" "$f" 2>/dev/null; then
-                sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$f" 2>/dev/null || true
-            fi
-        done
-    else
-        echo "GCE mirror not reachable, using default ports.ubuntu.com"
     fi
-else
-    echo "Not running on GCP, using default mirrors"
 fi
 
 # ============================================
-# System Updates
+# System Updates & Core Packages
 # ============================================
 report_progress "Updating system packages"
 wait_for_apt
 apt-get update
 apt-get upgrade -y
 
-# ============================================
-# Core System Packages (from Anthropic devcontainer + CI requirements)
-# ============================================
 report_progress "Installing core system packages"
 apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
+    build-essential \
     curl \
     wget \
-    gnupg \
-    gnupg2 \
-    lsb-release \
-    software-properties-common \
-    build-essential \
-    cmake \
     git \
-    less \
-    procps \
-    sudo \
-    fzf \
-    zsh \
-    man-db \
+    jq \
     unzip \
     zip \
+    tmux \
+    zsh \
+    vim \
+    nano \
+    htop \
+    ncdu \
+    procps \
+    sudo \
+    ca-certificates \
+    gnupg \
+    lsb-release \
     iptables \
     ipset \
     iproute2 \
     dnsutils \
-    jq \
-    nano \
-    vim \
-    tmux \
-    screen \
-    htop \
-    ncdu \
-    clang-format \
     sqlite3 \
     gdb \
-    skopeo
+    cmake \
+    clang-format
 
 # ============================================
-# git-delta (from Anthropic devcontainer)
+# Homebrew (package manager for dev tools)
 # ============================================
-report_progress "Installing git-delta ${DELTA_VERSION}"
-ARCH=$(dpkg --print-architecture)
-wget -q "https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/git-delta_${DELTA_VERSION}_${ARCH}.deb" -O /tmp/git-delta.deb
-dpkg -i /tmp/git-delta.deb || apt-get install -f -y
-rm /tmp/git-delta.deb
+report_progress "Installing Homebrew"
+if [ ! -d /home/linuxbrew/.linuxbrew ]; then
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+
+# Set up brew for this script
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 
 # ============================================
-# ripgrep and fd-find
+# Dev Tools via Homebrew
 # ============================================
-report_progress "Installing ripgrep and fd-find"
-apt-get install -y ripgrep fd-find
-
-# fd is installed as fdfind on Ubuntu - create symlink
-ln -sf "$(which fdfind)" /usr/local/bin/fd
-
-# ============================================
-# GitHub CLI
-# ============================================
-report_progress "Installing GitHub CLI"
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-apt-get update
-apt-get install -y gh
+report_progress "Installing dev tools via Homebrew"
+brew install \
+    go \
+    node \
+    ruby \
+    python@3 \
+    golangci-lint \
+    actionlint \
+    hadolint \
+    shellcheck \
+    git-delta \
+    ripgrep \
+    fd \
+    fzf \
+    yq \
+    gh \
+    k9s \
+    helm \
+    btop
 
 # ============================================
 # Docker (using Ubuntu system packages)
 # ============================================
 report_progress "Installing Docker"
-# Use system Docker (27.5 on Ubuntu 25.04) - no external repo needed
 apt-get install -y docker.io docker-compose-v2 docker-buildx
 
 systemctl enable docker
@@ -240,13 +187,10 @@ EOF
 systemctl restart docker
 
 # ============================================
-# Node.js (Claude Code runtime + JS/TS services)
+# Node.js global packages (Claude Code)
 # ============================================
-report_progress "Installing Node.js ${NODE_VERSION}"
-curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-apt-get install -y nodejs
-
-# Install global npm packages (including linting tools from pre-commit)
+report_progress "Installing Node.js packages"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 npm install -g \
     @anthropic-ai/claude-code \
     yarn \
@@ -259,20 +203,12 @@ npm install -g \
     markdownlint-cli2
 
 # ============================================
-# Python (using Ubuntu system Python)
+# Python tools via uv
 # ============================================
-report_progress "Installing Python"
-
-# Use system Python (3.13 on Ubuntu 25.04) - no external PPA needed
-apt-get install -y python3-full python3-venv python3-dev python3-pip
-echo "Using Python version: $(python3 --version)"
-
-# Install uv (fast Python package manager)
-report_progress "Installing uv package manager"
+report_progress "Installing Python tools"
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 
-# Install Python tools using uv (including pre-commit hooks: ruff, yamllint)
 uv tool install pipx
 uv tool install poetry
 uv tool install black
@@ -282,135 +218,40 @@ uv tool install pytest
 uv tool install pre-commit
 uv tool install httpie
 uv tool install yamllint
+uv tool install semgrep
 
 # ============================================
-# Go
+# Ruby gems
 # ============================================
-report_progress "Installing Go ${GO_VERSION}"
-wget -q "https://go.dev/dl/go${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" -O /tmp/go.tar.gz
-rm -rf /usr/local/go
-tar -C /usr/local -xzf /tmp/go.tar.gz
-rm /tmp/go.tar.gz
-
-cat > /etc/profile.d/go.sh <<'EOF'
-export PATH=$PATH:/usr/local/go/bin
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-EOF
-
-export PATH=$PATH:/usr/local/go/bin
-export GOPATH=/root/go
-export PATH=$PATH:$GOPATH/bin
-
-# Install Go tools (golangci-lint v2 from pre-commit)
-report_progress "Installing golangci-lint ${GOLANGCI_LINT_VERSION}"
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin ${GOLANGCI_LINT_VERSION}
-
-go install github.com/go-delve/delve/cmd/dlv@latest
-
-# ============================================
-# actionlint (GitHub Actions linting - from pre-commit)
-# ============================================
-report_progress "Installing actionlint ${ACTIONLINT_VERSION}"
-wget -q "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_$(dpkg --print-architecture).tar.gz" -O /tmp/actionlint.tar.gz
-tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint
-chmod +x /usr/local/bin/actionlint
-rm /tmp/actionlint.tar.gz
-
-# ============================================
-# hadolint (Dockerfile linting - from pre-commit)
-# ============================================
-report_progress "Installing hadolint ${HADOLINT_VERSION}"
-HADOLINT_ARCH=$(dpkg --print-architecture)
-if [ "$HADOLINT_ARCH" = "amd64" ]; then HADOLINT_ARCH="x86_64"; fi
-wget -q "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" -O /usr/local/bin/hadolint
-chmod +x /usr/local/bin/hadolint
-
-# ============================================
-# ShellCheck (Shell linting - from pre-commit)
-# ============================================
-report_progress "Installing ShellCheck"
-apt-get install -y shellcheck
+report_progress "Installing Ruby gems"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+gem install bundler rubocop
 
 # ============================================
 # Rust
 # ============================================
-report_progress "Installing Rust ${RUST_VERSION}"
+report_progress "Installing Rust"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
 source "$HOME/.cargo/env"
 rustup component add clippy rustfmt
 
 # ============================================
-# Java (using Ubuntu system OpenJDK)
+# Java (system OpenJDK) + Maven
 # ============================================
-report_progress "Installing Java ${JAVA_VERSION}"
-# Use system OpenJDK (equivalent to Temurin) - no external repo needed
-apt-get install -y openjdk-${JAVA_VERSION}-jdk
-
-# Maven
-apt-get install -y maven
-
-# Gradle
-report_progress "Installing Gradle ${GRADLE_VERSION}"
-wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip
-unzip -qo /tmp/gradle.zip -d /opt
-ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
-rm /tmp/gradle.zip
+report_progress "Installing Java"
+apt-get install -y openjdk-${JAVA_VERSION}-jdk maven
 
 # ============================================
-# Scala / sbt
-# ============================================
-report_progress "Installing sbt ${SBT_VERSION}"
-wget -q "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz" -O /tmp/sbt.tgz
-tar -xzf /tmp/sbt.tgz -C /opt
-ln -sf /opt/sbt/bin/sbt /usr/local/bin/sbt
-rm /tmp/sbt.tgz
-
-# ============================================
-# Ruby
-# ============================================
-report_progress "Installing Ruby ${RUBY_VERSION}"
-# Use rbenv for version management
-apt-get install -y \
-    autoconf \
-    bison \
-    libssl-dev \
-    libyaml-dev \
-    libreadline-dev \
-    zlib1g-dev \
-    libncurses-dev \
-    libffi-dev \
-    libgdbm-dev
-
-if [ ! -d /opt/rbenv ]; then
-    git clone https://github.com/rbenv/rbenv.git /opt/rbenv
-    git clone https://github.com/rbenv/ruby-build.git /opt/rbenv/plugins/ruby-build
-fi
-
-export PATH="/opt/rbenv/bin:/opt/rbenv/shims:$PATH"
-eval "$(rbenv init -)"
-
-# Install Ruby (this takes a while)
-rbenv install ${RUBY_VERSION}.0 || rbenv install ${RUBY_VERSION}.1 || apt-get install -y ruby-full
-rbenv global ${RUBY_VERSION}.0 2>/dev/null || rbenv global ${RUBY_VERSION}.1 2>/dev/null || true
-
-# Install gems (rubocop from pre-commit)
-gem install bundler rubocop
-
-# ============================================
-# PHP (using Ubuntu system PHP)
+# PHP (system packages)
 # ============================================
 report_progress "Installing PHP"
-# Use system PHP (8.4 on Ubuntu 25.04) - no external PPA needed
 apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
-
-# Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 # ============================================
 # .NET
 # ============================================
-report_progress "Installing .NET ${DOTNET_VERSION}"
+report_progress "Installing .NET"
 wget "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb
 dpkg -i /tmp/packages-microsoft-prod.deb
 rm /tmp/packages-microsoft-prod.deb
@@ -418,7 +259,7 @@ apt-get update
 apt-get install -y dotnet-sdk-${DOTNET_VERSION} || apt-get install -y dotnet-sdk-8.0
 
 # ============================================
-# Google Cloud CLI
+# Cloud CLIs
 # ============================================
 report_progress "Installing Google Cloud CLI"
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
@@ -426,18 +267,13 @@ curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --batch --yes -
 apt-get update
 apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 
-# ============================================
-# AWS CLI
-# ============================================
 report_progress "Installing AWS CLI"
-# Detect architecture for correct binary
 AWS_ARCH="x86_64"
 if [ "$(uname -m)" = "aarch64" ]; then
     AWS_ARCH="aarch64"
 fi
 curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
 unzip -qo /tmp/awscliv2.zip -d /tmp
-# Use --update if already installed (idempotent)
 if [ -d /usr/local/aws-cli ]; then
     /tmp/aws/install --update
 else
@@ -445,11 +281,17 @@ else
 fi
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
-# ============================================
-# Azure CLI
-# ============================================
 report_progress "Installing Azure CLI"
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+# ============================================
+# Kubernetes tools
+# ============================================
+report_progress "Installing Kubernetes tools"
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y kubectl
 
 # ============================================
 # Terraform
@@ -461,88 +303,10 @@ apt-get update
 apt-get install -y terraform
 
 # ============================================
-# Kubernetes Tools
-# ============================================
-report_progress "Installing Kubernetes tools"
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
-apt-get update
-apt-get install -y kubectl
-
-# Helm
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-# k9s
-wget -q "https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_$(dpkg --print-architecture).tar.gz" -O /tmp/k9s.tar.gz
-tar -xzf /tmp/k9s.tar.gz -C /usr/local/bin k9s
-rm /tmp/k9s.tar.gz
-
-# ============================================
-# Database Clients
-# ============================================
-report_progress "Installing database clients"
-apt-get install -y \
-    postgresql-client \
-    default-mysql-client \
-    redis-tools
-
-# MongoDB mongosh - check if repo supports this Ubuntu version
-UBUNTU_CODENAME=$(lsb_release -cs)
-MONGODB_RELEASE_URL="https://repo.mongodb.org/apt/ubuntu/dists/${UBUNTU_CODENAME}/mongodb-org/7.0/Release"
-if curl -sI "$MONGODB_RELEASE_URL" 2>/dev/null | grep -q "200 OK"; then
-    if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
-        wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-    fi
-    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu ${UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-    apt-get update
-    apt-get install -y mongodb-mongosh || true
-else
-    echo "MongoDB repo does not support Ubuntu ${UBUNTU_CODENAME}, skipping mongosh"
-fi
-
-# ============================================
-# Additional CLI Tools
-# ============================================
-report_progress "Installing additional CLI tools"
-
-# yq (YAML processor - used in CI)
-wget -q "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)" -O /usr/local/bin/yq
-chmod +x /usr/local/bin/yq
-
-# btop
-apt-get install -y btop || true
-
-# micro editor
-curl https://getmic.ro | bash
-mv micro /usr/local/bin/
-
-# grpcurl
-go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-cp /root/go/bin/grpcurl /usr/local/bin/ 2>/dev/null || true
-
-# Beads (bd) - Issue tracking
-echo "Installing Beads (bd)"
-curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash || true
-
-# ============================================
-# Container Tools
+# Container tools
 # ============================================
 report_progress "Installing container tools"
-
-# crane (container registry tool)
-go install github.com/google/go-containerregistry/cmd/crane@latest
-cp /root/go/bin/crane /usr/local/bin/ 2>/dev/null || true
-
-# dive (container layer analyzer)
-DIVE_VERSION=$(curl -s https://api.github.com/repos/wagoodman/dive/releases/latest | grep tag_name | cut -d '"' -f 4)
-wget -q "https://github.com/wagoodman/dive/releases/download/${DIVE_VERSION}/dive_${DIVE_VERSION#v}_linux_amd64.deb" -O /tmp/dive.deb
-dpkg -i /tmp/dive.deb || apt-get install -f -y
-rm /tmp/dive.deb
-
-# ============================================
-# Security Scanning Tools
-# ============================================
-report_progress "Installing security tools"
+apt-get install -y skopeo
 
 # Trivy
 wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/trivy.gpg
@@ -550,11 +314,14 @@ echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.
 apt-get update
 apt-get install -y trivy
 
-# Semgrep
-uv tool install semgrep
+# ============================================
+# Database clients
+# ============================================
+report_progress "Installing database clients"
+apt-get install -y postgresql-client default-mysql-client redis-tools
 
 # ============================================
-# ZSH Configuration (from Anthropic devcontainer)
+# ZSH + Oh My Zsh
 # ============================================
 report_progress "Configuring ZSH"
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true
@@ -571,12 +338,11 @@ fi
 
 # Copy tools to sandbox user
 cp -r /root/.cargo /home/sandbox/ 2>/dev/null || true
-cp -r /root/go /home/sandbox/ 2>/dev/null || true
 cp -r /root/.oh-my-zsh /home/sandbox/ 2>/dev/null || true
 chown -R sandbox:sandbox /home/sandbox/
 
 # ============================================
-# Create workspace directories
+# Workspace directories
 # ============================================
 report_progress "Creating workspace directories"
 mkdir -p /workspaces
@@ -586,7 +352,7 @@ done
 chown -R sandbox:sandbox /workspaces
 
 # ============================================
-# Environment setup for sandbox user
+# Environment setup
 # ============================================
 cat > /home/sandbox/.zshrc <<'EOF'
 export ZSH="$HOME/.oh-my-zsh"
@@ -594,14 +360,11 @@ ZSH_THEME="robbyrussell"
 plugins=(git docker kubectl)
 source $ZSH/oh-my-zsh.sh
 
-# Path additions
-export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin:$HOME/.cargo/bin:/opt/rbenv/bin:/opt/rbenv/shims
-export GOPATH=$HOME/go
+# Homebrew
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
-# rbenv init
-if command -v rbenv &> /dev/null; then
-    eval "$(rbenv init -)"
-fi
+# Rust
+export PATH=$PATH:$HOME/.cargo/bin
 
 # Aliases
 alias ll='ls -la'
@@ -619,72 +382,17 @@ fi
 EOF
 chown sandbox:sandbox /home/sandbox/.zshrc
 
-# ============================================
-# tmux configuration
-# ============================================
+# tmux config
 cat > /home/sandbox/.tmux.conf <<'EOF'
 set -g mouse on
 set -g history-limit 50000
 set -g base-index 1
 setw -g pane-base-index 1
 set -g default-terminal "screen-256color"
-set -g status-bg colour235
-set -g status-fg white
-set -g status-left '[#S] '
-set -g status-right '#H | %H:%M'
-bind -n M-Left select-pane -L
-bind -n M-Right select-pane -R
-bind -n M-Up select-pane -U
-bind -n M-Down select-pane -D
 EOF
 chown sandbox:sandbox /home/sandbox/.tmux.conf
 
-# ============================================
-# Agent management scripts
-# ============================================
-cat > /usr/local/bin/start-agents.sh <<'SCRIPT'
-#!/bin/bash
-AGENT_COUNT=${1:-12}
-SESSION_NAME="claude-agents"
-
-tmux kill-session -t $SESSION_NAME 2>/dev/null || true
-tmux new-session -d -s $SESSION_NAME -n "agent-1"
-
-for i in $(seq 2 $AGENT_COUNT); do
-    tmux new-window -t $SESSION_NAME -n "agent-$i"
-done
-
-for i in $(seq 1 $AGENT_COUNT); do
-    tmux send-keys -t $SESSION_NAME:agent-$i "cd /workspaces/agent-$i && claude --dangerously-skip-permissions" Enter
-done
-
-echo "Started $AGENT_COUNT agent sessions in tmux session '$SESSION_NAME'"
-echo "Attach with: tmux attach -t $SESSION_NAME"
-echo "Or use: attach-agent.sh <number>"
-SCRIPT
-
-cat > /usr/local/bin/stop-agents.sh <<'SCRIPT'
-#!/bin/bash
-tmux kill-session -t claude-agents 2>/dev/null && echo "Stopped all agents" || echo "No agents running"
-SCRIPT
-
-cat > /usr/local/bin/attach-agent.sh <<'SCRIPT'
-#!/bin/bash
-AGENT_NUM=${1:-1}
-tmux select-window -t claude-agents:agent-$AGENT_NUM 2>/dev/null
-tmux attach -t claude-agents
-SCRIPT
-
-cat > /usr/local/bin/list-agents.sh <<'SCRIPT'
-#!/bin/bash
-tmux list-windows -t claude-agents 2>/dev/null || echo "No agents running"
-SCRIPT
-
-chmod +x /usr/local/bin/*.sh
-
-# ============================================
-# Git configuration
-# ============================================
+# git config
 cat > /home/sandbox/.gitconfig <<'EOF'
 [core]
     pager = delta
@@ -694,10 +402,6 @@ cat > /home/sandbox/.gitconfig <<'EOF'
     navigate = true
     light = false
     line-numbers = true
-[merge]
-    conflictstyle = diff3
-[diff]
-    colorMoved = default
 [init]
     defaultBranch = main
 [pull]
@@ -705,63 +409,54 @@ cat > /home/sandbox/.gitconfig <<'EOF'
 EOF
 chown sandbox:sandbox /home/sandbox/.gitconfig
 
+# Agent scripts
+cat > /usr/local/bin/start-agents.sh <<'SCRIPT'
+#!/bin/bash
+AGENT_COUNT=${1:-12}
+SESSION_NAME="claude-agents"
+tmux kill-session -t $SESSION_NAME 2>/dev/null || true
+tmux new-session -d -s $SESSION_NAME -n "agent-1"
+for i in $(seq 2 $AGENT_COUNT); do
+    tmux new-window -t $SESSION_NAME -n "agent-$i"
+done
+for i in $(seq 1 $AGENT_COUNT); do
+    tmux send-keys -t $SESSION_NAME:agent-$i "cd /workspaces/agent-$i && claude --dangerously-skip-permissions" Enter
+done
+echo "Started $AGENT_COUNT agents. Attach with: tmux attach -t $SESSION_NAME"
+SCRIPT
+chmod +x /usr/local/bin/start-agents.sh
+
 # ============================================
 # Cleanup
 # ============================================
 report_progress "Cleaning up"
 apt-get autoremove -y
 apt-get clean
-rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Summary
+# Done
 # ============================================
-
-# Mark provisioning as completed
 echo "completed" > "$STATUS_FILE"
 echo "$TOTAL_STEPS/$TOTAL_STEPS Provisioning complete" > "$PROGRESS_FILE"
 
 echo ""
 echo "=== Provisioning Complete ==="
 echo "Finished at: $(date)"
-echo "Status: completed (written to $STATUS_FILE)"
 echo ""
-echo "Installed versions:"
+echo "Installed via Homebrew:"
+brew list --formula | tr '\n' ' '
+echo ""
+echo ""
+echo "Key versions:"
 echo "  - Node.js    : $(node --version 2>/dev/null || echo 'N/A')"
+echo "  - Go         : $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
 echo "  - Python     : $(python3 --version 2>/dev/null || echo 'N/A')"
-echo "  - Go         : $(/usr/local/go/bin/go version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
-echo "  - Rust       : $(rustc --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
-echo "  - Java       : $(java --version 2>&1 | head -1 || echo 'N/A')"
 echo "  - Ruby       : $(ruby --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
-echo "  - PHP        : $(php --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
-echo "  - .NET       : $(dotnet --version 2>/dev/null || echo 'N/A')"
-echo "  - Gradle     : $(gradle --version 2>/dev/null | grep Gradle | awk '{print $2}' || echo 'N/A')"
-echo "  - sbt        : $(sbt --version 2>/dev/null | grep 'sbt script' | awk '{print $4}' || echo 'N/A')"
+echo "  - Rust       : $(rustc --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
 echo "  - Docker     : $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',' || echo 'N/A')"
-echo "  - Terraform  : $(terraform --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
-echo "  - AWS CLI    : $(aws --version 2>/dev/null | awk '{print $1}' | cut -d/ -f2 || echo 'N/A')"
-echo "  - Azure CLI  : $(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
 echo ""
-echo "Linting tools:"
-echo "  - golangci-lint : $(golangci-lint --version 2>/dev/null | awk '{print $4}' || echo 'N/A')"
-echo "  - ruff          : $(ruff --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
-echo "  - eslint        : $(eslint --version 2>/dev/null || echo 'N/A')"
-echo "  - prettier      : $(prettier --version 2>/dev/null || echo 'N/A')"
-echo "  - rubocop       : $(rubocop --version 2>/dev/null || echo 'N/A')"
-echo "  - actionlint    : $(actionlint --version 2>/dev/null || echo 'N/A')"
-echo "  - hadolint      : $(hadolint --version 2>/dev/null || echo 'N/A')"
-echo "  - shellcheck    : $(shellcheck --version 2>/dev/null | grep version: | awk '{print $2}' || echo 'N/A')"
-echo "  - clang-format  : $(clang-format --version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
-echo ""
-echo "Container tools:"
-echo "  - crane         : $(crane version 2>/dev/null || echo 'N/A')"
-echo "  - dive          : $(dive --version 2>/dev/null | head -1 || echo 'N/A')"
-echo "  - trivy         : $(trivy --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
-echo "  - skopeo        : $(skopeo --version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
-echo ""
 echo "Quick start:"
-echo "  1. SSH in: gcloud compute ssh $(hostname) --zone=ZONE --tunnel-through-iap"
+echo "  1. SSH: gcloud compute ssh $(hostname) --zone=ZONE --tunnel-through-iap"
 echo "  2. Switch user: sudo su - sandbox"
 echo "  3. Start agents: start-agents.sh 12"
-echo "  4. Attach: tmux attach -t claude-agents"
