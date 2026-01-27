@@ -9,11 +9,14 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 )
 
 var errTestConfig = errors.New("test config error")
 
 func TestCanModifyAgents(t *testing.T) {
+	completedStatus := &provisioning.StatusInfo{Status: provisioning.StatusCompleted}
+
 	tests := []struct {
 		name string
 		m    Model
@@ -22,43 +25,67 @@ func TestCanModifyAgents(t *testing.T) {
 		{
 			name: "can modify when VM running and no operation",
 			m: Model{
-				cfg:    &config.Config{},
-				vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				cfg:             &config.Config{},
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				provisionStatus: completedStatus,
 			},
 			want: true,
 		},
 		{
 			name: "cannot modify when VM stopped",
 			m: Model{
-				cfg:    &config.Config{},
-				vmInfo: &cloud.VMInfo{Status: cloud.VMStatusStopped},
+				cfg:             &config.Config{},
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusStopped},
+				provisionStatus: completedStatus,
 			},
 			want: false,
 		},
 		{
 			name: "cannot modify when config error",
 			m: Model{
-				cfg:    &config.Config{},
-				cfgErr: errTestConfig,
-				vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				cfg:             &config.Config{},
+				cfgErr:          errTestConfig,
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				provisionStatus: completedStatus,
 			},
 			want: false,
 		},
 		{
 			name: "cannot modify during operation",
 			m: Model{
-				cfg:       &config.Config{},
-				vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				operation: "adding",
+				cfg:             &config.Config{},
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				operation:       "adding",
+				provisionStatus: completedStatus,
 			},
 			want: false,
 		},
 		{
 			name: "cannot modify while agents loading",
 			m: Model{
-				cfg:           &config.Config{},
-				vmInfo:        &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				agentsLoading: true,
+				cfg:             &config.Config{},
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				agentsLoading:   true,
+				provisionStatus: completedStatus,
+			},
+			want: false,
+		},
+		{
+			name: "cannot modify while provisioning loading",
+			m: Model{
+				cfg:              &config.Config{},
+				vmInfo:           &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				provisionLoading: true,
+				provisionStatus:  completedStatus,
+			},
+			want: false,
+		},
+		{
+			name: "cannot modify when provisioning not complete",
+			m: Model{
+				cfg:             &config.Config{},
+				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusRunning},
 			},
 			want: false,
 		},
@@ -77,9 +104,10 @@ func TestCanModifyAgents(t *testing.T) {
 func TestKeyA_AddAgent(t *testing.T) {
 	// Setup model in state where adding is allowed
 	m := Model{
-		cfg:    &config.Config{},
-		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
-		agents: &agent.ListResult{Sessions: []agent.Session{}},
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents:          &agent.ListResult{Sessions: []agent.Session{}},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	// Simulate pressing 'A'
@@ -129,6 +157,7 @@ func TestKeyK_KillConfirmation(t *testing.T) {
 			},
 		},
 		selectedAgentIdx: 1, // Select agent-1
+		provisionStatus:  &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	// Simulate pressing 'K'
@@ -150,9 +179,10 @@ func TestKeyK_KillConfirmation(t *testing.T) {
 
 func TestKeyK_NotAllowedWithNoAgents(t *testing.T) {
 	m := Model{
-		cfg:    &config.Config{},
-		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
-		agents: &agent.ListResult{Sessions: []agent.Session{}}, // No agents
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents:          &agent.ListResult{Sessions: []agent.Session{}}, // No agents
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}
@@ -359,6 +389,7 @@ func TestRenderHelp_ShowsAgentActions(t *testing.T) {
 				{Index: 0, Name: "agent-0", Command: "bash"},
 			},
 		},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	help := m.renderHelp()
@@ -400,6 +431,7 @@ func TestKey_LowercaseC_Connect(t *testing.T) {
 			},
 		},
 		selectedAgentIdx: 1, // Select agent-1
+		provisionStatus:  &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	// Simulate pressing 'c' (lowercase for connect)
@@ -414,9 +446,10 @@ func TestKey_LowercaseC_Connect(t *testing.T) {
 
 func TestKey_LowercaseC_NotAllowedWhenNoAgents(t *testing.T) {
 	m := Model{
-		cfg:    &config.Config{},
-		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
-		agents: &agent.ListResult{Sessions: []agent.Session{}}, // No agents
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents:          &agent.ListResult{Sessions: []agent.Session{}}, // No agents
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
@@ -477,6 +510,7 @@ func TestRenderHelp_ShowsConnectAction(t *testing.T) {
 				{Index: 0, Name: "agent-0", Command: "bash"},
 			},
 		},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
 	help := m.renderHelp()

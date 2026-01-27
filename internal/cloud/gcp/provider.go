@@ -12,6 +12,7 @@ import (
 	"google.golang.org/api/googleapi"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
+	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 )
 
 // Provider implements cloud.Provider for GCP.
@@ -246,6 +247,17 @@ systemctl stop ssh.socket 2>/dev/null || true
 systemctl start ssh.socket
 systemctl start ssh.service
 `, config.SSHPort, config.SSHPort)
+	}
+
+	// Fetch and append provisioning script if URL is provided
+	if config.ProvisionScriptURL != "" {
+		provisionScript, err := provisioning.FetchScript(ctx, config.ProvisionScriptURL)
+		if err != nil {
+			return fmt.Errorf("fetch provisioning script: %w", err)
+		}
+		// Strip the shebang since we're appending to an existing script
+		startupScript += "\n# Provisioning script from: " + config.ProvisionScriptURL + "\n"
+		startupScript += provisioning.StripShebang(provisionScript)
 	}
 
 	instance.Metadata = &computepb.Metadata{

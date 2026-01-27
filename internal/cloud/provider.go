@@ -75,6 +75,9 @@ type VMCreateConfig struct {
 	// ServiceAccount is the service account email (GCP), instance profile ARN (AWS),
 	// or managed identity ID (Azure) to attach to the VM.
 	ServiceAccount string
+	// ProvisionScriptURL is the URL to fetch the provisioning script from.
+	// If empty, no additional provisioning is performed.
+	ProvisionScriptURL string
 }
 
 // Provider defines the interface for cloud provider operations.
