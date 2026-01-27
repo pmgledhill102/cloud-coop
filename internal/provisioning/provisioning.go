@@ -73,7 +73,11 @@ func FetchScript(ctx context.Context, url string) (string, error) {
 
 // ParseStatusInfo parses status and progress file contents into a StatusInfo.
 func ParseStatusInfo(statusContent, progressContent string) StatusInfo {
+	// Only use the first line of status (file may contain additional error info)
 	status := strings.TrimSpace(statusContent)
+	if idx := strings.Index(status, "\n"); idx != -1 {
+		status = status[:idx]
+	}
 	progress := strings.TrimSpace(progressContent)
 
 	info := StatusInfo{

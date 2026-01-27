@@ -10,7 +10,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // DefaultTimeout is the default SSH connection timeout.
@@ -49,13 +48,24 @@ func DefaultConfig(host, user string) Config {
 }
 
 // NewClient creates a new SSH client connection.
+// It automatically manages host keys in cloudcoop's own known_hosts file,
+// so users don't need to manually handle host key verification for VMs.
 func NewClient(cfg Config) (*Client, error) {
 	authMethods := discoverAuthMethods()
 	if len(authMethods) == 0 {
 		return nil, fmt.Errorf("no SSH authentication methods available")
 	}
 
-	hostKeyCallback := loadKnownHostsOrInsecure()
+	// Ensure we have the host key before connecting
+	// This fetches/updates the key automatically for cloudcoop-managed VMs
+	if err := EnsureHostKey(cfg.Host, cfg.Port); err != nil {
+		return nil, fmt.Errorf("fetch host key: %w", err)
+	}
+
+	hostKeyCallback, err := CreateHostKeyCallback(cfg.Host, cfg.Port)
+	if err != nil {
+		return nil, fmt.Errorf("create host key callback: %w", err)
+	}
 
 	sshConfig := &ssh.ClientConfig{
 		User:            cfg.User,
@@ -116,13 +126,4 @@ func discoverAuthMethods() []ssh.AuthMethod {
 	}
 
 	return methods
-}
-
-// loadKnownHostsOrInsecure loads known_hosts file or falls back to insecure mode.
-func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
-	home, _ := os.UserHomeDir()
-	if cb, err := knownhosts.New(filepath.Join(home, ".ssh", "known_hosts")); err == nil {
-		return cb
-	}
-	return ssh.InsecureIgnoreHostKey()
 }

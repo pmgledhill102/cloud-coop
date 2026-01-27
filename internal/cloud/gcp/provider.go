@@ -17,10 +17,9 @@ import (
 
 // Provider implements cloud.Provider for GCP.
 type Provider struct {
-	project     string
-	zone        string
-	client      instancesClient
-	disksClient disksClient
+	project string
+	zone    string
+	client  instancesClient
 }
 
 // New creates a new GCP provider.
@@ -31,27 +30,19 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 		return nil, fmt.Errorf("create compute client: %w", err)
 	}
 
-	disksClient, err := compute.NewDisksRESTClient(ctx)
-	if err != nil {
-		_ = client.Close() // Best-effort cleanup; already returning an error
-		return nil, fmt.Errorf("create disks client: %w", err)
-	}
-
 	return &Provider{
-		project:     project,
-		zone:        zone,
-		client:      &realInstancesClient{client: client},
-		disksClient: &realDisksClient{client: disksClient},
+		project: project,
+		zone:    zone,
+		client:  &realInstancesClient{client: client},
 	}, nil
 }
 
 // newWithClient creates a provider with custom clients (for testing).
-func newWithClient(project, zone string, client instancesClient, disks disksClient) *Provider {
+func newWithClient(project, zone string, client instancesClient) *Provider {
 	return &Provider{
-		project:     project,
-		zone:        zone,
-		client:      client,
-		disksClient: disks,
+		project: project,
+		zone:    zone,
+		client:  client,
 	}
 }
 
@@ -159,7 +150,7 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 		Disks: []*computepb.AttachedDisk{
 			{
 				Boot:       ptr(true),
-				AutoDelete: ptr(false), // Per ADR-0003: preserve disk across stops
+				AutoDelete: ptr(true), // Per ADR-0003: auto-delete only triggers on DELETE, not STOP
 				InitializeParams: &computepb.AttachedDiskInitializeParams{
 					SourceImage: &config.Image,
 					DiskSizeGb:  &config.DiskSizeGB,
@@ -286,9 +277,10 @@ systemctl start ssh.service
 	return nil
 }
 
-// DeleteVM deletes a VM and its boot disk by name.
-// The boot disk is created with AutoDelete=false (per ADR-0003) to preserve state across
-// preemption/stops, but when explicitly deleting the VM we also delete the disk.
+// DeleteVM deletes a VM by name.
+// The boot disk is created with AutoDelete=true (per ADR-0003), so GCP automatically
+// deletes the disk when the instance is deleted. Auto-delete only triggers on DELETE,
+// not STOP, so disks are preserved across preemption and manual stops.
 func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 	op, err := p.client.Delete(ctx, &computepb.DeleteInstanceRequest{
 		Project:  p.project,
@@ -299,26 +291,9 @@ func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 		return fmt.Errorf("delete instance %s: %w", name, err)
 	}
 
-	// Wait for instance deletion to complete
+	// Wait for instance deletion to complete (disk is auto-deleted)
 	if err := op.Wait(ctx); err != nil {
 		return fmt.Errorf("wait for delete %s: %w", name, err)
-	}
-
-	// Delete the boot disk (has same name as instance by convention)
-	diskOp, err := p.disksClient.Delete(ctx, &computepb.DeleteDiskRequest{
-		Project: p.project,
-		Zone:    p.zone,
-		Disk:    name,
-	})
-	if err != nil {
-		// Log but don't fail if disk deletion fails (disk may not exist or have different name)
-		return nil
-	}
-
-	// Wait for disk deletion to complete
-	if err := diskOp.Wait(ctx); err != nil {
-		// Log but don't fail - VM is already deleted
-		return nil
 	}
 
 	return nil
@@ -329,19 +304,8 @@ func ptr[T any](v T) *T { return &v }
 
 // Close closes the provider's clients.
 func (p *Provider) Close() error {
-	var errs []error
 	if p.client != nil {
-		if err := p.client.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if p.disksClient != nil {
-		if err := p.disksClient.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) > 0 {
-		return errs[0]
+		return p.client.Close()
 	}
 	return nil
 }

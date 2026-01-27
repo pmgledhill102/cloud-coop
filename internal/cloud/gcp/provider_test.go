@@ -11,7 +11,7 @@ import (
 )
 
 func TestProvider_Name(t *testing.T) {
-	p := newWithClient("proj", "zone", &mockInstancesClient{}, &mockDisksClient{})
+	p := newWithClient("proj", "zone", &mockInstancesClient{})
 	if got := p.Name(); got != "gcp" {
 		t.Errorf("Name() = %q, want %q", got, "gcp")
 	}
@@ -146,7 +146,7 @@ func TestProvider_GetVMInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
+			p := newWithClient("test-project", "test-zone", tt.mock)
 			info, err := p.GetVMInfo(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -225,7 +225,7 @@ func TestProvider_StartVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
+			p := newWithClient("test-project", "test-zone", tt.mock)
 			err := p.StartVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -284,7 +284,7 @@ func TestProvider_StopVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
+			p := newWithClient("test-project", "test-zone", tt.mock)
 			err := p.StopVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {
@@ -311,7 +311,7 @@ func TestProvider_StopVM(t *testing.T) {
 func TestProvider_Close(t *testing.T) {
 	t.Run("successful close", func(t *testing.T) {
 		mock := &mockInstancesClient{}
-		p := newWithClient("proj", "zone", mock, &mockDisksClient{})
+		p := newWithClient("proj", "zone", mock)
 
 		err := p.Close()
 		if err != nil {
@@ -324,7 +324,7 @@ func TestProvider_Close(t *testing.T) {
 
 	t.Run("close error", func(t *testing.T) {
 		mock := &mockInstancesClient{closeError: errors.New("close failed")}
-		p := newWithClient("proj", "zone", mock, &mockDisksClient{})
+		p := newWithClient("proj", "zone", mock)
 
 		err := p.Close()
 		if err == nil {
@@ -490,7 +490,7 @@ func TestProvider_CreateVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
+			p := newWithClient("test-project", "test-zone", tt.mock)
 			err := p.CreateVM(context.Background(), tt.config)
 
 			if (err != nil) != tt.wantErr {
@@ -526,7 +526,7 @@ func TestProvider_CreateVM(t *testing.T) {
 
 func TestProvider_CreateVM_SpotScheduling(t *testing.T) {
 	mock := &mockInstancesClient{}
-	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
+	p := newWithClient("test-project", "test-zone", mock)
 
 	config := cloud.VMCreateConfig{
 		Name:           "spot-vm",
@@ -558,7 +558,7 @@ func TestProvider_CreateVM_SpotScheduling(t *testing.T) {
 
 func TestProvider_CreateVM_NetworkTags(t *testing.T) {
 	mock := &mockInstancesClient{}
-	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
+	p := newWithClient("test-project", "test-zone", mock)
 
 	config := cloud.VMCreateConfig{
 		Name:           "tagged-vm",
@@ -587,7 +587,7 @@ func TestProvider_CreateVM_NetworkTags(t *testing.T) {
 
 func TestProvider_CreateVM_ServiceAccount(t *testing.T) {
 	mock := &mockInstancesClient{}
-	p := newWithClient("test-project", "test-zone", mock, &mockDisksClient{})
+	p := newWithClient("test-project", "test-zone", mock)
 
 	config := cloud.VMCreateConfig{
 		Name:           "sa-vm",
@@ -651,7 +651,7 @@ func TestProvider_DeleteVM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newWithClient("test-project", "test-zone", tt.mock, &mockDisksClient{})
+			p := newWithClient("test-project", "test-zone", tt.mock)
 			err := p.DeleteVM(context.Background(), tt.vmName)
 
 			if (err != nil) != tt.wantErr {

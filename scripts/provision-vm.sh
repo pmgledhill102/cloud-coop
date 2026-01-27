@@ -21,7 +21,7 @@ LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
 # Total number of provisioning steps (for progress reporting)
-TOTAL_STEPS=34
+TOTAL_STEPS=35
 CURRENT_STEP=0
 
 # Create required directories
@@ -71,7 +71,7 @@ fi
 # These match the discord-bot-test-suite CI requirements
 NODE_VERSION="${NODE_VERSION:-24}"
 GO_VERSION="${GO_VERSION:-1.25.3}"
-PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
+PYTHON_VERSION="${PYTHON_VERSION:-3.14}"
 RUST_VERSION="${RUST_VERSION:-1.93}"
 JAVA_VERSION="${JAVA_VERSION:-21}"
 RUBY_VERSION="${RUBY_VERSION:-3.4}"
@@ -215,24 +215,26 @@ apt-get update
 apt-get install -y \
     python${PYTHON_VERSION} \
     python${PYTHON_VERSION}-venv \
-    python${PYTHON_VERSION}-dev \
-    python3-pip
+    python${PYTHON_VERSION}-dev
 
 update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
 update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
 
-# Install Python tools (including pre-commit hooks: ruff, yamllint)
-pip3 install --break-system-packages \
-    pipx \
-    poetry \
-    uv \
-    black \
-    ruff \
-    mypy \
-    pytest \
-    pre-commit \
-    httpie \
-    yamllint
+# Install uv (fast Python package manager)
+report_progress "Installing uv package manager"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Install Python tools using uv (including pre-commit hooks: ruff, yamllint)
+uv tool install pipx
+uv tool install poetry
+uv tool install black
+uv tool install ruff
+uv tool install mypy
+uv tool install pytest
+uv tool install pre-commit
+uv tool install httpie
+uv tool install yamllint
 
 # ============================================
 # Go
@@ -492,7 +494,7 @@ apt-get update
 apt-get install -y trivy
 
 # Semgrep
-pip3 install --break-system-packages semgrep
+uv tool install semgrep
 
 # ============================================
 # ZSH Configuration (from Anthropic devcontainer)
