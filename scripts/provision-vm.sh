@@ -383,7 +383,7 @@ apt-get install -y maven
 # Gradle
 report_progress "Installing Gradle ${GRADLE_VERSION}"
 wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip
-unzip -q /tmp/gradle.zip -d /opt
+unzip -qo /tmp/gradle.zip -d /opt
 ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
 rm /tmp/gradle.zip
 
@@ -474,7 +474,7 @@ apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
 # ============================================
 report_progress "Installing AWS CLI"
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-unzip -q /tmp/awscliv2.zip -d /tmp
+unzip -qo /tmp/awscliv2.zip -d /tmp
 /tmp/aws/install
 rm -rf /tmp/aws /tmp/awscliv2.zip
 
