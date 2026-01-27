@@ -8,8 +8,8 @@
 # - Idempotent design (safe to re-run for retry/refresh/resume)
 #
 # Package management strategy:
-# - Homebrew: dev tools, language runtimes, CLI utilities (always current)
-# - apt: system packages, Docker, cloud CLIs
+# - Homebrew: languages, dev tools, CLIs, database clients (always current)
+# - apt: system packages, Docker, Google Cloud CLI (Linux-specific)
 #
 # Status values: pending | running | completed | failed
 
@@ -24,7 +24,7 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-TOTAL_STEPS=26
+TOTAL_STEPS=15
 CURRENT_STEP=0
 
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
@@ -45,14 +45,6 @@ echo "0/$TOTAL_STEPS Initializing" > "$PROGRESS_FILE"
 echo "=== Cloudcoop VM Provisioning ==="
 echo "Started at: $(date)"
 echo "Hostname: $(hostname)"
-
-# ============================================
-# Versions (for tools not managed by brew)
-# ============================================
-RUST_VERSION="${RUST_VERSION:-1.93}"
-JAVA_VERSION="${JAVA_VERSION:-21}"
-DOTNET_VERSION="${DOTNET_VERSION:-10.0}"
-KUBECTL_VERSION="${KUBECTL_VERSION:-1.30}"
 
 export DEBIAN_FRONTEND=noninteractive
 export HOME=/root
@@ -156,15 +148,41 @@ eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 
 # ============================================
-# Dev Tools via Homebrew
+# Dev Tools via Homebrew (comprehensive)
 # ============================================
 report_progress "Installing dev tools via Homebrew"
-# Run brew as sandbox user (Homebrew recommends non-root)
+
+# Add HashiCorp tap for Terraform
+sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew tap hashicorp/tap
+
+# Install all languages, tools, and CLIs via Homebrew
 sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     go \
     node \
     ruby \
     python@3 \
+    openjdk@21 \
+    php \
+    rust \
+    dotnet \
+    maven \
+    gradle \
+    sbt \
+    composer \
+    awscli \
+    azure-cli \
+    kubernetes-cli \
+    helm \
+    k9s \
+    hashicorp/tap/terraform \
+    trivy \
+    dive \
+    crane \
+    skopeo \
+    postgresql@17 \
+    mysql-client \
+    redis \
+    mongosh \
     golangci-lint \
     actionlint \
     hadolint \
@@ -175,8 +193,6 @@ sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     fzf \
     yq \
     gh \
-    k9s \
-    helm \
     btop
 
 # ============================================
@@ -239,97 +255,13 @@ eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 gem install bundler rubocop
 
 # ============================================
-# Rust
-# ============================================
-report_progress "Installing Rust"
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
-source "$HOME/.cargo/env"
-rustup component add clippy rustfmt
-
-# ============================================
-# Java (system OpenJDK) + Maven
-# ============================================
-report_progress "Installing Java"
-apt-get install -y openjdk-${JAVA_VERSION}-jdk maven
-
-# ============================================
-# PHP (system packages)
-# ============================================
-report_progress "Installing PHP"
-apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
-curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-# ============================================
-# .NET
-# ============================================
-report_progress "Installing .NET"
-wget "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb
-dpkg -i /tmp/packages-microsoft-prod.deb
-rm /tmp/packages-microsoft-prod.deb
-apt-get update
-apt-get install -y dotnet-sdk-${DOTNET_VERSION} || apt-get install -y dotnet-sdk-8.0
-
-# ============================================
-# Cloud CLIs
+# Google Cloud CLI (apt required for Linux)
 # ============================================
 report_progress "Installing Google Cloud CLI"
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/cloud.google.gpg
 apt-get update
 apt-get install -y google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin
-
-report_progress "Installing AWS CLI"
-AWS_ARCH="x86_64"
-if [ "$(uname -m)" = "aarch64" ]; then
-    AWS_ARCH="aarch64"
-fi
-curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip
-unzip -qo /tmp/awscliv2.zip -d /tmp
-if [ -d /usr/local/aws-cli ]; then
-    /tmp/aws/install --update
-else
-    /tmp/aws/install
-fi
-rm -rf /tmp/aws /tmp/awscliv2.zip
-
-report_progress "Installing Azure CLI"
-curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-
-# ============================================
-# Kubernetes tools
-# ============================================
-report_progress "Installing Kubernetes tools"
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/Release.key | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBECTL_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
-apt-get update
-apt-get install -y kubectl
-
-# ============================================
-# Terraform
-# ============================================
-report_progress "Installing Terraform"
-wget -O- https://apt.releases.hashicorp.com/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-apt-get update
-apt-get install -y terraform
-
-# ============================================
-# Container tools
-# ============================================
-report_progress "Installing container tools"
-apt-get install -y skopeo
-
-# Trivy
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/trivy.gpg
-echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | tee /etc/apt/sources.list.d/trivy.list
-apt-get update
-apt-get install -y trivy
-
-# ============================================
-# Database clients
-# ============================================
-report_progress "Installing database clients"
-apt-get install -y postgresql-client default-mysql-client redis-tools
 
 # ============================================
 # ZSH + Oh My Zsh
@@ -343,8 +275,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 report_progress "Configuring sandbox user"
 usermod -aG docker sandbox
 
-# Copy tools to sandbox user
-cp -r /root/.cargo /home/sandbox/ 2>/dev/null || true
+# Copy Oh My Zsh to sandbox user
 cp -r /root/.oh-my-zsh /home/sandbox/ 2>/dev/null || true
 chown -R sandbox:sandbox /home/sandbox/
 
@@ -367,11 +298,8 @@ ZSH_THEME="robbyrussell"
 plugins=(git docker kubectl)
 source $ZSH/oh-my-zsh.sh
 
-# Homebrew
+# Homebrew (includes all languages and tools)
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
-# Rust
-export PATH=$PATH:$HOME/.cargo/bin
 
 # Aliases
 alias ll='ls -la'
@@ -460,7 +388,13 @@ echo "  - Go         : $(go version 2>/dev/null | awk '{print $3}' || echo 'N/A'
 echo "  - Python     : $(python3 --version 2>/dev/null || echo 'N/A')"
 echo "  - Ruby       : $(ruby --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
 echo "  - Rust       : $(rustc --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
+echo "  - Java       : $(java --version 2>/dev/null | head -1 || echo 'N/A')"
+echo "  - .NET       : $(dotnet --version 2>/dev/null || echo 'N/A')"
 echo "  - Docker     : $(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',' || echo 'N/A')"
+echo "  - Terraform  : $(terraform --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
+echo "  - kubectl    : $(kubectl version --client -o json 2>/dev/null | jq -r '.clientVersion.gitVersion' || echo 'N/A')"
+echo "  - AWS CLI    : $(aws --version 2>/dev/null | awk '{print $1}' || echo 'N/A')"
+echo "  - Azure CLI  : $(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
 echo ""
 echo "Quick start:"
