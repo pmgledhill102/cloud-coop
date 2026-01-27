@@ -26,6 +26,7 @@
 # Testing
 actionlint
 amd64
+Adoptium
 anthropics
 apiv
 apperrors
@@ -101,9 +102,11 @@ ludeeus
 macos
 markdownlint
 misspell
+mongosh
 mutex
 mypy
 noreply
+ondrej
 openssh
 osascript
 oslogin
@@ -129,6 +132,7 @@ scalafmt
 scandir
 secretmanager
 securego
+Semgrep
 semver
 shellcheck
 slog
