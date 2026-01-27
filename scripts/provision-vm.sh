@@ -428,18 +428,24 @@ gem install bundler rubocop
 # ============================================
 # PHP
 # ============================================
-report_progress "Installing PHP ${PHP_VERSION}"
-add-apt-repository -y ppa:ondrej/php
-apt-get update
-apt-get install -y \
-    php${PHP_VERSION} \
-    php${PHP_VERSION}-cli \
-    php${PHP_VERSION}-common \
-    php${PHP_VERSION}-curl \
-    php${PHP_VERSION}-mbstring \
-    php${PHP_VERSION}-xml \
-    php${PHP_VERSION}-zip \
-    php${PHP_VERSION}-sodium
+report_progress "Installing PHP"
+# Try ondrej/php PPA for specific version, fall back to system PHP
+UBUNTU_CODENAME=$(lsb_release -cs)
+
+if add-apt-repository -y ppa:ondrej/php 2>&1 | grep -q "does not have a Release file"; then
+    echo "ondrej/php PPA does not support Ubuntu $UBUNTU_CODENAME, using system PHP"
+    apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
+else
+    apt-get update
+    if apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-common \
+        php${PHP_VERSION}-curl php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml \
+        php${PHP_VERSION}-zip php${PHP_VERSION}-sodium 2>/dev/null; then
+        echo "Installed PHP ${PHP_VERSION} from ondrej/php"
+    else
+        echo "PHP ${PHP_VERSION} not available, using system PHP"
+        apt-get install -y php php-cli php-common php-curl php-mbstring php-xml php-zip
+    fi
+fi
 
 # Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
