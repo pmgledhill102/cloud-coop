@@ -230,7 +230,6 @@ uv tool install pytest
 uv tool install pre-commit
 uv tool install httpie
 uv tool install yamllint
-uv tool install semgrep
 
 # ============================================
 # Ruby gems
