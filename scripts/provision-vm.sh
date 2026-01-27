@@ -301,6 +301,10 @@ source $ZSH/oh-my-zsh.sh
 # Homebrew (includes all languages and tools)
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
+# Keg-only formula paths (not linked to main bin)
+export PATH="/home/linuxbrew/.linuxbrew/opt/postgresql@17/bin:$PATH"
+export PATH="/home/linuxbrew/.linuxbrew/opt/mysql-client/bin:$PATH"
+
 # Aliases
 alias ll='ls -la'
 alias k='kubectl'
