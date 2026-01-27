@@ -16,15 +16,21 @@ import (
 
 // Config represents the cloudcoop configuration.
 type Config struct {
-	Cloud  CloudConfig  `toml:"cloud"`
-	VM     VMConfig     `toml:"vm"`
-	SSH    SSHConfig    `toml:"ssh"`
-	Agents AgentsConfig `toml:"agents"`
+	Cloud        CloudConfig        `toml:"cloud"`
+	VM           VMConfig           `toml:"vm"`
+	SSH          SSHConfig          `toml:"ssh"`
+	Agents       AgentsConfig       `toml:"agents"`
+	Provisioning ProvisioningConfig `toml:"provisioning"`
 }
 
 // AgentsConfig contains settings for agent sessions.
 type AgentsConfig struct {
 	DefaultCommand string `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
+}
+
+// ProvisioningConfig contains settings for VM provisioning.
+type ProvisioningConfig struct {
+	ScriptURL string `toml:"script_url"` // URL to fetch provisioning script from
 }
 
 // SSHConfig contains SSH connection settings.
@@ -122,6 +128,9 @@ func LoadFile(path string) (*Config, error) {
 			"xlarge": "c4a-highcpu-32",
 		}
 	}
+	if cfg.Provisioning.ScriptURL == "" {
+		cfg.Provisioning.ScriptURL = "https://raw.githubusercontent.com/pmgledhill102/cloudcoop/main/scripts/provision-vm.sh"
+	}
 
 	return &cfg, nil
 }
@@ -187,6 +196,8 @@ func (c *Config) SetValue(key, value string) error {
 		c.SSH.User = value
 	case "agents.default_command":
 		c.Agents.DefaultCommand = value
+	case "provisioning.script_url":
+		c.Provisioning.ScriptURL = value
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
 	}
@@ -212,6 +223,8 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.SSH.User, nil
 	case "agents.default_command":
 		return c.Agents.DefaultCommand, nil
+	case "provisioning.script_url":
+		return c.Provisioning.ScriptURL, nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}
@@ -228,6 +241,7 @@ func AllKeys() []string {
 		"ssh.port",
 		"ssh.user",
 		"agents.default_command",
+		"provisioning.script_url",
 	}
 }
 

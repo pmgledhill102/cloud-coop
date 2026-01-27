@@ -15,6 +15,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -69,6 +70,11 @@ type Model struct {
 	agents        *agent.ListResult
 	agentsErr     error
 	agentsLoading bool
+
+	// Provisioning status
+	provisionStatus  *provisioning.StatusInfo
+	provisionErr     error
+	provisionLoading bool
 
 	// Agent selection and confirmation
 	selectedAgentIdx int    // currently selected agent index in the list (not tmux index)
@@ -139,6 +145,12 @@ type agentAddedMsg struct {
 type agentKilledMsg struct {
 	index int
 	err   error
+}
+
+// provisionStatusMsg is sent when provisioning status check completes.
+type provisionStatusMsg struct {
+	status *provisioning.StatusInfo
+	err    error
 }
 
 // loadConfig loads the configuration file.
@@ -261,14 +273,16 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 		defer cleanup()
 
 		createCfg := cloud.VMCreateConfig{
-			Name:        cfg.VM.Name,
-			MachineType: machineType,
-			DiskSizeGB:  cfg.VM.DiskSizeGB,
-			Image:       cfg.VM.Image,
-			Spot:        cfg.VM.Spot,
-			Network:     cfg.VM.Network,
-			Tags:        cfg.VM.Tags,
-			SSHPort:     cfg.SSH.Port,
+			Name:               cfg.VM.Name,
+			MachineType:        machineType,
+			DiskSizeGB:         cfg.VM.DiskSizeGB,
+			Image:              cfg.VM.Image,
+			Spot:               cfg.VM.Spot,
+			Network:            cfg.VM.Network,
+			Tags:               cfg.VM.Tags,
+			SSHPort:            cfg.SSH.Port,
+			ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
+			ProvisionScriptURL: cfg.Provisioning.ScriptURL,
 		}
 
 		if err := provider.CreateVM(ctx, createCfg); err != nil {
@@ -428,6 +442,34 @@ func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
 		}
 
 		return agentKilledMsg{index: index}
+	}
+}
+
+// fetchProvisionStatus checks the provisioning status on the VM via SSH.
+func fetchProvisionStatus(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+	return func() tea.Msg {
+		// Resolve SSH connection parameters using helpers
+		ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+		if err != nil {
+			return provisionStatusMsg{err: fmt.Errorf("no IP address available")}
+		}
+
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+
+		// Connect via SSH
+		client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
+		if err != nil {
+			return provisionStatusMsg{err: fmt.Errorf("SSH: %w", err)}
+		}
+		defer func() { _ = client.Close() }()
+
+		// Check provisioning status
+		status, err := provisioning.CheckStatus(client)
+		if err != nil {
+			return provisionStatusMsg{err: err}
+		}
+
+		return provisionStatusMsg{status: status}
 	}
 }
 
@@ -618,21 +660,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.cleanup = msg.cleanup
 		}
-		// Fetch agents if VM is running
+		// Fetch agents and provisioning status if VM is running
 		if msg.err == nil && msg.info != nil && msg.info.Status == cloud.VMStatusRunning {
 			m.agentsLoading = true
+			m.provisionLoading = true
 			m.agents = nil
 			m.agentsErr = nil
-			return m, fetchAgents(m.cfg, msg.info)
+			m.provisionStatus = nil
+			m.provisionErr = nil
+			return m, tea.Batch(
+				fetchAgents(m.cfg, msg.info),
+				fetchProvisionStatus(m.cfg, msg.info),
+			)
 		}
-		// Clear agents if VM not running
+		// Clear agents and provision status if VM not running
 		m.agents = nil
 		m.agentsErr = nil
+		m.provisionStatus = nil
+		m.provisionErr = nil
 
 	case agentsMsg:
 		m.agentsLoading = false
 		m.agents = msg.result
 		m.agentsErr = msg.err
+
+	case provisionStatusMsg:
+		m.provisionLoading = false
+		m.provisionStatus = msg.status
+		m.provisionErr = msg.err
 
 	case vmStartMsg:
 		m.operation = ""
@@ -724,7 +779,9 @@ func (m Model) canModifyAgents() bool {
 		m.vmInfo != nil &&
 		m.vmInfo.Status == cloud.VMStatusRunning &&
 		m.operation == "" &&
-		!m.agentsLoading
+		!m.agentsLoading &&
+		!m.provisionLoading &&
+		provisioning.IsProvisioningComplete(m.provisionStatus)
 }
 
 // View renders the TUI.
@@ -853,6 +910,13 @@ func (m Model) renderVMStatus() string {
 				labelStyle.Render("Internal IP:"),
 				info.InternalIP))
 		}
+
+		// Show provisioning status for running VMs
+		if info.Status == cloud.VMStatusRunning {
+			lines = append(lines, fmt.Sprintf("%s%s",
+				labelStyle.Render("Provisioning:"),
+				m.formatProvisionStatus()))
+		}
 	}
 
 	lines = append(lines, "")
@@ -881,6 +945,39 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 		return "◑ stopping..."
 	default:
 		return string(status)
+	}
+}
+
+func (m Model) formatProvisionStatus() string {
+	if m.provisionLoading {
+		return "checking..."
+	}
+	if m.provisionErr != nil {
+		return errorStyle.Render(fmt.Sprintf("error: %v", m.provisionErr))
+	}
+	if m.provisionStatus == nil {
+		return stoppedStyle.Render("(unknown)")
+	}
+
+	switch m.provisionStatus.Status {
+	case provisioning.StatusPending:
+		return stoppedStyle.Render("○ pending")
+	case provisioning.StatusRunning:
+		progress := "◐ running"
+		if m.provisionStatus.Progress != "" {
+			progress = fmt.Sprintf("◐ %s", m.provisionStatus.Progress)
+		}
+		return progress
+	case provisioning.StatusCompleted:
+		return runningStyle.Render("● completed")
+	case provisioning.StatusFailed:
+		msg := "✗ failed"
+		if m.provisionStatus.Error != "" {
+			msg = fmt.Sprintf("✗ failed: %s", m.provisionStatus.Error)
+		}
+		return errorStyle.Render(msg)
+	default:
+		return stoppedStyle.Render("? unknown")
 	}
 }
 
@@ -1024,8 +1121,8 @@ func (m Model) renderHelp() string {
 			actions = append(actions, "S: start", "D: delete")
 		case cloud.VMStatusRunning:
 			actions = append(actions, "T: stop")
-			// Agent management actions when VM is running
-			if !m.agentsLoading {
+			// Agent management actions when VM is running and provisioned
+			if m.canModifyAgents() {
 				actions = append(actions, "A: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
 					actions = append(actions, "c: connect", "K: kill agent", "↑/↓: select")
