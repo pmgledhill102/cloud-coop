@@ -56,6 +56,11 @@ func TestParseStatusInfo(t *testing.T) {
 			statusContent: "  running\n",
 			wantStatus:    StatusRunning,
 		},
+		{
+			name:          "failed with multiline content",
+			statusContent: "failed\nStep 8/34: Installing Python failed with exit code 100",
+			wantStatus:    StatusFailed,
+		},
 	}
 
 	for _, tt := range tests {
