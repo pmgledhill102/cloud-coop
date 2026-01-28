@@ -110,6 +110,8 @@ make help         # Show all available targets
 - [decisions/](decisions/README.md) - All Architecture Decision Records
 - [SETUP-FLOW.md](docs/SETUP-FLOW.md) - First-run experience and setup wizard
 - [DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md) - Contributing guide
+- [SECURITY-MODEL.md](docs/SECURITY-MODEL.md) - Trust boundaries and privilege model
+- [SECURITY.md](docs/SECURITY.md) - Operational security and incident response
 
 ## Issue Tracking
 

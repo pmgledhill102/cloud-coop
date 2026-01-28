@@ -1,6 +1,10 @@
 # Security Considerations
 
-This document outlines the security model for the Claude Code sandbox environment.
+> **See also:** [SECURITY-MODEL.md](SECURITY-MODEL.md) for the architectural security model
+> (trust boundaries, privilege asymmetry, and reasoning behind the security posture).
+
+This document covers operational security for the cloudcoop sandbox environment: what to
+configure, how to monitor, and how to respond to incidents.
 
 ## Threat Model
 
