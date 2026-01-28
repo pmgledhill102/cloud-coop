@@ -61,9 +61,9 @@ func
 funcs
 gcloud
 ghostty
-glab
 gitattributes
 gitignore
+glab
 goarch
 gofmt
 goimports
@@ -127,12 +127,13 @@ rubocop
 rustup
 sandboxed
 sandboxing
-scpt
 scalafmt
 scandir
+scpt
 secretmanager
 securego
 semver
+setuid
 shellcheck
 slog
 spf13
@@ -148,10 +149,10 @@ subtests
 taplo
 tcsh
 temurin
+terminfo
 testdata
 testuser
 testutil
-terminfo
 tfstate
 tmux
 toml
