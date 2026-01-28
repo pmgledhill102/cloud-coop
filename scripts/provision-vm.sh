@@ -104,6 +104,9 @@ if [ -n "$GCP_REGION" ]; then
     fi
 fi
 
+# Force IPv4 for APT (IPv6 can be slow/broken in cloud environments)
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+
 # ============================================
 # System Updates & Core Packages
 # ============================================
