@@ -171,6 +171,9 @@ export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 # ============================================
 report_progress "Installing dev tools via Homebrew"
 
+# Change to a directory accessible by sandbox user (brew requires readable cwd)
+cd /tmp
+
 # Add HashiCorp tap for Terraform
 sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew tap hashicorp/tap
 
