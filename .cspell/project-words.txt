@@ -61,6 +61,7 @@ func
 funcs
 gcloud
 ghostty
+glab
 gitattributes
 gitignore
 goarch
