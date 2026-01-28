@@ -82,7 +82,13 @@ if [ -n "$GCP_REGION" ]; then
     GCE_MIRROR="${GCP_REGION}.gce.ports.ubuntu.com"
     if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
         echo "Using GCE mirror: $GCE_MIRROR"
-        if ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
+        # Ubuntu 25.04+ uses deb822 format in /etc/apt/sources.list.d/ubuntu.sources
+        SOURCES_FILE="/etc/apt/sources.list.d/ubuntu.sources"
+        if [ -f "$SOURCES_FILE" ] && ! grep -q "gce.ports.ubuntu.com" "$SOURCES_FILE"; then
+            sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$SOURCES_FILE"
+        fi
+        # Fallback for older Ubuntu with traditional sources.list
+        if [ -s /etc/apt/sources.list ] && ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
             sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" /etc/apt/sources.list 2>/dev/null || true
         fi
     fi
