@@ -80,6 +80,11 @@ agents automatically started on the VM, and attach to them via terminal splits.
 
 **Beads Epic:** cc-m9b
 
+**Prerequisites:** Phase 1 assumes VM provisioning (Stages 1-5 of SETUP-FLOW.md) is
+already complete — the VM exists, has development tools installed, and SSH access works.
+Agent authentication (Stage 6) is deferred to Phase 4 (cc-cz1). Provisioning is handled
+by the existing `provision-vm.sh` startup script and `cloudcoop provision` commands.
+
 ### 1.1 Repo Slug & Worktree Detection (cc-b47)
 
 **ADRs:** 0022, 0023
