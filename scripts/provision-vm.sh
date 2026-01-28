@@ -162,9 +162,21 @@ if [ ! -d /home/linuxbrew/.linuxbrew ]; then
     sudo -u sandbox bash -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 fi
 
-# Set up brew path
+# Set up brew path for this script
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
+# Persist brew environment to .bashrc for non-interactive SSH sessions
+# Must be BEFORE the interactive guard (case $- in ...) so it's available
+# for non-interactive SSH commands like: ssh user@host "which node"
+if ! grep -q "linuxbrew" /home/sandbox/.bashrc 2>/dev/null; then
+    sed -i '/^# for examples$/a\
+\
+# Homebrew (must be before interactive guard for non-interactive SSH)\
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"\
+' /home/sandbox/.bashrc
+    chown sandbox:sandbox /home/sandbox/.bashrc
+fi
 
 # ============================================
 # Dev Tools via Homebrew (comprehensive)
@@ -347,11 +359,25 @@ chown sandbox:sandbox /home/sandbox/.zshrc
 
 # tmux config
 cat > /home/sandbox/.tmux.conf <<'EOF'
+# Enable mouse support (for clicking URLs, scrolling, selecting panes)
 set -g mouse on
+
+# Allow passthrough of OSC sequences (enables clickable hyperlinks in Ghostty, etc.)
+set -g allow-passthrough on
+
+# Proper terminal settings for modern features
+set -g default-terminal "tmux-256color"
+set -as terminal-features ",xterm-256color:RGB"
+
+# Enable focus events (helps with some terminal features)
+set -g focus-events on
+
+# Scrollback buffer
 set -g history-limit 50000
+
+# Window/pane numbering
 set -g base-index 1
 setw -g pane-base-index 1
-set -g default-terminal "screen-256color"
 EOF
 chown sandbox:sandbox /home/sandbox/.tmux.conf
 
