@@ -24,7 +24,7 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-TOTAL_STEPS=15
+TOTAL_STEPS=16
 CURRENT_STEP=0
 
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
@@ -49,9 +49,6 @@ echo "Hostname: $(hostname)"
 export DEBIAN_FRONTEND=noninteractive
 export HOME=/root
 
-# Wait for cloud-init and apt locks
-cloud-init status --wait || true
-
 wait_for_apt() {
     local max_wait=300
     local waited=0
@@ -70,6 +67,13 @@ wait_for_apt() {
 }
 
 # ============================================
+# Wait for cloud-init
+# ============================================
+report_progress "Waiting for cloud-init"
+cloud-init status --wait || true
+sleep 2  # Extra delay to ensure cloud-init has finished writing files
+
+# ============================================
 # Configure GCE APT Mirror
 # ============================================
 report_progress "Configuring GCE apt mirror"
@@ -86,6 +90,12 @@ if [ -n "$GCP_REGION" ]; then
         SOURCES_FILE="/etc/apt/sources.list.d/ubuntu.sources"
         if [ -f "$SOURCES_FILE" ] && ! grep -q "gce.ports.ubuntu.com" "$SOURCES_FILE"; then
             sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$SOURCES_FILE"
+            # Verify the change was applied
+            if grep -q "gce.ports.ubuntu.com" "$SOURCES_FILE"; then
+                echo "GCE mirror configured successfully in $SOURCES_FILE"
+            else
+                echo "WARNING: Failed to configure GCE mirror in $SOURCES_FILE"
+            fi
         fi
         # Fallback for older Ubuntu with traditional sources.list
         if [ -s /etc/apt/sources.list ] && ! grep -q "gce.ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
