@@ -1,32 +1,32 @@
 # Post-MVP Implementation Approach
 
-**Version:** 1.0
-**Date:** 2026-01-27
-**Status:** Draft
+**Version:** 2.0
+**Date:** 2026-01-28
+**Status:** Active
 
 ---
 
 ## Executive Summary
 
-This document outlines a phased approach for cloudcoop development beyond the MVP. The roadmap
-addresses security gaps, code quality improvements, feature completion, and multi-cloud expansion
-over four progressive phases.
+This document outlines a phased approach for cloudcoop development beyond the MVP. Version 2.0
+reflects the architectural redesign captured in ADRs 0022-0027 (accepted 2026-01-28), which
+replaced the original Phase 1 plan with a worktree-based multi-repo agent workspace model.
 
 **Strategic Direction:**
 
-1. **Server Build Complete** - Integrate VM provisioning and agent setup (SETUP-FLOW Stage 5-6)
-2. **Security Foundation** - Address SSH host key verification and code quality
-3. **GCP Feature Complete** - Finish resize, firewall, metadata features
-4. **Multi-Cloud & Advanced** - AWS/Azure providers, terminal config generator, session recovery
+1. **Multi-Agent Workspace Foundation** — Implement `agents sync` and `agents attach` (ADRs 0022-0027)
+2. **Security Foundation** — Address SSH host key verification and code quality
+3. **GCP Feature Complete** — Finish resize, firewall, metadata features
+4. **Multi-Cloud & Advanced** — AWS/Azure providers, agent auth, session recovery
 
-**Timeline Overview:**
+**Phase Overview:**
 
-| Phase | Focus | Complexity |
-|-------|-------|------------|
-| 1 | VM Provisioning & Agent Setup | 3-4 weeks |
-| 2 | Security & Quality Foundation | 2-3 weeks |
-| 3 | GCP Feature Completion | 4-6 weeks |
-| 4 | Multi-Cloud & Advanced Features | 10-14 weeks |
+| Phase | Focus | Key ADRs |
+|-------|-------|----------|
+| 1 | Multi-Agent Workspace Foundation | 0022, 0023, 0024, 0025, 0026, 0027 |
+| 2 | Security & Quality Foundation | — |
+| 3 | GCP Feature Completion | 0012 |
+| 4 | Multi-Cloud & Advanced Features | 0009, 0010 |
 
 ---
 
@@ -45,353 +45,217 @@ Based on the comprehensive MVP review (2026-01-26):
 | Test Coverage | 6.5/10 | CLI tests at 19%, full coverage needs mock infrastructure |
 | CI/CD Maturity | 9/10 | govulncheck and gosec added |
 
-### Key Gaps
+### The Pivot: ADRs 0022-0027
 
-1. **VM Provisioning:** SETUP-FLOW.md Stage 5 (install tools, agents) not integrated into TUI
-2. **Agent Authentication:** SETUP-FLOW.md Stage 6 (OAuth for Claude Code) not implemented
-3. **Agent Management Scripts:** provision-vm.sh has scripts but no TUI/CLI integration
-4. **Terminal Config:** Multi-session Ghostty/iTerm2 views not implemented (cc-3.1)
-5. **Security:** SSH host key verification falls back to `InsecureIgnoreHostKey()` (gosec G106)
-6. **Features:** VM Resize, Dynamic IP Firewall, VM Metadata not implemented
-7. **Multi-Cloud:** AWS and Azure interfaces designed but not implemented
+Six ADRs (accepted 2026-01-28) redesigned the agent workspace and session model:
+
+| Aspect | Old Model | New Model (ADRs 0022-0027) |
+|--------|-----------|---------------------------|
+| Workspaces | Flat `/workspaces/agent-N` | Git worktrees: `/workspaces/<slug>/<branch>` |
+| tmux sessions | Single `"agents"` session | Per-repo sessions: `acme-backend`, `acme-frontend` |
+| Setup command | `provision-vm.sh` scripts | `cloudcoop agents sync` (clone-on-demand) |
+| Agent start | `start-agents.sh [count]` | Auto-start per worktree during sync |
+| Agent attach | `cloudcoop connect <index>` | `cloudcoop agents attach --next` (grouped sessions) |
+| Git access | Not addressed | Deploy keys via `gh` CLI (ADR-0026) |
+| Agent config | Hardcoded `claude` | Configurable per-repo commands + pre-hooks (ADR-0027) |
+| Multi-repo | Not supported | First-class: one tmux session per repo |
 
 ### Technical Debt
 
 | Item | Location | Impact |
 |------|----------|--------|
-| Large `tui/app.go` | ~1000 LOC | Maintainability |
-| `Update()` function | Lines 417-615 | 198 lines, ~30 branches |
+| Hardcoded `"agents"` session | agent.go, connect.go, terminal/*.go | Blocks multi-repo |
+| `InsecureIgnoreHostKey()` fallback | ssh/client.go | Security risk (gosec G106) |
 | Low test coverage | CLI, SSH, TUI packages | Quality risk |
-
-### Open Issues
-
-| Issue ID | Title | Priority | Phase |
-|----------|-------|----------|-------|
-| cc-xzi | Improve SSH host key management UX | P2 | 1 |
-| cc-s7h | Add cloudcoop metadata to created VMs | P3 | 2 |
-| cc-l5v | Review ADR-0003: disk auto-delete behavior | P3 | 2 |
-| cc-3.1 | Terminal config generator (Ghostty/iTerm2/Kitty) | P4 | 4 |
-| cc-atw | Support terminals other than Ghostty | P4 | 4 |
 
 ---
 
-## Phase 1: VM Provisioning & Agent Setup
+## Phase 1: Multi-Agent Workspace Foundation
 
-**Objective:** Complete the end-to-end VM setup experience documented in SETUP-FLOW.md.
+**Objective:** Implement the core `agents sync` and `agents attach` workflow from ADRs 0022-0027.
+This is the primary user-facing feature that makes cloudcoop useful for real multi-agent development.
 
-The current MVP can create VMs and manage their lifecycle, but the server-side setup is manual.
-The vision in SETUP-FLOW.md describes an automated provisioning flow that installs all development
-tooling and configures agents. The provision-vm.sh script already exists but isn't integrated.
+**Acceptance Criteria:** User can run `cloudcoop agents sync` from a repo with worktrees, have
+agents automatically started on the VM, and attach to them via terminal splits.
 
-### 1.1 Integrate VM Provisioning Script
+**Beads Epic:** cc-m9b
 
-**Current State:**
+### 1.1 Repo Slug & Worktree Detection (cc-b47)
 
-- `scripts/provision-vm.sh` is a comprehensive 650-line script that installs:
-  - Development languages: Node.js, Go, Python, Rust, Java, Ruby, PHP, .NET
-  - Claude Code CLI (`@anthropic-ai/claude-code`)
-  - Linting tools: golangci-lint, eslint, prettier, ruff, etc.
-  - Container tools: Docker, crane, dive, trivy
-  - Cloud CLIs: gcloud, aws, az
-  - Database clients: PostgreSQL, MySQL, Redis, MongoDB
-  - Agent management scripts: `start-agents.sh`, `stop-agents.sh`, etc.
+**ADRs:** 0022, 0023
+**New package:** `internal/workspace/`
 
-**Missing:** The script exists but isn't invoked by cloudcoop.
+- Detect git remote URL from cwd (`git remote get-url origin`)
+- Derive repo slug from URL (handle SSH and HTTPS formats)
+- List local worktrees via `git worktree list --porcelain`
+- Parse worktree output into structured data (path, branch, commit)
+- Handle edge cases: not a git repo, no remote, bare repo
 
-**Implementation:**
+### 1.2 Repo-Scoped tmux Sessions (cc-xmd)
 
-1. **Startup Script Metadata** - Pass provision-vm.sh via GCP startup-script metadata:
+**ADR:** 0023
+**Depends on:** 1.1
 
-```go
-// During VM creation
-metadata := &computepb.Metadata{
-    Items: []*computepb.Items{
-        {Key: proto.String("startup-script"), Value: proto.String(provisionScript)},
-    },
-}
-```
+Files that currently hardcode `"agents"` session name:
 
-1. **Provisioning Status Display** - Show progress in TUI:
+- `internal/agent/agent.go` — all tmux commands
+- `internal/ssh/connect.go` — tmux attach
+- `internal/terminal/ghostty.go`, `kitty.go`, `iterm2.go` — attach commands
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Provisioning VM (first run takes 5-10 minutes)                 │
-├─────────────────────────────────────────────────────────────────┤
-│  [✓] System packages                                            │
-│  [✓] Docker                                                     │
-│  [✓] Node.js 24                                                 │
-│  [░░░░░░░░░░] Claude Code CLI...                               │
-│  [ ] tmux configuration                                         │
-│  [ ] Workspace directories                                      │
-└─────────────────────────────────────────────────────────────────┘
-```
+Changes:
 
-1. **Provisioning Verification** - SSH check for installed tools:
+- Replace all hardcoded `"agents"` with dynamic session name parameter
+- Session name = repo slug (e.g., `acme-backend`)
+- Update `ListSessions()`, `CreateSession()`, `KillSession()` to accept session name
+- Add `ListAllSessions()` for `--all` flag
+- Update all existing tests
 
-```go
-func (p *Provisioner) CheckStatus(ctx context.Context) (ProvisionStatus, error) {
-    // Check if Claude Code is installed
-    _, err := p.ssh.Run("claude --version")
-    if err != nil {
-        return ProvisionStatusIncomplete, nil
-    }
-    return ProvisionStatusComplete, nil
-}
-```
+### 1.3 Deploy Key Management (cc-5bo)
 
-**Deliverables:**
+**ADR:** 0026
+**Depends on:** 1.1
+**New package:** `internal/deploykey/`
 
-- [ ] Embed provision-vm.sh in binary or fetch from config
-- [ ] Pass startup-script metadata during VM creation
-- [ ] Add provisioning status check to TUI
-- [ ] Show provisioning progress on first connection
-- [ ] Add `cloudcoop provision` CLI command for re-provisioning
+- Check for existing key at `~/.ssh/cloudcoop-deploy-<slug>`
+- Generate ed25519 key pair if missing
+- Register on GitHub via `gh api repos/{owner}/{repo}/keys`
+- Detect `gh` availability; fallback to manual instructions
+- Copy private key to VM via SCP
+- Write SSH config entry on VM (handle multi-repo host aliases)
+- Pre-flight check: `git ls-remote` on VM
 
-**Success Criteria:**
+### 1.4 Clone-on-Demand Sync (cc-gov)
 
-- New VM is fully provisioned automatically
-- TUI shows provisioning status
-- `claude --version` works on fresh VM
+**ADR:** 0024
+**Depends on:** 1.1, 1.2, 1.3
 
-### 1.2 Agent Authentication (SETUP-FLOW Stage 6)
+- Implement `cloudcoop agents sync` command
+- Read local worktree state
+- SSH to VM, check for existing bare clone at `/repos/<slug>.git`
+- Clone bare repo if missing: `git clone --bare <url> /repos/<slug>.git`
+- Fetch latest: `git -C /repos/<slug>.git fetch --all --prune`
+- Create worktrees: `git worktree add /workspaces/<slug>/<name> <branch>`
+- Skip existing worktrees (idempotent)
+- Detect removed worktrees (exist on VM but not locally), prompt for cleanup
+- Start tmux session with one window per worktree
 
-**Reference:** SETUP-FLOW.md Stage 6, ADR-0009
+### 1.5 Agent Startup Hooks (cc-mya)
 
-The vision shows interactive agent authentication after provisioning:
+**ADR:** 0027
+**Depends on:** 1.4
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Authenticate Claude Code:                                      │
-│                                                                 │
-│  Opening browser for authentication...                          │
-│  If browser doesn't open, visit:                                │
-│  https://console.anthropic.com/auth?callback=...               │
-│                                                                 │
-│  [Waiting for authentication...]                                │
-└─────────────────────────────────────────────────────────────────┘
-```
+Extend config schema with `[agents]` section:
 
-**Implementation:**
+- `default_command` (default: `"claude"`)
+- `pre_commands` (list of strings)
+- `[agents.repos.<slug>]` overrides
 
-1. **SSH Tunnel for OAuth** - Forward localhost for OAuth callbacks:
+Build tmux window command: `cd <worktree> && <pre_commands...> && <agent_command>`
 
-```bash
-ssh -L 8080:localhost:8080 claude-sandbox -t "claude auth login"
-```
+Resolution order:
 
-1. **Auth Status Check** - Verify authentication on connection:
+- Agent command: repo-specific > default > `"claude"`
+- Pre-commands: global + repo-specific (concatenated)
 
-```go
-func (a *AuthChecker) CheckClaudeAuth(ctx context.Context) (AuthStatus, error) {
-    output, err := a.ssh.Run("claude auth status")
-    // Parse output for authentication state
-}
-```
+### 1.6 Terminal-Native Attach (cc-f4g)
 
-**Deliverables:**
+**ADR:** 0025
+**Depends on:** 1.2 (can run in parallel with 1.5)
 
-- [ ] Add SSH tunnel helper for OAuth flows
-- [ ] Check agent auth status on VM start
-- [ ] Show auth status in TUI infrastructure section
-- [ ] Add `cloudcoop auth` CLI command
-- [ ] Support re-authentication flow
+- `cloudcoop agents attach --next`:
+  - List windows in repo session
+  - List clients/grouped sessions to find attached windows
+  - Select first unattached window
+  - Create grouped session: `tmux new-session -t <slug> -s <slug>-<unique>`
+  - Select assigned window
+- `cloudcoop agents attach --window <name|index>`
+- `cloudcoop agents list` (current repo)
+- `cloudcoop agents list --all` (all repos)
 
-### 1.3 Agent Management Script Integration
+### 1.7 Phase 1 Verification (cc-n5j)
 
-**Current State:**
+**Depends on:** all above
 
-provision-vm.sh creates these scripts on the VM:
+Manual test gate:
 
-- `start-agents.sh [count]` - Start N Claude agents in tmux
-- `stop-agents.sh` - Kill all agent sessions
-- `attach-agent.sh [number]` - Attach to specific agent
-- `list-agents.sh` - List running agents
+- [ ] `cloudcoop agents sync` from repo with 3 worktrees creates VM setup
+- [ ] Deploy key generated and registered on GitHub automatically
+- [ ] Bare clone + worktrees created on VM
+- [ ] 3 tmux windows running configured agent command
+- [ ] `cloudcoop agents list` shows 3 agents for current repo
+- [ ] `cloudcoop agents attach --next` attaches to next unattached window
+- [ ] Second `--next` attaches to a different window
+- [ ] Re-running sync is idempotent (no duplicate windows)
+- [ ] Adding a local worktree + sync creates new window
+- [ ] Multi-repo: sync from second repo creates separate session
 
-**Missing:** TUI doesn't invoke these scripts.
-
-**Integration:**
-
-```go
-// internal/agent/manager.go
-func (m *Manager) StartAgents(ctx context.Context, count int) error {
-    return m.ssh.Run(fmt.Sprintf("start-agents.sh %d", count))
-}
-
-func (m *Manager) StopAllAgents(ctx context.Context) error {
-    return m.ssh.Run("stop-agents.sh")
-}
-```
-
-**TUI Integration:**
+### Implementation Order
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Start Agents                                                   │
-├─────────────────────────────────────────────────────────────────┤
-│  How many agents? [12]                                          │
-│                                                                 │
-│  Agent type: ● Claude Code  ○ Aider  ○ Gemini CLI              │
-│                                                                 │
-│  [Start]  [Cancel]                                              │
-└─────────────────────────────────────────────────────────────────┘
+1.1 (slug/worktree detection)
+  → 1.2 (repo-scoped tmux) — can parallel with 1.3
+  → 1.3 (deploy keys) — can parallel with 1.2
+    → 1.4 (clone-on-demand sync) — depends on 1.1, 1.2, 1.3
+      → 1.5 (startup hooks) — depends on 1.4
+      → 1.6 (terminal-native attach) — depends on 1.2, can parallel with 1.5
+        → 1.7 (verification) — depends on all above
 ```
 
-**Deliverables:**
+### New Packages & Files
 
-- [ ] Invoke start-agents.sh from TUI [A]dd action
-- [ ] Invoke stop-agents.sh from TUI bulk stop
-- [ ] Show agent count in status view
-- [ ] Add `cloudcoop agents start --count=N` CLI
+| Package | Files | Purpose |
+|---------|-------|---------|
+| `internal/workspace/` | `workspace.go`, `sync.go`, `workspace_test.go` | Worktree detection, sync logic |
+| `internal/deploykey/` | `deploykey.go`, `deploykey_test.go` | Deploy key lifecycle |
 
-### 1.4 Terminal Config Generator (cc-3.1)
+### Files to Modify
 
-**Reference:** TUI-REQUIREMENTS.md Section 7
-
-Generate terminal emulator configs for viewing multiple agent sessions simultaneously.
-
-**Ghostty Config:**
-
-```toml
-# ~/.config/ghostty/cloudcoop-12-agents.toml
-# Generated by: cloudcoop terminal-config --agents=12
-
-[window]
-title = "cloudcoop agents"
-
-# 3x4 grid of agent views
-[[window.split]]
-command = "ssh claude-sandbox -t 'tmux attach -t agents:agent-1'"
-
-[[window.split]]
-command = "ssh claude-sandbox -t 'tmux attach -t agents:agent-2'"
-# ... repeat for all agents
-```
-
-**iTerm2 AppleScript:**
-
-```applescript
-tell application "iTerm2"
-    tell current session of current tab of current window
-        split horizontally with default profile command "ssh claude-sandbox -t 'tmux attach -t agents:agent-1'"
-    end tell
-end tell
-```
-
-**Deliverables:**
-
-- [ ] Add `cloudcoop terminal-config` command
-- [ ] Generate Ghostty config (TOML)
-- [ ] Generate iTerm2 profile/AppleScript
-- [ ] Generate Kitty config
-- [ ] Support configurable grid layouts (2x2, 3x4, 4x4)
-
-**Success Criteria:**
-
-- `cloudcoop terminal-config --terminal=ghostty --agents=12` generates working config
-- User can open terminal with multi-pane agent view
+| File | Change |
+|------|--------|
+| `internal/agent/agent.go` | Parameterize session name, add grouped session support |
+| `internal/ssh/connect.go` | Parameterize session name for attach |
+| `internal/terminal/ghostty.go` | Use dynamic session name |
+| `internal/terminal/kitty.go` | Use dynamic session name |
+| `internal/terminal/iterm2.go` | Use dynamic session name |
+| `internal/config/config.go` | Add `[agents]` section with repos/hooks |
+| `internal/cli/agents.go` | Add `sync`, `attach --next`, `list --all` subcommands |
 
 ---
 
 ## Phase 2: Security & Quality Foundation
 
-**Objective:** Establish a secure, maintainable codebase before adding new features.
+**Objective:** Establish a secure, maintainable codebase before adding GCP features.
 
-### 2.1 SSH Host Key Management (cc-xzi)
+**Beads Epic:** cc-w5l (blocked by Phase 1)
+
+### 2.1 SSH Host Key Management
 
 **Current Problem:**
 
 ```go
-// internal/ssh/client.go:121-128
-func loadKnownHostsOrInsecure() ssh.HostKeyCallback {
-    if cb, err := knownhosts.New(...); err == nil {
-        return cb
-    }
-    return ssh.InsecureIgnoreHostKey()  // ⚠️ MITM vulnerability
-}
+// internal/ssh/client.go — falls back to InsecureIgnoreHostKey() (gosec G106)
 ```
 
-**Solution Approach:**
+**Solution:**
 
-1. **Never fall back to InsecureIgnoreHostKey** - Require valid host key verification
-2. **Interactive TOFU (Trust On First Use)** - Prompt user to accept new host keys
-3. **Automatic key learning** - On first connection, learn and store the host key
-4. **Clear error messaging** - Explain when host key changes (potential MITM)
+1. Remove `InsecureIgnoreHostKey()` fallback entirely
+2. Implement TOFU (Trust On First Use) with user confirmation
+3. Cloudcoop-managed known_hosts file
+4. `--accept-host-key` flag for automation
+5. Clear error on host key change (potential MITM warning)
 
-**Implementation:**
-
-```go
-type HostKeyAction int
-const (
-    HostKeyAccept HostKeyAction = iota  // First connection - learn key
-    HostKeyReject                        // Key mismatch - abort
-    HostKeyPrompt                        // Ask user to confirm
-)
-
-func verifyHostKey(hostname string, remote net.Addr, key ssh.PublicKey) error {
-    known, err := loadKnownHosts()
-    if err != nil {
-        return fmt.Errorf("cannot load known_hosts: %w", err)
-    }
-
-    switch known.Check(hostname, remote, key) {
-    case knownhosts.KeyOK:
-        return nil
-    case knownhosts.KeyChanged:
-        return fmt.Errorf("HOST KEY CHANGED for %s - possible MITM attack", hostname)
-    case knownhosts.KeyNotFound:
-        return promptAndAddKey(hostname, key)
-    }
-}
-```
-
-**Deliverables:**
-
-- [ ] Remove `InsecureIgnoreHostKey()` fallback
-- [ ] Implement TOFU pattern with user confirmation
-- [ ] Add `~/.ssh/known_hosts` management
-- [ ] Display key fingerprint for verification
-- [ ] Provide `--accept-host-key` flag for automation
-
-**Success Criteria:**
-
-- gosec G106 finding eliminated
-- New VM connections prompt for key confirmation
-- Changed host keys abort with clear error message
-- Existing valid host keys work without prompts
+**Files:** `internal/ssh/client.go`, new `internal/ssh/hostkey.go`
 
 ### 2.2 Refactor tui/app.go
 
-**Current State:** ~1000 LOC single file with large `Update()` function.
+**Note:** tui/app.go was already refactored to 117 LOC during MVP. This task verifies the
+refactor accounts for repo-scoped sessions from Phase 1.
 
-**Target Structure:**
-
-```text
-internal/tui/
-├── app.go          # Main model, Init(), simplified Update()
-├── commands.go     # Command generation (tea.Cmd functions)
-├── handlers.go     # Message handlers extracted from Update()
-├── view.go         # View() and rendering helpers
-└── styles.go       # Lipgloss style definitions (if needed)
-```
-
-**Deliverables:**
-
-- [ ] Extract keyboard handlers to `handlers.go`
-- [ ] Extract command builders to `commands.go`
-- [ ] Move view logic to `view.go`
-- [ ] Reduce `Update()` to dispatcher pattern (~50 lines)
-- [ ] Maintain full test coverage through refactor
-
-**Success Criteria:**
-
+- Ensure handlers.go, commands.go, view.go work with dynamic session names
 - No file exceeds 300 LOC
-- `Update()` function under 100 lines
-- All existing TUI tests pass
-- No functional changes to user experience
+- All TUI tests pass with repo-scoped session changes
 
 ### 2.3 Improve Test Coverage
-
-**Current Coverage Gaps:**
 
 | Package | Current | Target | Gap |
 |---------|---------|--------|-----|
@@ -399,316 +263,65 @@ internal/tui/
 | SSH | 5.5% | 60% | +55% |
 | TUI | 20.8% | 50% | +30% |
 
-**Approach:**
-
-1. **CLI Testing** - Add mock cloud provider for command testing
-2. **SSH Testing** - Extend MockSSHClient for additional scenarios
-3. **TUI Testing** - Add tea.Model state machine tests
-
-**Priority Test Scenarios:**
-
-| Package | Scenario | Priority |
-|---------|----------|----------|
-| SSH | Connection failure handling | High |
-| SSH | Host key verification | High |
-| CLI | `cloudcoop start` happy path | High |
-| CLI | `cloudcoop status` error handling | High |
-| TUI | Keyboard navigation | Medium |
-| TUI | Confirmation dialogs | Medium |
-
-**Deliverables:**
-
-- [ ] CLI package mock infrastructure
-- [ ] SSH connection tests with mock server
-- [ ] TUI state transition tests
-- [ ] Integration test for full workflow
-
-**Success Criteria:**
-
-- CLI coverage ≥60%
-- SSH coverage ≥60%
-- TUI coverage ≥50%
-- No reduction in existing coverage
+- Add tests for new Phase 1 packages (workspace, deploykey)
+- CLI mock provider infrastructure
+- SSH mock server tests
+- TUI state transition tests
 
 ---
 
 ## Phase 3: GCP Feature Completion
 
-**Objective:** Implement documented features in TUI-REQUIREMENTS.md that are not yet built.
+**Beads Epic:** cc-md9 (blocked by Phase 2)
 
-### 3.1 VM Resize
+### 3.1 VM Resize (cc-md9.1)
 
-**Reference:** TUI-REQUIREMENTS.md Section 2.4
-
-**Requirements:**
-
-- Display current and available machine types
+- Add `ResizeVM` to cloud provider interface
+- GCP `SetMachineType` implementation
+- TUI resize screen + CLI command + [R] shortcut
 - Require VM stopped before resize
-- Offer to stop running VM
-- Update machine type via `SetMachineType` API
 
-**UI Design:**
+### 3.2 Dynamic IP Firewall (cc-md9.2)
 
-```text
-Current: c4a-highcpu-16 (16 vCPU, 32GB) - ~$0.12/hr spot
-Available sizes:
-  [1] Small   c4a-highcpu-4   ( 4 vCPU,  8GB) - ~$0.03/hr spot
-  [2] Medium  c4a-highcpu-8   ( 8 vCPU, 16GB) - ~$0.06/hr spot
-  [3] Large   c4a-highcpu-16  (16 vCPU, 32GB) - ~$0.12/hr spot  ← current
-  [4] XLarge  c4a-highcpu-32  (32 vCPU, 64GB) - ~$0.24/hr spot
+- `[network]` config section
+- Modes: `iap`, `auto`, `manual`, `disabled`
+- IP detection for `auto` mode
+- Firewall rule CRUD via GCP SDK
+- TUI status display
 
-Select size [1-4] or Esc to cancel:
-```
+### 3.3 VM Metadata Tagging
 
-**Implementation:**
+- Add cloudcoop metadata on VM creation (`cloudcoop-version`, `cloudcoop-created`, `cloudcoop-config-hash`)
+- Display in status view
+- Version mismatch warnings
 
-```go
-// internal/cloud/gcp/provider.go
-func (p *GCPProvider) ResizeVM(ctx context.Context, name, machineType string) error {
-    op, err := p.instancesClient.SetMachineType(ctx, &computepb.SetMachineTypeInstanceRequest{
-        Project:  p.project,
-        Zone:     p.zone,
-        Instance: name,
-        InstancesSetMachineTypeRequestResource: &computepb.InstancesSetMachineTypeRequest{
-            MachineType: proto.String(fmt.Sprintf("zones/%s/machineTypes/%s", p.zone, machineType)),
-        },
-    })
-    if err != nil {
-        return fmt.Errorf("set machine type: %w", err)
-    }
-    return op.Wait(ctx)
-}
-```
+### 3.4 Disk Auto-Delete Review
 
-**Deliverables:**
-
-- [ ] Add `ResizeVM` to cloud provider interface
-- [ ] Implement GCP `SetMachineType` call
-- [ ] Add resize TUI screen with size picker
-- [ ] Add `cloudcoop resize` CLI command
-- [ ] Add keyboard shortcut [R] for resize
-
-**Success Criteria:**
-
-- Resize works for stopped VMs
-- Error message if VM is running
-- User can select from configured sizes
-- README.md updated with resize feature
-
-### 3.2 Dynamic IP Firewall
-
-**Reference:** ADR-0012 (Network Security for SSH Access)
-
-**Modes:**
-
-| Mode | Behavior |
-|------|----------|
-| `iap` | Use IAP tunnel (no firewall needed) |
-| `auto` | Detect public IP, update firewall rule |
-| `manual` | User specifies IP/CIDR in config |
-| `disabled` | No firewall management |
-
-**Implementation:**
-
-```go
-// internal/cloud/gcp/firewall.go
-func (p *GCPProvider) UpdateSSHFirewall(ctx context.Context, sourceRanges []string) error {
-    rule := &computepb.Firewall{
-        Name:         proto.String("cloudcoop-ssh-access"),
-        Network:      proto.String("global/networks/default"),
-        Allowed:      []*computepb.Allowed{{IPProtocol: proto.String("tcp"), Ports: []string{"22"}}},
-        SourceRanges: sourceRanges,
-        TargetTags:   []string{"cloudcoop-ssh"},
-    }
-    // Update or create firewall rule
-}
-```
-
-**Deliverables:**
-
-- [ ] Add `[network]` configuration section
-- [ ] Implement IP detection for `auto` mode
-- [ ] Add firewall rule create/update logic
-- [ ] Display current firewall status in TUI
-- [ ] Add `cloudcoop firewall` CLI command
-
-**Success Criteria:**
-
-- `auto` mode updates firewall on startup
-- IAP mode works without external IP
-- `manual` mode applies configured ranges
-- Status view shows firewall state
-
-### 3.3 VM Metadata Tagging (cc-s7h)
-
-**Purpose:** Tag VMs with cloudcoop metadata for identification and diagnostics.
-
-**Metadata Fields:**
-
-| Key | Value | Purpose |
-|-----|-------|---------|
-| `cloudcoop-version` | `0.2.0` | Track which version created VM |
-| `cloudcoop-created` | ISO timestamp | Creation time |
-| `cloudcoop-config-hash` | SHA256[:8] | Detect config drift |
-
-**Implementation:**
-
-```go
-// During VM creation
-metadata := &computepb.Metadata{
-    Items: []*computepb.Items{
-        {Key: proto.String("cloudcoop-version"), Value: proto.String(version.String())},
-        {Key: proto.String("cloudcoop-created"), Value: proto.String(time.Now().Format(time.RFC3339))},
-        {Key: proto.String("cloudcoop-config-hash"), Value: proto.String(configHash[:8])},
-    },
-}
-```
-
-**Deliverables:**
-
-- [ ] Add metadata on VM creation
-- [ ] Display metadata in status view
-- [ ] Warn if VM version differs from CLI version
-- [ ] Document metadata fields in CLAUDE.md
-
-**Success Criteria:**
-
-- New VMs have cloudcoop metadata
-- Status shows cloudcoop version mismatch warnings
-- Config hash helps detect drift
-
-### 3.4 Disk Auto-Delete Review (cc-l5v)
-
-**Context:** ADR-0003 specifies disk auto-delete behavior on VM deletion.
-
-**Review Items:**
-
-- [ ] Verify current `AutoDelete` setting matches ADR-0003
-- [ ] Document implications in TUI delete confirmation
-- [ ] Add warning about data loss in delete dialog
-- [ ] Consider adding disk snapshot option before delete
+- Verify `AutoDelete` setting matches ADR-0003
+- Document implications in TUI delete confirmation
+- Data loss warning in delete dialog
 
 ---
 
 ## Phase 4: Multi-Cloud & Advanced Features
 
-**Objective:** Implement AWS and Azure providers per ADR-0010, plus advanced capabilities.
+**Beads Epic:** cc-af8 (blocked by Phase 3)
 
-### Effort Estimate (from ADR-0010)
+### 4.1 AWS Provider (cc-af8.1)
 
-| Component | AWS | Azure |
-|-----------|-----|-------|
-| VM lifecycle | ~2 days | ~2 days |
-| Machine type mapping | ~1 day | ~1 day |
-| IAM setup docs | ~2 days | ~2 days |
-| Secret management | ~1 day | ~1 day |
-| Provisioning script | ~3 days | ~3 days |
-| Testing | ~2 days | ~2 days |
-| **Total** | ~11 days | ~11 days |
+- Implement full provider interface for AWS (EC2 lifecycle, Spot Instances, Graviton)
+- AWS configuration section in TOML
+- Integration tests with localstack
 
-### 4.1 AWS Provider
+### 4.2 Azure Provider (cc-af8.2)
 
-**Service Mapping:**
+- Implement full provider interface for Azure (VM lifecycle, Spot VMs, Cobalt)
+- Azure configuration section in TOML
+- Integration tests where applicable
 
-| Capability | GCP | AWS |
-|------------|-----|-----|
-| VM Service | Compute Engine | EC2 |
-| Spot Instances | Spot VMs | Spot Instances |
-| ARM Instances | C4A (Axion) | Graviton (c7g/c8g) |
-| IAM | Service Accounts | IAM Roles + Instance Profiles |
-| Secrets | Secret Manager | Secrets Manager |
+### 4.3 Machine Type Normalization (cc-af8.3)
 
-**Implementation Files:**
-
-```text
-internal/cloud/aws/
-├── provider.go      # AWSProvider implementation
-├── ec2.go           # VM lifecycle operations
-├── types.go         # Machine type mapping
-└── secrets.go       # Secrets Manager integration
-```
-
-**Key Implementation:**
-
-```go
-type AWSProvider struct {
-    region     string
-    client     *ec2.Client
-    instanceID string  // Cached after lookup by Name tag
-}
-
-func (p *AWSProvider) StartVM(ctx context.Context, name string) error {
-    instanceID, err := p.getInstanceIDByName(ctx, name)
-    if err != nil {
-        return err
-    }
-    _, err = p.client.StartInstances(ctx, &ec2.StartInstancesInput{
-        InstanceIds: []string{instanceID},
-    })
-    return err
-}
-```
-
-**Deliverables:**
-
-- [ ] Implement full provider interface for AWS
-- [ ] Add AWS configuration section to TOML
-- [ ] Create AWS provisioning documentation
-- [ ] Add AWS-specific machine type mappings
-- [ ] Integration tests with localstack
-
-### 4.2 Azure Provider
-
-**Service Mapping:**
-
-| Capability | GCP | Azure |
-|------------|-----|-------|
-| VM Service | Compute Engine | Virtual Machines |
-| Spot Instances | Spot VMs | Spot VMs |
-| ARM Instances | C4A (Axion) | Cobalt (Dpsv6) |
-| IAM | Service Accounts | Managed Identities |
-| Secrets | Secret Manager | Key Vault |
-
-**Implementation Files:**
-
-```text
-internal/cloud/azure/
-├── provider.go      # AzureProvider implementation
-├── vm.go            # VM lifecycle operations
-├── types.go         # Machine type mapping
-└── keyvault.go      # Key Vault integration
-```
-
-**Key Implementation:**
-
-```go
-type AzureProvider struct {
-    subscription  string
-    resourceGroup string
-    client        *armcompute.VirtualMachinesClient
-}
-
-func (p *AzureProvider) StartVM(ctx context.Context, name string) error {
-    poller, err := p.client.BeginStart(ctx, p.resourceGroup, name, nil)
-    if err != nil {
-        return fmt.Errorf("begin start: %w", err)
-    }
-    _, err = poller.PollUntilDone(ctx, nil)
-    return err
-}
-```
-
-**Deliverables:**
-
-- [ ] Implement full provider interface for Azure
-- [ ] Add Azure configuration section to TOML
-- [ ] Create Azure provisioning documentation
-- [ ] Add Azure-specific machine type mappings
-- [ ] Integration tests with Azurite (where applicable)
-
-### 4.3 Machine Type Normalization
-
-**Standard Types:**
+Standard sizes across clouds:
 
 | Normalized | GCP | AWS | Azure |
 |------------|-----|-----|-------|
@@ -717,159 +330,93 @@ func (p *AzureProvider) StartVM(ctx context.Context, name string) error {
 | arm-16cpu-32gb | c4a-highcpu-16 | c7g.4xlarge | Standard_D16pds_v6 |
 | arm-32cpu-64gb | c4a-highcpu-32 | c7g.8xlarge | Standard_D32pds_v6 |
 
-**Configuration:**
+### 4.4 Agent Authentication (cc-cz1)
 
-```toml
-[machine_types.arm-16cpu-32gb]
-gcp = "c4a-highcpu-16"
-aws = "c7g.4xlarge"
-azure = "Standard_D16pds_v6"
-```
+**Moved from old Phase 1.** Agent auth is now a post-sync concern, not a setup gate.
 
-### 4.4 API Key Management (ADR-0009)
+- OAuth tunnel for Claude Code auth (SSH port forwarding)
+- GCP Secret Manager integration for headless API keys
+- SSH environment forwarding as fallback
+- Per-agent auth status in TUI
+- Support multiple agent types (Claude Code, Aider, Gemini CLI)
 
-**Tiered Approach:**
+**References:** ADR-0009, previously cc-nat
 
-1. **OAuth browser flow** (preferred) - for agents that support it
-2. **GCP Secret Manager** (alternative) - for headless/automated scenarios
-3. **SSH environment forwarding** (fallback) - keys stay on local machine
+### 4.5 Session Recovery After Preemption (cc-af8.5)
 
-**TUI Integration:**
+- Periodic state snapshots (every 5 minutes)
+- Detect previous session on VM restart
+- Offer to restore agent configuration
+- Start agents in "continue" mode
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Authentication Status                                          │
-│  ────────────────────                                           │
-│  Claude Code:    ✓ Authenticated (OAuth, expires in 29 days)   │
-│  Aider:          ✓ Secret Manager (anthropic-api-key)          │
-│  Gemini CLI:     ✓ Service Account (workload identity)         │
-│  GitHub Copilot: ✗ Not authenticated [A]uthenticate            │
-└─────────────────────────────────────────────────────────────────┘
-```
+### 4.6 Bulk Agent Operations (cc-af8.6)
 
-**Configuration Extension:**
+- Bulk start command
+- Bulk stop (kill session) command
+- [B] keyboard shortcut
+- `cloudcoop agents start --count=N` CLI
 
-```toml
-[agents.claude.auth]
-method = "oauth"
-command = "claude auth login"
-check = "claude auth status"
+### 4.7 Agent Logs Viewing (cc-af8.7)
 
-[agents.aider.auth]
-method = "secret_manager"
-[agents.aider.auth.secrets]
-ANTHROPIC_API_KEY = "anthropic-api-key"
-```
+- Log viewing TUI screen
+- Follow mode with streaming
+- [L] keyboard shortcut
+- `cloudcoop logs <agent>` CLI command
 
-**Deliverables:**
-
-- [ ] OAuth flow with SSH tunnel helper
-- [ ] Secret Manager integration
-- [ ] Auth status display in TUI
-- [ ] Per-agent auth configuration
-
-### 4.5 Session Recovery After Preemption
-
-**Reference:** TUI-REQUIREMENTS.md Section 6.2
-
-**Approach:**
-
-1. Periodic state snapshots (every 5 minutes)
-2. Detect previous session on VM restart
-3. Offer to restore agent configuration
-4. Start agents in "continue" mode
-
-**State Captured:**
-
-- Active tmux windows and names
-- Agent process status (active/idle)
-- Working directory per agent
-- Last activity timestamp
-
-**Recovery UI:**
-
-```text
-Previous session detected (stopped 15 minutes ago):
-  - 12 agents were running
-  - Last snapshot: 2026-01-27 10:45:00
-
-  [Restore Previous Session]  [Start Fresh]
-```
-
-**Deliverables:**
-
-- [ ] Implement periodic state capture
-- [ ] Store state on VM boot disk
-- [ ] Add recovery detection on startup
-- [ ] Implement restore workflow
-
-### 4.6 Bulk Agent Operations
-
-**Reference:** TUI-REQUIREMENTS.md Section 3.3
-
-**UI Design:**
-
-```text
-Start agents:
-  Agent count: [12]
-  Agent type:  ● Claude  ○ Aider  ○ Gemini
-  Session mode: ○ Fresh  ● Continue  ○ Pick
-
-  [Start All]  [Cancel]
-```
-
-**Deliverables:**
-
-- [ ] Add bulk start command
-- [ ] Add bulk stop (kill session) command
-- [ ] Add keyboard shortcut [B] for bulk operations
-- [ ] Add `cloudcoop agents start --count=N` CLI
-
-### 4.7 Agent Logs Viewing
-
-**Reference:** TUI-REQUIREMENTS.md Section 3.6
-
-**Modes:**
-
-- **Follow** - Live streaming of agent output
-- **Historical** - Last N lines from tmux capture
-
-**Implementation:**
-
-```go
-// Follow mode
-sshClient.Run(fmt.Sprintf(`tmux capture-pane -t agents:%s -p -S -100`, index))
-```
-
-**Deliverables:**
-
-- [ ] Add log viewing TUI screen
-- [ ] Add follow mode with streaming
-- [ ] Add keyboard shortcut [L] for logs
-- [ ] Add `cloudcoop logs <agent>` CLI command
+**Note:** The old terminal config generator (cc-3.1) is effectively replaced by ADR-0025's
+terminal-native splits. Users create splits in their terminal and run `attach --next` in each.
+The existing `internal/terminal/` package may still be useful for convenience scripts but is
+no longer a Phase 1 deliverable.
 
 ---
 
-## Risks and Mitigations
+## Verification Plan
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| SSH host key changes break automation | Medium | High | Provide `--accept-host-key` flag for CI/CD |
-| Multi-cloud testing infrastructure | Medium | Medium | Use localstack (AWS) and mocks for initial testing |
-| Azure ARM instance availability | Low | Medium | Fall back to x86 instances if needed |
-| OAuth flow browser access from VM | Medium | Low | SSH tunnel helper script provided |
-| Spot preemption during state save | Low | Medium | Atomic writes, keep 3 snapshots |
+### Phase 1 End-to-End Test
+
+```bash
+# Prerequisites: VM running, gh authenticated, local repo with worktrees
+cd ~/dev/my-project
+git worktree list  # shows 3 worktrees
+
+# Test sync
+cloudcoop agents sync
+# Expected: deploy key created, bare clone on VM, 3 worktrees, 3 tmux windows
+
+# Test list
+cloudcoop agents list
+# Expected: 3 agents shown with worktree names
+
+# Test attach
+cloudcoop agents attach --next  # attaches to window 0
+# In new terminal split:
+cloudcoop agents attach --next  # attaches to window 1
+
+# Test idempotency
+cloudcoop agents sync  # no changes, existing agents untouched
+
+# Test incremental
+git worktree add feature-new
+cloudcoop agents sync  # creates 4th worktree + window
+```
+
+### Build Verification
+
+```bash
+make all  # fmt, lint, test, build — must pass at each phase
+```
 
 ---
 
 ## Success Metrics
 
-### Phase 1 Success (VM Provisioning & Agent Setup)
+### Phase 1 Success (Multi-Agent Workspace Foundation)
 
-- [ ] New VM is automatically provisioned with all dev tools
-- [ ] Claude Code authenticates via OAuth tunnel
-- [ ] `start-agents.sh 12` invocable from TUI
-- [ ] Terminal configs generate for Ghostty, iTerm2, Kitty
+- [ ] `cloudcoop agents sync` creates worktree-based workspace on VM
+- [ ] Deploy keys auto-generated and registered
+- [ ] `cloudcoop agents attach --next` provides terminal-native split workflow
+- [ ] Multi-repo support with per-repo tmux sessions
+- [ ] Idempotent re-sync
 
 ### Phase 2 Success (Security & Quality)
 
@@ -891,40 +438,39 @@ sshClient.Run(fmt.Sprintf(`tmux capture-pane -t agents:%s -p -S -100`, index))
 - [ ] `cloudcoop --cloud azure` works end-to-end
 - [ ] OAuth flow works for Claude Code authentication
 - [ ] Session recovery works after spot preemption
-- [ ] Bulk operations start/stop 12 agents efficiently
+- [ ] Bulk operations start/stop agents efficiently
 
 ---
 
 ## Appendix: Critical Files by Phase
 
-### Phase 1 (VM Provisioning & Agent Setup)
+### Phase 1 (Multi-Agent Workspace Foundation)
 
 | File | Purpose |
 |------|---------|
-| `scripts/provision-vm.sh` | Existing provisioning script (650 LOC) |
-| `config/versions.env` | Tool version configuration |
-| `internal/provisioner/provisioner.go` | New provisioning coordinator |
-| `internal/provisioner/status.go` | Provisioning status checks |
-| `internal/auth/tunnel.go` | SSH tunnel for OAuth |
-| `internal/agent/manager.go` | Agent start/stop/list operations |
-| `internal/terminal/generator.go` | Terminal config generators |
+| `internal/workspace/workspace.go` | Repo slug detection, worktree parsing |
+| `internal/workspace/sync.go` | Clone-on-demand, worktree creation on VM |
+| `internal/deploykey/deploykey.go` | Deploy key generation, GitHub registration |
+| `internal/agent/agent.go` | Repo-scoped tmux sessions, grouped sessions |
+| `internal/ssh/connect.go` | Parameterized session attach |
+| `internal/config/config.go` | Agent startup hooks configuration |
+| `internal/cli/agents.go` | sync, attach --next, list --all commands |
+| `internal/terminal/*.go` | Dynamic session name support |
 
 ### Phase 2 (Security & Quality)
 
 | File | Purpose |
 |------|---------|
 | `internal/ssh/client.go` | Host key verification fix |
-| `internal/ssh/host_keys.go` | New file for TOFU logic |
-| `internal/tui/app.go` | Refactor into smaller files |
-| `internal/tui/handlers.go` | Extracted message handlers |
-| `internal/tui/commands.go` | Extracted command builders |
+| `internal/ssh/hostkey.go` | New TOFU logic |
+| `internal/tui/*.go` | Verify repo-scoped session support |
 | `internal/cli/*_test.go` | New CLI tests |
 
 ### Phase 3 (GCP Feature Completion)
 
 | File | Purpose |
 |------|---------|
-| `internal/cloud/interface.go` | Add ResizeVM, Firewall methods |
+| `internal/cloud/provider.go` | Add ResizeVM, Firewall methods |
 | `internal/cloud/gcp/resize.go` | VM resize implementation |
 | `internal/cloud/gcp/firewall.go` | Firewall management |
 | `internal/tui/resize.go` | Resize screen |
@@ -935,26 +481,26 @@ sshClient.Run(fmt.Sprintf(`tmux capture-pane -t agents:%s -p -S -100`, index))
 | File | Purpose |
 |------|---------|
 | `internal/cloud/aws/provider.go` | AWS provider |
-| `internal/cloud/aws/ec2.go` | EC2 operations |
 | `internal/cloud/azure/provider.go` | Azure provider |
-| `internal/cloud/azure/vm.go` | Azure VM operations |
 | `internal/cloud/types.go` | Machine type mappings |
 | `internal/auth/oauth.go` | OAuth browser flow |
 | `internal/auth/secrets.go` | Secret Manager integration |
 | `internal/session/snapshot.go` | State capture |
 | `internal/session/recovery.go` | Session restore |
-| `internal/tui/bulk.go` | Bulk operations screen |
 
 ---
 
 ## References
 
-- [SETUP-FLOW.md](SETUP-FLOW.md) - First-run setup wizard (Stages 1-6)
-- [TUI-REQUIREMENTS.md](TUI-REQUIREMENTS.md) - Full TUI specification
-- [MVP-REVIEW-REPORT.md](MVP-REVIEW-REPORT.md) - Current state assessment
-- [provision-vm.sh](../scripts/provision-vm.sh) - Existing VM provisioning script (650 LOC)
-- [ADR-0003](../decisions/0003-instance-provisioning-model.md) - Instance Provisioning Model
-- [ADR-0009](../decisions/0009-api-key-management.md) - API Key Management
-- [ADR-0010](../decisions/0010-cloud-agnostic-design.md) - Cloud-Agnostic Design
-- [ADR-0012](../decisions/0012-dynamic-ip-firewall.md) - Dynamic IP Firewall
-- [Beads Issues](../.beads/) - cc-xzi, cc-s7h, cc-l5v, cc-3.1, cc-atw
+- [ADR-0022](../decisions/0022-worktree-based-agent-workspaces.md) — Worktree-Based Agent Workspaces
+- [ADR-0023](../decisions/0023-repo-scoped-tmux-sessions.md) — Repo-Scoped tmux Sessions
+- [ADR-0024](../decisions/0024-clone-on-demand-remote-setup.md) — Clone-on-Demand Remote Setup
+- [ADR-0025](../decisions/0025-terminal-native-split-workflow.md) — Terminal-Native Split Workflow
+- [ADR-0026](../decisions/0026-vm-git-authentication.md) — VM Git Authentication
+- [ADR-0027](../decisions/0027-agent-startup-hooks.md) — Agent Startup Hooks
+- [ADR-0009](../decisions/0009-api-key-management.md) — API Key Management
+- [ADR-0010](../decisions/0010-cloud-agnostic-design.md) — Cloud-Agnostic Design
+- [ADR-0012](../decisions/0012-dynamic-ip-firewall.md) — Dynamic IP Firewall
+- [SETUP-FLOW.md](SETUP-FLOW.md) — First-run setup wizard
+- [TUI-REQUIREMENTS.md](TUI-REQUIREMENTS.md) — Full TUI specification
+- [Beads Issues](../.beads/) — cc-m9b (Phase 1), cc-w5l (Phase 2), cc-md9 (Phase 3), cc-af8 (Phase 4)
