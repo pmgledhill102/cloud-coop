@@ -23,6 +23,17 @@ func ConnectInteractive(opts ConnectOptions) error {
 		port = 22
 	}
 
+	// Ensure host key is available (uses cloudcoop's managed known_hosts)
+	if err := EnsureHostKey(opts.Host, port); err != nil {
+		return fmt.Errorf("fetch host key: %w", err)
+	}
+
+	// Get path to cloudcoop's known_hosts file for native ssh
+	knownHostsPath, err := CloudcoopKnownHostsPath()
+	if err != nil {
+		return fmt.Errorf("get known_hosts path: %w", err)
+	}
+
 	// Build the tmux attach command
 	// First select the window, then attach to the session
 	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", opts.WindowIndex)
@@ -30,7 +41,9 @@ func ConnectInteractive(opts ConnectOptions) error {
 	// Build SSH command
 	// -t forces pseudo-terminal allocation (required for tmux)
 	// -p specifies port
+	// -o UserKnownHostsFile uses cloudcoop's managed known_hosts
 	args := []string{
+		"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
 		"-t", // Force PTY allocation
 		"-p", fmt.Sprintf("%d", port),
 		fmt.Sprintf("%s@%s", opts.User, opts.Host),
@@ -43,7 +56,7 @@ func ConnectInteractive(opts ConnectOptions) error {
 	cmd.Stderr = os.Stderr
 
 	// Run the command - this blocks until SSH session ends
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		// Check if it's just an exit status from the remote command
 		if exitErr, ok := err.(*exec.ExitError); ok {

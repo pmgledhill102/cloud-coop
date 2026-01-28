@@ -13,10 +13,10 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-// cloudcoopKnownHostsPath returns the path to cloudcoop's managed known_hosts file.
+// CloudcoopKnownHostsPath returns the path to cloudcoop's managed known_hosts file.
 // This is separate from ~/.ssh/known_hosts to avoid polluting the user's file
 // with ephemeral VM host keys.
-func cloudcoopKnownHostsPath() (string, error) {
+func CloudcoopKnownHostsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("get home directory: %w", err)
@@ -45,7 +45,7 @@ func formatKnownHostsEntry(host string, port int) string {
 // If the key doesn't exist or has changed, it fetches and stores the new key.
 // This provides a seamless experience for ephemeral VMs.
 func EnsureHostKey(host string, port int) error {
-	khPath, err := cloudcoopKnownHostsPath()
+	khPath, err := CloudcoopKnownHostsPath()
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func removeHostEntry(khPath, host string, port int) error {
 // ClearHostKey removes a host's key from cloudcoop's known_hosts file.
 // Useful when a VM is deleted.
 func ClearHostKey(host string, port int) error {
-	khPath, err := cloudcoopKnownHostsPath()
+	khPath, err := CloudcoopKnownHostsPath()
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func ClearHostKey(host string, port int) error {
 // managed known_hosts file. This keeps VM host keys separate from the user's
 // main known_hosts file.
 func CreateHostKeyCallback(host string, port int) (ssh.HostKeyCallback, error) {
-	khPath, err := cloudcoopKnownHostsPath()
+	khPath, err := CloudcoopKnownHostsPath()
 	if err != nil {
 		return nil, err
 	}
