@@ -25,6 +25,12 @@ func main() {
 
 	// Execute the root command
 	if err := cli.Execute(); err != nil {
+		// Usage errors (invalid commands, flags) are already printed by Cobra
+		if apperrors.IsUsageError(err) {
+			os.Exit(apperrors.ExitUsage)
+		}
+
+		// Log other errors with structured logging
 		log.Error("command failed", log.Err(err))
 		os.Exit(apperrors.ExitCodeFor(err))
 	}

@@ -4,6 +4,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -22,9 +23,10 @@ that host AI coding agents in isolated tmux sessions.
 
 Run without arguments to launch the interactive TUI.
 Use subcommands for scriptable automation.`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	RunE:          runTUI,
+	SilenceUsage:               true,
+	SilenceErrors:              false, // Let Cobra print errors with suggestions
+	SuggestionsMinimumDistance: 4,     // Suggest commands within 4 edit distance
+	RunE:                       runTUI,
 }
 
 func init() {
@@ -48,7 +50,21 @@ func init() {
 
 // Execute runs the root command.
 func Execute() error {
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err == nil {
+		return nil
+	}
+
+	// Wrap CLI usage errors so main.go doesn't log them
+	// (Cobra already printed the error with suggestions via SilenceErrors: false)
+	errStr := err.Error()
+	if strings.Contains(errStr, "unknown command") ||
+		strings.Contains(errStr, "unknown flag") ||
+		strings.Contains(errStr, "unknown shorthand flag") {
+		return apperrors.NewUsageError(errStr, nil, err)
+	}
+
+	return err
 }
 
 // runTUI launches the interactive terminal UI.
