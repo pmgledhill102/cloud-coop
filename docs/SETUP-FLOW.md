@@ -43,6 +43,12 @@ The TUI guides users through setup interactively, creating resources as needed. 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+> **Note:** The new multi-agent workflow (ADRs 0022-0027) changes how agents are launched
+> after provisioning. Instead of starting agents during setup, users run
+> `cloudcoop agents sync` from their local repo to create worktree-based workspaces.
+> Agent authentication (Stage 6) is deferred to Phase 4 — see
+> [POST-MVP-IMPLEMENTATION.md](POST-MVP-IMPLEMENTATION.md) for the current roadmap.
+
 ## Detailed Flow
 
 ### Stage 1: Prerequisites

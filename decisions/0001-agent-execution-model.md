@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted (workspace layout superseded by [ADR-0022](0022-worktree-based-agent-workspaces.md),
+session naming superseded by [ADR-0023](0023-repo-scoped-tmux-sessions.md))
 
 ## Context
 
@@ -90,5 +91,6 @@ Run each agent on its own small VM instance.
 
 ### Neutral
 
-- Workspaces separated by directory (`/workspaces/agent-1`, `/workspaces/agent-2`, etc.)
+- ~~Workspaces separated by directory (`/workspaces/agent-1`, `/workspaces/agent-2`, etc.)~~
+  Superseded: workspaces now use git worktrees at `/workspaces/<slug>/<branch>` per [ADR-0022](0022-worktree-based-agent-workspaces.md)
 - All agents use same installed toolchain versions

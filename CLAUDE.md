@@ -20,18 +20,20 @@ Code, Aider, Gemini CLI, etc.) in tmux sessions.
 ## Architecture Summary
 
 ```text
-Workstation (cloudcoop TUI)
+Workstation (cloudcoop TUI/CLI)
     |
     | SSH + Cloud SDK
     v
 Cloud VM (GCP/AWS/Azure)
     |
-    +-- tmux: agents session
-         |
-         +-- agent-1 (claude)
-         +-- agent-2 (claude)
-         +-- agent-3 (aider)
-         ...
+    +-- tmux: acme-backend       (per-repo session)
+    |    +-- main (claude)
+    |    +-- feature-auth (claude)
+    |    +-- fix-bug-42 (aider)
+    |
+    +-- tmux: acme-frontend      (per-repo session)
+         +-- main (claude)
+         +-- redesign (gemini)
 ```
 
 **Technology stack:**
@@ -94,9 +96,11 @@ make help         # Show all available targets
 
 ### Agent Sessions
 
-- Agents run in tmux windows within an "agents" session
-- Support multiple agent types with different CLI flags
-- Session modes: Fresh, Continue (resume most recent), Pick (select from available)
+- Agents run in tmux windows within per-repo sessions (ADR-0023)
+- Each repo gets its own tmux session named by slug (e.g., `acme-backend`)
+- `cloudcoop agents sync` sets up worktree-based workspaces on the VM (ADR-0024)
+- `cloudcoop agents attach --next` connects via grouped tmux sessions (ADR-0025)
+- Support multiple agent types with configurable startup hooks (ADR-0027)
 
 ### Code Style
 
@@ -112,6 +116,7 @@ make help         # Show all available targets
 - [DEVELOPMENT-ENVIRONMENT.md](docs/DEVELOPMENT-ENVIRONMENT.md) - Contributing guide
 - [SECURITY-MODEL.md](docs/SECURITY-MODEL.md) - Trust boundaries and privilege model
 - [SECURITY.md](docs/SECURITY.md) - Operational security and incident response
+- [MULTI-AGENT-WORKFLOW.md](docs/MULTI-AGENT-WORKFLOW.md) - Multi-repo agent workflow
 
 ## Issue Tracking
 
