@@ -36,7 +36,8 @@ authenticated access to the git remote.
 ## Decision
 
 Use GitHub deploy keys (read-write, per-repo) stored locally in `~/.ssh/` and copied to the
-VM automatically by `cloudcoop agents sync`.
+VM automatically by `cloudcoop agents sync`. Deploy key registration on GitHub is automated
+via the `gh` CLI, with a manual fallback for users without `gh`.
 
 **Key storage:**
 
@@ -49,19 +50,53 @@ Deploy keys are generated and stored on the user's local machine at
 2. cloudcoop checks for `~/.ssh/cloudcoop-deploy-<slug>`
 3. If missing, generates the key pair:
    `ssh-keygen -t ed25519 -f ~/.ssh/cloudcoop-deploy-<slug> -N ""`
-4. Displays the public key and prompts the user to add it as a deploy key on GitHub
-   with write access enabled
+4. Registers the public key as a deploy key on GitHub via `gh api`:
+
+   ```bash
+   gh api repos/{owner}/{repo}/keys \
+     -f title="cloudcoop-deploy-<slug>" \
+     -f key="$(cat ~/.ssh/cloudcoop-deploy-<slug>.pub)" \
+     -F read_only=false
+   ```
+
 5. Copies the private key to the VM via SCP
 6. Writes the SSH config entry on the VM
 7. Runs pre-flight check (`git ls-remote`) to verify access
 8. Proceeds with clone
+
+The entire flow — key generation, GitHub registration, VM copy, and clone — happens in a
+single `cloudcoop agents sync` invocation with no manual steps.
+
+**Manual fallback:**
+
+If `gh` is not installed or not authenticated, cloudcoop falls back to displaying the public
+key and prompting the user to add it manually:
+
+```text
+gh CLI not available — manual setup required.
+
+Add this public key as a deploy key at:
+  https://github.com/acme/acme-backend/settings/keys
+
+Public key:
+  ssh-ed25519 AAAA... cloudcoop-deploy-acme-backend
+
+Enable "Allow write access", then run:
+  cloudcoop agents sync
+```
+
+**gh authentication requirements:**
+
+The user's `gh` token must have the `admin:public_key` scope (classic tokens) or
+repository administration permission (fine-grained tokens) to create deploy keys. Most
+developers who have run `gh auth login` already have sufficient permissions.
 
 **Subsequent syncs and new VMs:**
 
 1. `cloudcoop agents sync` finds existing local key at `~/.ssh/cloudcoop-deploy-<slug>`
 2. Copies private key to VM via SCP (idempotent — overwrites if already present)
 3. Ensures SSH config entry exists on VM
-4. Pre-flight check passes — no GitHub interaction needed
+4. Pre-flight check passes — no GitHub or `gh` interaction needed
 
 **SSH config on VM (`~/.ssh/config`):**
 
@@ -108,22 +143,6 @@ To fix this:
      https://github.com/acme/acme-backend/settings/keys
   2. Ensure "Allow write access" is enabled
   3. Run sync again: cloudcoop agents sync
-```
-
-If no local key exists at all:
-
-```text
-No deploy key found for acme-backend.
-Generating key pair at ~/.ssh/cloudcoop-deploy-acme-backend...
-
-Add this public key as a deploy key at:
-  https://github.com/acme/acme-backend/settings/keys
-
-Public key:
-  ssh-ed25519 AAAA... cloudcoop-deploy-acme-backend
-
-Enable "Allow write access", then run:
-  cloudcoop agents sync
 ```
 
 ## Options Considered
@@ -183,32 +202,36 @@ Per-repository SSH keys generated on the VM and added as deploy keys on GitHub.
 - Manual GitHub interaction on every VM replacement
 - For N repos on spot instances, this friction compounds quickly
 
-### Option 4: Local Deploy Keys Copied to VM (Chosen)
+### Option 4: Local Deploy Keys with Automated GitHub Registration (Chosen)
 
 Per-repository SSH keys stored locally in `~/.ssh/` and copied to VMs by
-`cloudcoop agents sync`.
+`cloudcoop agents sync`. Deploy key registration on GitHub automated via `gh api`.
 
 **Pros:**
 
+- **Zero manual steps** — key generation, GitHub registration, VM copy, and clone all
+  happen in one `cloudcoop agents sync` invocation
 - **Scoped to a single repository** — key only grants access to one repo
-- **VM-ephemeral** — new VMs get keys automatically, no GitHub interaction needed
+- **VM-ephemeral** — new VMs get keys automatically, no interaction needed
 - No expiration — deploy keys remain valid until removed
 - Configurable read-only or read-write access per key
 - Keys live in `~/.ssh/` — familiar location, covered by existing backup and sync workflows
 - Compromise of one key doesn't affect other repositories
 - Easy to audit — visible in GitHub repository settings
 - Easy to revoke — remove the key from repository settings
-- `cloudcoop agents sync` automates the copy — zero manual steps after first-time setup
 - Multi-machine users already have strategies for syncing `~/.ssh/` (dotfiles, 1Password
   SSH agent, manual copy)
+- Graceful degradation — falls back to manual instructions if `gh` is unavailable
 
 **Cons:**
 
+- Depends on `gh` CLI for fully automated flow (reasonable assumption for target audience;
+  manual fallback available)
+- `gh` token must have `admin:public_key` scope or repository administration permission
 - Private key transits the network (encrypted via SSH/SCP, but leaves local machine)
 - Local machine holds deploy keys for all configured repos (incremental risk is small —
   local machine already holds personal SSH keys and cloud credentials with broader access)
 - One key per repository — setup scales linearly with repo count
-- Requires repository admin access to add deploy keys
 - Not available on all git hosting platforms with identical semantics
 
 ### Option 5: GitHub App Installation Token
@@ -236,29 +259,33 @@ generate installation tokens for the VM.
 
 ### Positive
 
+- Fully automated first-time setup — `cloudcoop agents sync` handles everything when `gh`
+  is available
 - Least-privilege access — each deploy key only grants access to one repository
 - No expiration — set up once per repo, works indefinitely
 - VM replacement is seamless — `cloudcoop agents sync` copies existing keys automatically
-- Spot preemption recovery requires no manual GitHub interaction
+- Spot preemption recovery requires no interaction at all
 - Keys stored in `~/.ssh/` — users' existing backup, sync, and permission workflows apply
 - Clear security boundary — VM can only access explicitly configured repos
 - Easy to audit and revoke via GitHub repository settings
 
 ### Negative
 
+- `gh` CLI is a soft dependency for the automated path (manual fallback exists)
 - Private keys are copied to VMs (mitigated: transfer is over SSH, and VM compromise
   exposes the key regardless of where it was generated)
 - Local machine holds all deploy keys (mitigated: incremental risk is small given what
   else lives on the local machine)
-- One-time setup per repo requires GitHub admin access to add deploy key
 - Scales linearly — N repos require N deploy key pairs
-- GitLab and Bitbucket have different deploy key semantics
+- GitLab and Bitbucket have different deploy key APIs (GitLab supports a similar REST
+  endpoint; Bitbucket uses a different model)
 
 ### Neutral
 
 - Security companion to [ADR-0024](0024-clone-on-demand-remote-setup.md) — sync checks
   auth before cloning and automates key distribution
-- Future improvement: `cloudcoop` could automate deploy key creation via GitHub API
-  (with user's permission), eliminating the manual GitHub step entirely
+- `gh` is already commonly installed by developers using GitHub — cloudcoop could check
+  for it during setup and suggest installation if missing
 - Users with existing VM git access (e.g., pre-configured SSH keys) can skip this setup
 - The pre-flight check in `cloudcoop agents sync` provides clear guidance when auth fails
+- Future: could support `glab` for GitLab automation using the same pattern
