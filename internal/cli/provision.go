@@ -12,4 +12,5 @@ var provisionCmd = &cobra.Command{
 
 func init() {
 	provisionCmd.AddCommand(provisionStatusCmd)
+	provisionCmd.AddCommand(provisionLogsCmd)
 }
