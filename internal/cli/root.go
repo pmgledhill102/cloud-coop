@@ -43,6 +43,7 @@ func init() {
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(sshCmd)
 	rootCmd.AddCommand(agentsCmd)
+	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(provisionCmd)
 	rootCmd.AddCommand(terminalCmd)
