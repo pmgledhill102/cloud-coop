@@ -219,6 +219,8 @@ systemctl restart docker
 # ============================================
 report_progress "Installing Node.js packages"
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+# Configure npm to use system CA certificates (Homebrew node needs this)
+npm config set cafile /etc/ssl/certs/ca-certificates.crt
 npm install -g \
     @anthropic-ai/claude-code \
     yarn \
