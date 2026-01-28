@@ -19,6 +19,12 @@ authenticated access to the git remote.
 - Credentials on the VM are exposed to all agents (shared filesystem per
   [ADR-0001](0001-agent-execution-model.md))
 
+**Operational constraints:**
+
+- VMs are ephemeral — spot preemption, region changes, and resizing can destroy a VM at any time
+- Re-creating git credentials on every new VM is a significant friction point
+- Users may work from multiple machines (laptop, desktop)
+
 **Minimum permissions agents need for autonomous work:**
 
 - Read/write repository contents (push commits, create branches)
@@ -29,43 +35,61 @@ authenticated access to the git remote.
 
 ## Decision
 
-Use GitHub deploy keys (read-write, per-repo) as the recommended authentication method for
-VM git access.
+Use GitHub deploy keys (read-write, per-repo) stored locally in `~/.ssh/` and copied to the
+VM automatically by `cloudcoop agents sync`.
 
-**Setup flow:**
+**Key storage:**
 
-1. User generates an SSH key pair on the VM (or cloudcoop generates it during provisioning)
-2. User adds the public key as a deploy key on each repository that agents will access
-3. Configure deploy key with write access enabled
-4. VM's SSH config maps each repo's host to the correct key
+Deploy keys are generated and stored on the user's local machine at
+`~/.ssh/cloudcoop-deploy-<repo-slug>`. This is the canonical location — VMs receive copies.
+
+**Setup flow (first time per repo):**
+
+1. User runs `cloudcoop agents sync` from a repo directory
+2. cloudcoop checks for `~/.ssh/cloudcoop-deploy-<slug>`
+3. If missing, generates the key pair:
+   `ssh-keygen -t ed25519 -f ~/.ssh/cloudcoop-deploy-<slug> -N ""`
+4. Displays the public key and prompts the user to add it as a deploy key on GitHub
+   with write access enabled
+5. Copies the private key to the VM via SCP
+6. Writes the SSH config entry on the VM
+7. Runs pre-flight check (`git ls-remote`) to verify access
+8. Proceeds with clone
+
+**Subsequent syncs and new VMs:**
+
+1. `cloudcoop agents sync` finds existing local key at `~/.ssh/cloudcoop-deploy-<slug>`
+2. Copies private key to VM via SCP (idempotent — overwrites if already present)
+3. Ensures SSH config entry exists on VM
+4. Pre-flight check passes — no GitHub interaction needed
 
 **SSH config on VM (`~/.ssh/config`):**
 
 ```text
 # Default GitHub access
 Host github.com
-  IdentityFile ~/.ssh/cloudcoop_deploy_key
+  IdentityFile ~/.ssh/cloudcoop-deploy-acme-backend
   IdentitiesOnly yes
 ```
 
 For multiple repos needing different keys:
 
 ```text
-Host github-backend
+Host github-acme-backend
   HostName github.com
-  IdentityFile ~/.ssh/deploy_acme_backend
+  IdentityFile ~/.ssh/cloudcoop-deploy-acme-backend
   IdentitiesOnly yes
 
-Host github-frontend
+Host github-acme-frontend
   HostName github.com
-  IdentityFile ~/.ssh/deploy_acme_frontend
+  IdentityFile ~/.ssh/cloudcoop-deploy-acme-frontend
   IdentitiesOnly yes
 ```
 
 With corresponding git remote URLs using the host alias:
 
 ```text
-git remote set-url origin git@github-backend:acme/acme-backend.git
+git remote set-url origin git@github-acme-backend:acme/acme-backend.git
 ```
 
 **Pre-flight check:**
@@ -76,13 +100,30 @@ clone. If authentication fails, it displays:
 ```text
 Error: VM cannot access git@github.com:acme/acme-backend.git
 
+Local deploy key exists at ~/.ssh/cloudcoop-deploy-acme-backend
+but the VM was denied access.
+
 To fix this:
-  1. SSH to your VM: cloudcoop ssh
-  2. Generate a key: ssh-keygen -t ed25519 -f ~/.ssh/cloudcoop_deploy_key -N ""
-  3. Copy the public key: cat ~/.ssh/cloudcoop_deploy_key.pub
-  4. Add it as a deploy key at: https://github.com/acme/acme-backend/settings/keys
-  5. Enable "Allow write access"
-  6. Run sync again: cloudcoop agents sync
+  1. Verify the deploy key is added at:
+     https://github.com/acme/acme-backend/settings/keys
+  2. Ensure "Allow write access" is enabled
+  3. Run sync again: cloudcoop agents sync
+```
+
+If no local key exists at all:
+
+```text
+No deploy key found for acme-backend.
+Generating key pair at ~/.ssh/cloudcoop-deploy-acme-backend...
+
+Add this public key as a deploy key at:
+  https://github.com/acme/acme-backend/settings/keys
+
+Public key:
+  ssh-ed25519 AAAA... cloudcoop-deploy-acme-backend
+
+Enable "Allow write access", then run:
+  cloudcoop agents sync
 ```
 
 ## Options Considered
@@ -124,29 +165,53 @@ Use a GitHub fine-grained PAT scoped to specific repositories.
 - Token rotation requires updating VM configuration
 - HTTPS credential management adds complexity
 
-### Option 3: GitHub Deploy Keys (Chosen)
+### Option 3: Deploy Keys Generated on VM
 
-Per-repository SSH keys added as deploy keys on GitHub.
+Per-repository SSH keys generated on the VM and added as deploy keys on GitHub.
+
+**Pros:**
+
+- Private key never leaves the VM
+- Scoped to a single repository
+- No expiration
+
+**Cons:**
+
+- **VM replacement requires full re-setup** — new VM means regenerating keys and re-adding
+  to GitHub for every repo
+- Spot preemption, region changes, or resizing destroy the keys
+- Manual GitHub interaction on every VM replacement
+- For N repos on spot instances, this friction compounds quickly
+
+### Option 4: Local Deploy Keys Copied to VM (Chosen)
+
+Per-repository SSH keys stored locally in `~/.ssh/` and copied to VMs by
+`cloudcoop agents sync`.
 
 **Pros:**
 
 - **Scoped to a single repository** — key only grants access to one repo
+- **VM-ephemeral** — new VMs get keys automatically, no GitHub interaction needed
 - No expiration — deploy keys remain valid until removed
 - Configurable read-only or read-write access per key
-- SSH-based — standard git authentication, no credential helpers needed
+- Keys live in `~/.ssh/` — familiar location, covered by existing backup and sync workflows
 - Compromise of one key doesn't affect other repositories
-- Easy to audit — visible in repository settings
+- Easy to audit — visible in GitHub repository settings
 - Easy to revoke — remove the key from repository settings
+- `cloudcoop agents sync` automates the copy — zero manual steps after first-time setup
+- Multi-machine users already have strategies for syncing `~/.ssh/` (dotfiles, 1Password
+  SSH agent, manual copy)
 
 **Cons:**
 
+- Private key transits the network (encrypted via SSH/SCP, but leaves local machine)
+- Local machine holds deploy keys for all configured repos (incremental risk is small —
+  local machine already holds personal SSH keys and cloud credentials with broader access)
 - One key per repository — setup scales linearly with repo count
 - Requires repository admin access to add deploy keys
-- SSH config complexity for multiple repos with different keys
-- Must be set up manually (GitHub API could automate but adds complexity)
 - Not available on all git hosting platforms with identical semantics
 
-### Option 4: GitHub App Installation Token
+### Option 5: GitHub App Installation Token
 
 Create a GitHub App with minimal permissions, install it on target repos,
 generate installation tokens for the VM.
@@ -172,24 +237,28 @@ generate installation tokens for the VM.
 ### Positive
 
 - Least-privilege access — each deploy key only grants access to one repository
-- No expiration — set up once, works indefinitely
+- No expiration — set up once per repo, works indefinitely
+- VM replacement is seamless — `cloudcoop agents sync` copies existing keys automatically
+- Spot preemption recovery requires no manual GitHub interaction
+- Keys stored in `~/.ssh/` — users' existing backup, sync, and permission workflows apply
 - Clear security boundary — VM can only access explicitly configured repos
 - Easy to audit and revoke via GitHub repository settings
-- Standard SSH-based git authentication — no special tooling needed
 
 ### Negative
 
-- Manual setup per repository (generate key, add to GitHub)
-- Scales linearly — N repos require N deploy keys
-- Repository admin access required to add deploy keys
-- SSH config management for multi-repo setups
+- Private keys are copied to VMs (mitigated: transfer is over SSH, and VM compromise
+  exposes the key regardless of where it was generated)
+- Local machine holds all deploy keys (mitigated: incremental risk is small given what
+  else lives on the local machine)
+- One-time setup per repo requires GitHub admin access to add deploy key
+- Scales linearly — N repos require N deploy key pairs
 - GitLab and Bitbucket have different deploy key semantics
 
 ### Neutral
 
 - Security companion to [ADR-0024](0024-clone-on-demand-remote-setup.md) — sync checks
-  auth before cloning
+  auth before cloning and automates key distribution
 - Future improvement: `cloudcoop` could automate deploy key creation via GitHub API
-  (with user's permission)
+  (with user's permission), eliminating the manual GitHub step entirely
 - Users with existing VM git access (e.g., pre-configured SSH keys) can skip this setup
 - The pre-flight check in `cloudcoop agents sync` provides clear guidance when auth fails

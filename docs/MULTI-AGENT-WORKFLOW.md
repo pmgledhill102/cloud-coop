@@ -69,7 +69,8 @@ to start agents on the VM, one per worktree.
 ### Prerequisites
 
 - A cloudcoop VM is running (`cloudcoop vm start`)
-- VM has git access to the repository (deploy key configured — see
+- Deploy key added to the repository on GitHub (cloudcoop generates the key locally on
+  first sync and prompts you to add it — see
   [ADR-0026](../decisions/0026-vm-git-authentication.md))
 - Local repo has worktrees set up
 
@@ -369,5 +370,8 @@ cd /workspaces/<slug>/<worktree> \
 
 ### VM Git Access
 
-Repositories are cloned on the VM using deploy keys scoped to each repository. See
-[ADR-0026](../decisions/0026-vm-git-authentication.md) for setup instructions.
+Repositories are cloned on the VM using per-repo deploy keys. Keys are generated and stored
+locally at `~/.ssh/cloudcoop-deploy-<repo-slug>` and copied to the VM automatically by
+`cloudcoop agents sync`. First-time setup per repo requires adding the public key to GitHub;
+subsequent syncs and new VMs need no manual steps. See
+[ADR-0026](../decisions/0026-vm-git-authentication.md) for details.
