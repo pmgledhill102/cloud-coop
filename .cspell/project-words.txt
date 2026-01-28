@@ -47,6 +47,7 @@ covermode
 coverprofile
 darwin
 dependabot
+deploykey
 direnv
 dockerfile
 dockerfiles
@@ -85,6 +86,7 @@ gsutil
 hadolint
 hamina
 highcpu
+hostkey
 hotspot
 imgs
 incpatch
