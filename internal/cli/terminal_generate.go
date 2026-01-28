@@ -168,7 +168,7 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 
 	// Write output
 	if terminalOutput != "" {
-		if err := os.WriteFile(terminalOutput, []byte(output), 0644); err != nil {
+		if err := os.WriteFile(terminalOutput, []byte(output), 0600); err != nil {
 			return fmt.Errorf("write output file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Config written to: %s\n", terminalOutput)
