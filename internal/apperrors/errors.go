@@ -203,3 +203,31 @@ func New(text string) error {
 func Join(errs ...error) error {
 	return errors.Join(errs...)
 }
+
+// UsageError represents a CLI usage error (invalid flags, unknown commands, etc.).
+// These errors are already printed by Cobra, so main.go should not log them again.
+type UsageError struct {
+	// Err is the underlying error from Cobra.
+	Err error
+}
+
+// Error implements the error interface.
+func (e *UsageError) Error() string {
+	return e.Err.Error()
+}
+
+// Unwrap returns the underlying error for errors.Is and errors.As.
+func (e *UsageError) Unwrap() error {
+	return e.Err
+}
+
+// NewUsageError creates a new UsageError.
+func NewUsageError(message string, suggestions []string, err error) *UsageError {
+	return &UsageError{Err: err}
+}
+
+// IsUsageError checks if err is a UsageError.
+func IsUsageError(err error) bool {
+	var usageErr *UsageError
+	return errors.As(err, &usageErr)
+}
