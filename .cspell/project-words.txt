@@ -47,11 +47,13 @@ covermode
 coverprofile
 darwin
 dependabot
+direnv
 dockerfile
 dockerfiles
 dorny
 dpsv
 editorconfig
+envrc
 envvars
 errcheck
 errorf
@@ -159,6 +161,8 @@ unmarshals
 VMIP
 vulns
 waitgroup
+worktree
+worktrees
 wrapf
 xlarge
 yamllint

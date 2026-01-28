@@ -26,6 +26,13 @@ This directory contains Architecture Decision Records (ADRs) for cloudcoop.
 | [ADR-0018](0018-tui-state-machine.md) | TUI State Machine | Accepted | 2026-01-25 |
 | [ADR-0019](0019-ssh-testing-infrastructure.md) | SSH Testing Infrastructure | Accepted | 2026-01-25 |
 | [ADR-0020](0020-vm-service-account-requirement.md) | VM Service Account Requirement | Accepted | 2026-01-26 |
+| [ADR-0021](0021-provisioning-script-location.md) | Provisioning Script Location | Accepted | 2026-01-26 |
+| [ADR-0022](0022-worktree-based-agent-workspaces.md) | Worktree-Based Agent Workspaces | Proposed | 2026-01-28 |
+| [ADR-0023](0023-repo-scoped-tmux-sessions.md) | Repo-Scoped tmux Sessions | Proposed | 2026-01-28 |
+| [ADR-0024](0024-clone-on-demand-remote-setup.md) | Clone-on-Demand Remote Setup | Proposed | 2026-01-28 |
+| [ADR-0025](0025-terminal-native-split-workflow.md) | Terminal-Native Split Workflow | Proposed | 2026-01-28 |
+| [ADR-0026](0026-vm-git-authentication.md) | VM Git Authentication | Proposed | 2026-01-28 |
+| [ADR-0027](0027-agent-startup-hooks.md) | Agent Startup Hooks | Proposed | 2026-01-28 |
 
 ## About ADRs
 
