@@ -21,4 +21,5 @@ func init() {
 	agentsCmd.AddCommand(agentsListCmd)
 	agentsCmd.AddCommand(agentsAddCmd)
 	agentsCmd.AddCommand(agentsKillCmd)
+	agentsCmd.AddCommand(agentsAttachCmd)
 }

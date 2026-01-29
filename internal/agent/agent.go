@@ -2,7 +2,9 @@
 package agent
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
@@ -269,4 +271,118 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// ErrAllWindowsAttached indicates every window in the session already has an attached client.
+var ErrAllWindowsAttached = errors.New("all windows have attached clients")
+
+// ClientInfo describes a tmux client attached to a session.
+type ClientInfo struct {
+	TTY         string
+	Session     string
+	WindowIndex int
+	WindowName  string
+}
+
+// ListClients queries the remote host for clients attached to a tmux session.
+func ListClients(runner ssh.Runner, sessionName string) ([]ClientInfo, error) {
+	cmd := "tmux list-clients -t " + shellEscape(sessionName) +
+		" -F '#{client_tty}|#{client_session}|#{window_index}|#{window_name}'"
+	output, err := runner.Run(cmd)
+	if err != nil {
+		errStr := strings.ToLower(output + err.Error())
+		if strings.Contains(errStr, "no clients") ||
+			strings.Contains(errStr, "session not found") ||
+			strings.Contains(errStr, "can't find session") ||
+			strings.Contains(errStr, "no server running") {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return parseTmuxClients(output), nil
+}
+
+// parseTmuxClients parses the output of tmux list-clients.
+// Each line is expected to be in format: tty|session|windowIndex|windowName
+func parseTmuxClients(output string) []ClientInfo {
+	var clients []ClientInfo
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 4)
+		if len(parts) < 4 {
+			continue
+		}
+		var idx int
+		if _, err := parseIndex(parts[2], &idx); err != nil {
+			continue
+		}
+		clients = append(clients, ClientInfo{
+			TTY:         parts[0],
+			Session:     parts[1],
+			WindowIndex: idx,
+			WindowName:  parts[3],
+		})
+	}
+	return clients
+}
+
+// FindNextWindow returns the first session window that has no attached client.
+func FindNextWindow(sessions []Session, clients []ClientInfo) (Session, error) {
+	attached := make(map[int]bool)
+	for _, c := range clients {
+		attached[c.WindowIndex] = true
+	}
+	for _, s := range sessions {
+		if !attached[s.Index] {
+			return s, nil
+		}
+	}
+	return Session{}, ErrAllWindowsAttached
+}
+
+// CreateGroupedSession creates a new tmux session grouped with the base session,
+// and selects the given window index. Returns the grouped session name.
+func CreateGroupedSession(runner ssh.Runner, slug string, windowIndex int) (string, error) {
+	suffix, err := randomHex(4)
+	if err != nil {
+		return "", fmt.Errorf("generate session suffix: %w", err)
+	}
+	grouped := slug + "-" + suffix
+
+	// Create grouped session
+	cmd := "tmux new-session -d -t " + shellEscape(slug) + " -s " + shellEscape(grouped)
+	_, err = runner.Run(cmd)
+	if err != nil {
+		return "", fmt.Errorf("create grouped session: %w", err)
+	}
+
+	// Select the target window
+	selectCmd := "tmux select-window -t " + shellEscape(grouped) + ":" + itoa(windowIndex)
+	_, err = runner.Run(selectCmd)
+	if err != nil {
+		return "", fmt.Errorf("select window: %w", err)
+	}
+
+	return grouped, nil
+}
+
+// randomHex returns n random hex characters.
+func randomHex(n int) (string, error) {
+	b := make([]byte, (n+1)/2)
+	_, err := cryptoRandRead(b)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b)[:n], nil
+}
+
+// cryptoRandRead is a variable for testability.
+var cryptoRandRead = cryptoRandReadImpl
+
+func cryptoRandReadImpl(b []byte) (int, error) {
+	return rand.Read(b)
 }
