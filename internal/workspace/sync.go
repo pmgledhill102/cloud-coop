@@ -10,8 +10,9 @@ import (
 
 // SyncOptions configures the sync operation.
 type SyncOptions struct {
-	AgentCommand string // command for tmux windows (empty → "bash")
-	RepoOwner    string // from deploykey.ParseRepoRef
+	AgentCommand string   // command for tmux windows (empty → "bash")
+	PreCommands  []string // pre-commands to run before agent
+	RepoOwner    string   // from deploykey.ParseRepoRef
 	RepoName     string
 }
 
@@ -159,7 +160,7 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 		}
 
 		wtPath := wsDir + "/" + name
-		command := "cd " + shellEscape(wtPath) + " && " + agentCmd
+		command := BuildCommand(wtPath, opts.PreCommands, agentCmd)
 
 		_, err = agent.CreateSession(runner, slug, agent.CreateSessionOptions{
 			Name:    name,
@@ -179,6 +180,15 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 	}
 
 	return result, nil
+}
+
+// BuildCommand constructs the full shell command chain for a tmux window.
+// It joins cd, pre-commands, and the agent command with " && ".
+func BuildCommand(worktreePath string, preCommands []string, agentCommand string) string {
+	parts := []string{"cd " + shellEscape(worktreePath)}
+	parts = append(parts, preCommands...)
+	parts = append(parts, agentCommand)
+	return strings.Join(parts, " && ")
 }
 
 // worktreeRef returns the branch name if set, else the commit SHA.

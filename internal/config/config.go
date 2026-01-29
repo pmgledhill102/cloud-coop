@@ -31,7 +31,39 @@ type TUIConfig struct {
 
 // AgentsConfig contains settings for agent sessions.
 type AgentsConfig struct {
-	DefaultCommand string `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
+	DefaultCommand string                `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
+	PreCommands    []string              `toml:"pre_commands"`    // Commands to run before agent in every session
+	Repos          map[string]RepoConfig `toml:"repos"`           // Per-repo overrides keyed by slug
+}
+
+// RepoConfig holds per-repo agent overrides.
+type RepoConfig struct {
+	Command     string   `toml:"command"`      // Agent command override for this repo
+	PreCommands []string `toml:"pre_commands"` // Pre-commands specific to this repo
+}
+
+// ResolveCommand returns the agent command for a given repo slug.
+// Priority: repo-specific → default → empty string.
+func (a *AgentsConfig) ResolveCommand(slug string) string {
+	if a.Repos != nil {
+		if rc, ok := a.Repos[slug]; ok && rc.Command != "" {
+			return rc.Command
+		}
+	}
+	return a.DefaultCommand
+}
+
+// ResolvePreCommands returns the concatenated pre-commands for a given slug.
+// Global pre-commands come first, then repo-specific.
+func (a *AgentsConfig) ResolvePreCommands(slug string) []string {
+	var cmds []string
+	cmds = append(cmds, a.PreCommands...)
+	if a.Repos != nil {
+		if rc, ok := a.Repos[slug]; ok {
+			cmds = append(cmds, rc.PreCommands...)
+		}
+	}
+	return cmds
 }
 
 // ProvisioningConfig contains settings for VM provisioning.

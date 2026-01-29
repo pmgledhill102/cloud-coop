@@ -136,15 +136,19 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deploy key VM setup: %w", err)
 	}
 
-	// 4. Resolve agent command.
+	// 4. Resolve agent command: flag > repo-specific > default > "" (sync defaults to "bash").
 	agentCommand := syncCommand
-	if agentCommand == "" && cfg.Agents.DefaultCommand != "" {
-		agentCommand = cfg.Agents.DefaultCommand
+	if agentCommand == "" {
+		agentCommand = cfg.Agents.ResolveCommand(info.Slug)
 	}
 
-	// 5. Sync.
+	// 5. Resolve pre-commands: global + repo-specific.
+	preCommands := cfg.Agents.ResolvePreCommands(info.Slug)
+
+	// 6. Sync.
 	syncResult, err := workspace.Sync(client, info, workspace.SyncOptions{
 		AgentCommand: agentCommand,
+		PreCommands:  preCommands,
 		RepoOwner:    repo.Owner,
 		RepoName:     repo.Name,
 	})
@@ -152,7 +156,7 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	// 6. Print results.
+	// 7. Print results.
 	printSyncResult(syncResult)
 	return nil
 }

@@ -153,6 +153,23 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("  default_command = %q\n", cfg.Agents.DefaultCommand)
 	}
+	if len(cfg.Agents.PreCommands) == 0 {
+		fmt.Printf("  pre_commands = (none)\n")
+	} else {
+		fmt.Printf("  pre_commands = %v\n", cfg.Agents.PreCommands)
+	}
+	if len(cfg.Agents.Repos) > 0 {
+		fmt.Println()
+		for slug, rc := range cfg.Agents.Repos {
+			fmt.Printf("[agents.repos.%s]\n", slug)
+			if rc.Command != "" {
+				fmt.Printf("  command = %q\n", rc.Command)
+			}
+			if len(rc.PreCommands) > 0 {
+				fmt.Printf("  pre_commands = %v\n", rc.PreCommands)
+			}
+		}
+	}
 
 	return nil
 }

@@ -583,6 +583,104 @@ func TestSync_DefaultCommand(t *testing.T) {
 	}
 }
 
+func TestBuildCommand(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		preCommands []string
+		agentCmd    string
+		want        string
+	}{
+		{
+			name:        "no pre-commands",
+			path:        "/workspaces/backend/main",
+			preCommands: nil,
+			agentCmd:    "claude",
+			want:        "cd '/workspaces/backend/main' && claude",
+		},
+		{
+			name:        "with pre-commands",
+			path:        "/workspaces/backend/main",
+			preCommands: []string{"export A=1", "nvm use 18"},
+			agentCmd:    "claude",
+			want:        "cd '/workspaces/backend/main' && export A=1 && nvm use 18 && claude",
+		},
+		{
+			name:        "empty pre-commands slice",
+			path:        "/workspaces/backend/main",
+			preCommands: []string{},
+			agentCmd:    "bash",
+			want:        "cd '/workspaces/backend/main' && bash",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BuildCommand(tt.path, tt.preCommands, tt.agentCmd)
+			if got != tt.want {
+				t.Errorf("BuildCommand() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSync_PreCommands(t *testing.T) {
+	runner := &syncMockRunner{
+		calls: []syncMockCall{
+			// 1. mkdir
+			{output: "", err: nil},
+			// 2. test -d (exists)
+			{output: "", err: nil},
+			// 3. git fetch
+			{output: "", err: nil},
+			// 4. git worktree list (main exists remotely)
+			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
+				"worktree /workspaces/backend/main\nHEAD def\nbranch refs/heads/main\n"},
+			// 5. agent.ListSessions (no session)
+			{output: "can't find session: backend", err: errors.New("exit status 1")},
+			// 6. agent.CreateSession → ListSessions
+			{output: "can't find session: backend", err: errors.New("exit status 1")},
+			// 7. tmux new-session
+			{output: "", err: nil},
+		},
+	}
+
+	info := &Info{
+		RemoteURL: "git@github.com:acme/backend.git",
+		Slug:      "backend",
+		Worktrees: []Worktree{
+			{Path: "/home/user/backend", Branch: "main", Commit: "abc123"},
+		},
+	}
+
+	_, err := Sync(runner, info, SyncOptions{
+		AgentCommand: "claude",
+		PreCommands:  []string{"export BEADS_NO_DAEMON=1", "nvm use 18"},
+		RepoOwner:    "acme",
+		RepoName:     "backend",
+	})
+	if err != nil {
+		t.Fatalf("Sync() error = %v", err)
+	}
+
+	// Verify the tmux command includes pre-commands in the chain.
+	found := false
+	for _, cmd := range runner.commands {
+		if strings.Contains(cmd, "export BEADS_NO_DAEMON=1") &&
+			strings.Contains(cmd, "nvm use 18") &&
+			strings.Contains(cmd, "claude") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected tmux command with pre-commands in chain")
+		for i, cmd := range runner.commands {
+			t.Logf("  command[%d]: %s", i, cmd)
+		}
+	}
+}
+
 func TestWorktreeRef(t *testing.T) {
 	tests := []struct {
 		name string
