@@ -77,8 +77,12 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 	bareRepo := "/repos/" + slug + ".git"
 	wsDir := "/workspaces/" + slug
 
-	// 1. Ensure directories exist.
-	_, err := runner.Run("mkdir -p /repos " + shellEscape(wsDir))
+	// 1. Ensure directories exist (sudo for root-owned paths, chown to current user).
+	mkdirCmd := fmt.Sprintf(
+		`sudo mkdir -p /repos %s && sudo chown "$(id -un):$(id -gn)" /repos %s`,
+		shellEscape(wsDir), shellEscape(wsDir),
+	)
+	_, err := runner.Run(mkdirCmd)
 	if err != nil {
 		return nil, fmt.Errorf("create directories: %w", err)
 	}
