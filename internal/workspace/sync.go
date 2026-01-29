@@ -133,16 +133,12 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 		}
 
 		wtPath := wsDir + "/" + name
-		var addCmd string
-		if wt.Branch != "" {
-			// Create local branch tracking the remote ref.
-			addCmd = "git -C " + shellEscape(bareRepo) + " worktree add -b " +
-				shellEscape(wt.Branch) + " " + shellEscape(wtPath) + " " +
-				shellEscape("origin/"+wt.Branch)
-		} else {
-			addCmd = "git -C " + shellEscape(bareRepo) + " worktree add --detach " +
-				shellEscape(wtPath) + " " + shellEscape(wt.Commit)
+		ref := wt.Branch
+		if ref == "" {
+			ref = wt.Commit
 		}
+		addCmd := "git -C " + shellEscape(bareRepo) + " worktree add " +
+			shellEscape(wtPath) + " " + shellEscape(ref)
 		_, err = runner.Run(addCmd)
 		if err != nil {
 			return nil, fmt.Errorf("create worktree %s: %w", name, err)
