@@ -246,12 +246,14 @@ func registerKey(fs FileSystem, cmd CommandRunner, kp KeyPair, opts Options) err
 		return fmt.Errorf("read public key: %w", err)
 	}
 
-	// Register via gh api
-	body := fmt.Sprintf(`{"title":"cloudcoop-deploy-%s","key":%q,"read_only":true}`,
-		opts.Slug, strings.TrimSpace(string(pubKey)))
-
+	// Register via gh api using field flags (avoids stdin and unsupported --body flag)
 	endpoint := fmt.Sprintf("repos/%s/%s/keys", opts.Repo.Owner, opts.Repo.Name)
-	_, err = cmd.Run("gh", "api", endpoint, "--method", "POST", "--input", "-", "--body", body)
+	title := fmt.Sprintf("cloudcoop-deploy-%s", opts.Slug)
+	key := strings.TrimSpace(string(pubKey))
+	_, err = cmd.Run("gh", "api", endpoint, "--method", "POST",
+		"-f", "title="+title,
+		"-f", "key="+key,
+		"-F", "read_only=true")
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrGHRegisterFailed, err)
 	}
