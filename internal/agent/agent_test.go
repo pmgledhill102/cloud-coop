@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -559,4 +560,248 @@ func containsAt(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestListClients(t *testing.T) {
+	tests := []struct {
+		name        string
+		output      string
+		err         error
+		wantClients []ClientInfo
+		wantErr     bool
+	}{
+		{
+			name:   "multiple clients",
+			output: "/dev/pts/0|acme-backend|0|main\n/dev/pts/1|acme-backend-a1b2|1|feature\n",
+			wantClients: []ClientInfo{
+				{TTY: "/dev/pts/0", Session: "acme-backend", WindowIndex: 0, WindowName: "main"},
+				{TTY: "/dev/pts/1", Session: "acme-backend-a1b2", WindowIndex: 1, WindowName: "feature"},
+			},
+		},
+		{
+			name:        "no clients",
+			output:      "no clients",
+			err:         errors.New("exit status 1"),
+			wantClients: nil,
+		},
+		{
+			name:        "no session",
+			output:      "can't find session: acme",
+			err:         errors.New("exit status 1"),
+			wantClients: nil,
+		},
+		{
+			name:        "empty output",
+			output:      "",
+			wantClients: nil,
+		},
+		{
+			name:   "single client",
+			output: "/dev/pts/2|myrepo|3|bugfix\n",
+			wantClients: []ClientInfo{
+				{TTY: "/dev/pts/2", Session: "myrepo", WindowIndex: 3, WindowName: "bugfix"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mockRunner{output: tt.output, err: tt.err}
+			clients, err := ListClients(runner, "acme")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ListClients() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if len(clients) != len(tt.wantClients) {
+				t.Errorf("ListClients() got %d clients, want %d", len(clients), len(tt.wantClients))
+				return
+			}
+			for i, got := range clients {
+				want := tt.wantClients[i]
+				if got != want {
+					t.Errorf("Client[%d] = %+v, want %+v", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestParseTmuxClients(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   []ClientInfo
+	}{
+		{
+			name:   "standard",
+			output: "/dev/pts/0|agents|0|main",
+			want:   []ClientInfo{{TTY: "/dev/pts/0", Session: "agents", WindowIndex: 0, WindowName: "main"}},
+		},
+		{
+			name:   "empty",
+			output: "",
+			want:   nil,
+		},
+		{
+			name:   "malformed - too few parts",
+			output: "/dev/pts/0|agents",
+			want:   nil,
+		},
+		{
+			name:   "malformed - bad index",
+			output: "/dev/pts/0|agents|abc|main",
+			want:   nil,
+		},
+		{
+			name:   "window name with pipe",
+			output: "/dev/pts/0|agents|0|name|extra",
+			want:   []ClientInfo{{TTY: "/dev/pts/0", Session: "agents", WindowIndex: 0, WindowName: "name|extra"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseTmuxClients(tt.output)
+			if len(got) != len(tt.want) {
+				t.Errorf("parseTmuxClients() got %d, want %d", len(got), len(tt.want))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("Client[%d] = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestFindNextWindow(t *testing.T) {
+	tests := []struct {
+		name     string
+		sessions []Session
+		clients  []ClientInfo
+		want     Session
+		wantErr  error
+	}{
+		{
+			name: "all free",
+			sessions: []Session{
+				{Index: 0, Name: "main", Command: "claude"},
+				{Index: 1, Name: "feature", Command: "aider"},
+			},
+			clients: nil,
+			want:    Session{Index: 0, Name: "main", Command: "claude"},
+		},
+		{
+			name: "first attached",
+			sessions: []Session{
+				{Index: 0, Name: "main", Command: "claude"},
+				{Index: 1, Name: "feature", Command: "aider"},
+			},
+			clients: []ClientInfo{
+				{WindowIndex: 0},
+			},
+			want: Session{Index: 1, Name: "feature", Command: "aider"},
+		},
+		{
+			name: "all attached",
+			sessions: []Session{
+				{Index: 0, Name: "main", Command: "claude"},
+			},
+			clients: []ClientInfo{
+				{WindowIndex: 0},
+			},
+			wantErr: ErrAllWindowsAttached,
+		},
+		{
+			name: "index gaps",
+			sessions: []Session{
+				{Index: 0, Name: "main", Command: "claude"},
+				{Index: 3, Name: "debug", Command: "bash"},
+				{Index: 7, Name: "test", Command: "aider"},
+			},
+			clients: []ClientInfo{
+				{WindowIndex: 0},
+				{WindowIndex: 3},
+			},
+			want: Session{Index: 7, Name: "test", Command: "aider"},
+		},
+		{
+			name: "single window free",
+			sessions: []Session{
+				{Index: 0, Name: "main", Command: "claude"},
+			},
+			clients: nil,
+			want:    Session{Index: 0, Name: "main", Command: "claude"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := FindNextWindow(tt.sessions, tt.clients)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("FindNextWindow() error = %v, want %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("FindNextWindow() unexpected error: %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("FindNextWindow() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCreateGroupedSession(t *testing.T) {
+	// Override randomHex for deterministic testing
+	origRandRead := cryptoRandRead
+	defer func() { cryptoRandRead = origRandRead }()
+	cryptoRandRead = func(b []byte) (int, error) {
+		for i := range b {
+			b[i] = 0xa1 + byte(i)
+		}
+		return len(b), nil
+	}
+
+	runner := &sequenceMockRunner{
+		calls: []mockCall{
+			{output: "", err: nil}, // new-session
+			{output: "", err: nil}, // select-window
+		},
+	}
+
+	name, err := CreateGroupedSession(runner, "acme-backend", 2)
+	if err != nil {
+		t.Fatalf("CreateGroupedSession() error = %v", err)
+	}
+
+	// Check session name format: slug-<hex>
+	if !strings.HasPrefix(name, "acme-backend-") {
+		t.Errorf("Expected prefix 'acme-backend-', got %q", name)
+	}
+
+	// Check that correct tmux commands were issued
+	if len(runner.commands) != 2 {
+		t.Fatalf("Expected 2 commands, got %d", len(runner.commands))
+	}
+
+	// Verify new-session command
+	if !contains(runner.commands[0], "new-session -d -t") {
+		t.Errorf("Expected new-session command, got: %s", runner.commands[0])
+	}
+	if !contains(runner.commands[0], "'acme-backend'") {
+		t.Errorf("Expected base session name in command, got: %s", runner.commands[0])
+	}
+
+	// Verify select-window command
+	if !contains(runner.commands[1], "select-window") {
+		t.Errorf("Expected select-window command, got: %s", runner.commands[1])
+	}
+	if !contains(runner.commands[1], ":2") {
+		t.Errorf("Expected window index 2 in command, got: %s", runner.commands[1])
+	}
 }

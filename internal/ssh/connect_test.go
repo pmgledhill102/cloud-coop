@@ -77,3 +77,17 @@ func TestCheckSSHAvailable_ReturnsNilWhenFound(t *testing.T) {
 		t.Errorf("CheckSSHAvailable() returned error when SSH is available: %v", err)
 	}
 }
+
+func TestConnectOptions_GroupedSession(t *testing.T) {
+	opts := ConnectOptions{
+		Host:           "example.com",
+		User:           "testuser",
+		Session:        "acme-backend",
+		WindowIndex:    2,
+		GroupedSession: "acme-backend-a1b2",
+	}
+
+	if opts.GroupedSession != "acme-backend-a1b2" {
+		t.Errorf("GroupedSession = %q, want %q", opts.GroupedSession, "acme-backend-a1b2")
+	}
+}
