@@ -696,31 +696,3 @@ func TestSync_PreCommands(t *testing.T) {
 		}
 	}
 }
-
-func TestWorktreeRef(t *testing.T) {
-	tests := []struct {
-		name string
-		wt   Worktree
-		want string
-	}{
-		{
-			name: "branch set",
-			wt:   Worktree{Branch: "main", Commit: "abc123"},
-			want: "main",
-		},
-		{
-			name: "commit only",
-			wt:   Worktree{Commit: "abc123"},
-			want: "abc123",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := worktreeRef(tt.wt)
-			if got != tt.want {
-				t.Errorf("worktreeRef() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}

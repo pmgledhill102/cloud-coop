@@ -100,8 +100,9 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 	}
 
 	// Ensure fetch refspec is configured (git clone --bare doesn't set one).
+	// Use refs/remotes/origin/* to avoid conflicts with checked-out worktrees.
 	_, _ = runner.Run("git -C " + shellEscape(bareRepo) +
-		" config remote.origin.fetch '+refs/heads/*:refs/heads/*'")
+		" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'")
 
 	// 4. Fetch all.
 	_, err = runner.Run("git -C " + shellEscape(bareRepo) + " fetch --all --prune")
@@ -131,9 +132,18 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 			continue
 		}
 
-		ref := worktreeRef(wt)
 		wtPath := wsDir + "/" + name
-		_, err = runner.Run("git -C " + shellEscape(bareRepo) + " worktree add " + shellEscape(wtPath) + " " + shellEscape(ref))
+		var addCmd string
+		if wt.Branch != "" {
+			// Create local branch tracking the remote ref.
+			addCmd = "git -C " + shellEscape(bareRepo) + " worktree add -b " +
+				shellEscape(wt.Branch) + " " + shellEscape(wtPath) + " " +
+				shellEscape("origin/"+wt.Branch)
+		} else {
+			addCmd = "git -C " + shellEscape(bareRepo) + " worktree add --detach " +
+				shellEscape(wtPath) + " " + shellEscape(wt.Commit)
+		}
+		_, err = runner.Run(addCmd)
 		if err != nil {
 			return nil, fmt.Errorf("create worktree %s: %w", name, err)
 		}
@@ -197,14 +207,6 @@ func BuildCommand(worktreePath string, preCommands []string, agentCommand string
 	parts = append(parts, preCommands...)
 	parts = append(parts, agentCommand)
 	return strings.Join(parts, " && ")
-}
-
-// worktreeRef returns the branch name if set, else the commit SHA.
-func worktreeRef(wt Worktree) string {
-	if wt.Branch != "" {
-		return wt.Branch
-	}
-	return wt.Commit
 }
 
 // shellEscape escapes a string for safe use in shell commands.
