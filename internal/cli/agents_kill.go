@@ -107,7 +107,7 @@ func runAgentsKill(cmd *cobra.Command, args []string) error {
 		Force: killForce,
 	}
 
-	err = agent.KillSession(client, defaultSessionName, opts)
+	err = agent.KillSession(client, resolveSessionName(), opts)
 	if err != nil {
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")

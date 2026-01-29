@@ -107,7 +107,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 	}
 
 	// List sessions in the tmux session
-	listResult, err := agent.ListSessions(client, defaultSessionName)
+	listResult, err := agent.ListSessions(client, resolveSessionName())
 	if err != nil {
 		_ = client.Close()
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
@@ -131,7 +131,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 
 	if attachNext {
 		// Get clients to find unattached window
-		clients, err := agent.ListClients(client, defaultSessionName)
+		clients, err := agent.ListClients(client, resolveSessionName())
 		if err != nil {
 			_ = client.Close()
 			return fmt.Errorf("list clients: %w", err)
@@ -151,7 +151,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		}
 
 		// Create grouped session for this attachment
-		groupedSessionName, err = agent.CreateGroupedSession(client, defaultSessionName, targetWindow.Index)
+		groupedSessionName, err = agent.CreateGroupedSession(client, resolveSessionName(), targetWindow.Index)
 		if err != nil {
 			_ = client.Close()
 			return fmt.Errorf("create grouped session: %w", err)
@@ -165,7 +165,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		}
 
 		// Create grouped session for specific window too
-		groupedSessionName, err = agent.CreateGroupedSession(client, defaultSessionName, targetWindow.Index)
+		groupedSessionName, err = agent.CreateGroupedSession(client, resolveSessionName(), targetWindow.Index)
 		if err != nil {
 			_ = client.Close()
 			return fmt.Errorf("create grouped session: %w", err)
@@ -182,7 +182,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		Host:           ip,
 		User:           sshUser,
 		Port:           sshPort,
-		Session:        defaultSessionName,
+		Session:        resolveSessionName(),
 		WindowIndex:    targetWindow.Index,
 		GroupedSession: groupedSessionName,
 	}
