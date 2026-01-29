@@ -80,6 +80,7 @@ goroutine
 goroutines
 gosec
 gosimple
+gossh
 govet
 govulncheck
 gsutil

@@ -116,7 +116,7 @@ func discoverAuthMethods() []ssh.AuthMethod {
 
 	// Key files fallback
 	home, _ := os.UserHomeDir()
-	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa"} {
+	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa", "google_compute_engine"} {
 		path := filepath.Join(home, ".ssh", name)
 		if key, err := os.ReadFile(path); err == nil {
 			if signer, err := ssh.ParsePrivateKey(key); err == nil {
