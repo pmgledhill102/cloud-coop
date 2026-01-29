@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/cloud-coop/cloudcoop/internal/shell"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -328,10 +329,8 @@ func SetupVM(runner ssh.Runner, fs FileSystem, keyPair KeyPair, opts Options) (*
 	return result, nil
 }
 
-// shellEscape escapes a string for safe use in shell commands.
-func shellEscape(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
+// shellEscape is a convenience alias for shell.Escape.
+var shellEscape = shell.Escape
 
 func runExecCommand(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)

@@ -5,6 +5,8 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/ssh"
+	"github.com/cloud-coop/cloudcoop/internal/testutil"
 )
 
 // testConfig returns a valid test configuration.
@@ -55,6 +57,34 @@ func withMocks(cfg *config.Config, mock *cloud.MockProvider) func() {
 	cleanupConfig := withMockConfig(cfg, nil)
 	cleanupProvider := withMockProvider(mock)
 	return func() {
+		cleanupProvider()
+		cleanupConfig()
+	}
+}
+
+// newNoopSSHMock creates a mock SSH client that accepts any command.
+func newNoopSSHMock() *testutil.MockSSHClient {
+	return testutil.NewMockSSHClient().ExpectAnyCommand("", nil)
+}
+
+// withMockSSHClient sets up a mock SSH client factory and returns a cleanup function.
+func withMockSSHClient(mock *testutil.MockSSHClient) func() {
+	original := sshClientFactory
+	sshClientFactory = func(cfg ssh.Config) (ssh.Runner, error) {
+		return mock, nil
+	}
+	return func() {
+		sshClientFactory = original
+	}
+}
+
+// withFullMocks sets up mock provider, config, and SSH client, returning a cleanup function.
+func withFullMocks(cfg *config.Config, provider *cloud.MockProvider, sshClient *testutil.MockSSHClient) func() {
+	cleanupConfig := withMockConfig(cfg, nil)
+	cleanupProvider := withMockProvider(provider)
+	cleanupSSH := withMockSSHClient(sshClient)
+	return func() {
+		cleanupSSH()
 		cleanupProvider()
 		cleanupConfig()
 	}

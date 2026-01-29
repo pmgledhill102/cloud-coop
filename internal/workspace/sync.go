@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
+	"github.com/cloud-coop/cloudcoop/internal/shell"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -205,7 +206,5 @@ func BuildCommand(worktreePath string, preCommands []string, agentCommand string
 	return strings.Join(parts, " && ")
 }
 
-// shellEscape escapes a string for safe use in shell commands.
-func shellEscape(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
+// shellEscape is a convenience alias for shell.Escape.
+var shellEscape = shell.Escape

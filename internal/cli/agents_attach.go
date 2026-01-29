@@ -1,18 +1,14 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
-	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/log"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -52,64 +48,21 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load configuration
-	cfg, err := configLoader()
+	conn, err := connectToVM(cmd)
 	if err != nil {
-		return handleConfigError(err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
-	}
-
-	// Create provider to get VM info
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-	defer cancel()
-
-	provider, cleanup, err := createProvider(ctx, cfg)
-	if err != nil {
-		return handleProviderError(err)
-	}
-	defer cleanup()
-
-	// Get VM info
-	log.Debug("querying VM status", "name", cfg.VM.Name, "provider", provider.Name())
-	vmInfo, err := provider.GetVMInfo(ctx, cfg.VM.Name)
-	if err != nil {
-		return fmt.Errorf("get VM status: %w", err)
-	}
-
-	if vmInfo.Status == cloud.VMStatusNotFound {
-		fmt.Fprintln(os.Stderr, "VM not found:", cfg.VM.Name)
+	if conn == nil {
 		return nil
 	}
 
-	if vmInfo.Status != cloud.VMStatusRunning {
-		fmt.Fprintf(os.Stderr, "VM is %s (must be running to attach)\n", vmInfo.Status)
-		return nil
-	}
-
-	// Resolve SSH connection parameters
-	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
-		return nil
-	}
-
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	sshPort := ssh.ResolvePort(cfg.SSH.Port)
-	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", sshPort)
-
-	// Connect via Go SSH client for setup commands
-	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
-	if err != nil {
-		return fmt.Errorf("SSH connection failed: %w", err)
-	}
+	// Resolve session name once for all tmux operations
+	sessionName := resolveSessionName()
 
 	// List sessions in the tmux session
-	listResult, err := agent.ListSessions(client, resolveSessionName())
+	listResult, err := agent.ListSessions(conn.Client, sessionName)
 	if err != nil {
-		_ = client.Close()
+		conn.Close()
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")
 			return nil
@@ -118,7 +71,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 	}
 
 	if listResult.NoSession || len(listResult.Sessions) == 0 {
-		_ = client.Close()
+		conn.Close()
 		fmt.Fprintln(os.Stderr, "No agent sessions found")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Start an agent session with:")
@@ -131,15 +84,15 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 
 	if attachNext {
 		// Get clients to find unattached window
-		clients, err := agent.ListClients(client, resolveSessionName())
+		clients, err := agent.ListClients(conn.Client, sessionName)
 		if err != nil {
-			_ = client.Close()
+			conn.Close()
 			return fmt.Errorf("list clients: %w", err)
 		}
 
 		targetWindow, err = agent.FindNextWindow(listResult.Sessions, clients)
 		if err != nil {
-			_ = client.Close()
+			conn.Close()
 			if errors.Is(err, agent.ErrAllWindowsAttached) {
 				fmt.Fprintln(os.Stderr, "All windows have attached clients")
 				fmt.Fprintln(os.Stderr)
@@ -151,38 +104,38 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		}
 
 		// Create grouped session for this attachment
-		groupedSessionName, err = agent.CreateGroupedSession(client, resolveSessionName(), targetWindow.Index)
+		groupedSessionName, err = agent.CreateGroupedSession(conn.Client, sessionName, targetWindow.Index)
 		if err != nil {
-			_ = client.Close()
+			conn.Close()
 			return fmt.Errorf("create grouped session: %w", err)
 		}
 	} else {
 		// Find window by name or index
 		targetWindow, err = findWindow(listResult.Sessions, attachWindow)
 		if err != nil {
-			_ = client.Close()
+			conn.Close()
 			return err
 		}
 
 		// Create grouped session for specific window too
-		groupedSessionName, err = agent.CreateGroupedSession(client, resolveSessionName(), targetWindow.Index)
+		groupedSessionName, err = agent.CreateGroupedSession(conn.Client, sessionName, targetWindow.Index)
 		if err != nil {
-			_ = client.Close()
+			conn.Close()
 			return fmt.Errorf("create grouped session: %w", err)
 		}
 	}
 
 	// Close Go SSH client before interactive attach
-	_ = client.Close()
+	conn.Close()
 
 	fmt.Printf("Attaching to window %d (%s)...\n", targetWindow.Index, targetWindow.Name)
 
 	// Connect interactively via native SSH
 	connectOpts := ssh.ConnectOptions{
-		Host:           ip,
-		User:           sshUser,
-		Port:           sshPort,
-		Session:        resolveSessionName(),
+		Host:           conn.IP,
+		User:           conn.User,
+		Port:           conn.Port,
+		Session:        sessionName,
 		WindowIndex:    targetWindow.Index,
 		GroupedSession: groupedSessionName,
 	}

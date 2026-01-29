@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloud-coop/cloudcoop/internal/shell"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -57,7 +58,7 @@ func ListSessions(runner ssh.Runner, sessionName string) (*ListResult, error) {
 		}
 
 		// Unknown error
-		return nil, err
+		return nil, fmt.Errorf("list sessions: %w", err)
 	}
 
 	sessions := parseTmuxOutput(output)
@@ -137,7 +138,7 @@ func CreateSession(runner ssh.Runner, sessionName string, opts CreateSessionOpti
 	// Check if session exists first
 	listResult, err := ListSessions(runner, sessionName)
 	if err != nil && !errors.Is(err, ErrTmuxNotInstalled) {
-		return nil, err
+		return nil, fmt.Errorf("create session: %w", err)
 	}
 	if errors.Is(err, ErrTmuxNotInstalled) {
 		return nil, err
@@ -154,7 +155,7 @@ func CreateSession(runner ssh.Runner, sessionName string, opts CreateSessionOpti
 		cmd := "tmux new-session -d -s " + shellEscape(sessionName) + " -n " + shellEscape(name) + " " + shellEscape(command)
 		_, err := runner.Run(cmd)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create tmux session: %w", err)
 		}
 		windowIndex = 0
 	} else {
@@ -177,7 +178,7 @@ func CreateSession(runner ssh.Runner, sessionName string, opts CreateSessionOpti
 		cmd := "tmux new-window -t " + shellEscape(sessionName) + " -n " + shellEscape(name) + " " + shellEscape(command)
 		_, err := runner.Run(cmd)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create tmux window: %w", err)
 		}
 	}
 
@@ -200,7 +201,7 @@ func KillSession(runner ssh.Runner, sessionName string, opts KillSessionOptions)
 	// First verify the window exists and check for active process
 	listResult, err := ListSessions(runner, sessionName)
 	if err != nil {
-		return err
+		return fmt.Errorf("kill session: %w", err)
 	}
 
 	if listResult.NoSession {
@@ -234,7 +235,7 @@ func KillSession(runner ssh.Runner, sessionName string, opts KillSessionOptions)
 		if strings.Contains(errStr, "can't find") || strings.Contains(errStr, "not found") {
 			return ErrWindowNotFound
 		}
-		return err
+		return fmt.Errorf("kill window: %w", err)
 	}
 
 	return nil
@@ -254,11 +255,8 @@ func isActiveProcess(command string) bool {
 	return true
 }
 
-// shellEscape escapes a string for safe use in shell commands.
-func shellEscape(s string) string {
-	// Use single quotes and escape any single quotes in the string
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
+// shellEscape is a convenience alias for shell.Escape.
+var shellEscape = shell.Escape
 
 // itoa converts an integer to a string (simple implementation to avoid fmt import).
 func itoa(n int) string {
@@ -297,7 +295,7 @@ func ListClients(runner ssh.Runner, sessionName string) ([]ClientInfo, error) {
 			strings.Contains(errStr, "no server running") {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("list clients: %w", err)
 	}
 	return parseTmuxClients(output), nil
 }

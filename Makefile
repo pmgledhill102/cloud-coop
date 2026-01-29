@@ -27,7 +27,7 @@ SRC := $(shell find . -name '*.go' -type f 2>/dev/null)
 .DEFAULT_GOAL := all
 
 # Phony targets
-.PHONY: all build test test-coverage test-coverage-check lint fmt clean install help
+.PHONY: all build test test-integration test-coverage test-coverage-check lint fmt clean install help
 
 ## all: Build and run tests
 all: fmt lint test build
@@ -42,6 +42,10 @@ $(BIN_DIR)/$(BINARY_NAME): $(SRC)
 ## test: Run all tests
 test:
 	$(GO) test $(GOFLAGS) ./...
+
+## test-integration: Run integration tests (requires git)
+test-integration:
+	$(GO) test $(GOFLAGS) -tags=integration ./...
 
 ## test-coverage: Run tests with coverage report
 test-coverage:
