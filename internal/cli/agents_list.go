@@ -20,7 +20,7 @@ var agentsListCmd = &cobra.Command{
 	Short: "List running agent sessions",
 	Long: `List agent sessions running in tmux on the cloud VM.
 
-This command connects to the VM via SSH and queries the "agents" tmux session
+This command connects to the VM via SSH and queries the tmux session
 for running windows. Each window typically contains one AI coding agent.
 
 Example output:
@@ -87,7 +87,7 @@ func runAgentsList(cmd *cobra.Command, args []string) error {
 	defer func() { _ = client.Close() }()
 
 	// List agent sessions
-	result, err := agent.ListSessions(client)
+	result, err := agent.ListSessions(client, defaultSessionName)
 	if err != nil {
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")
@@ -107,10 +107,10 @@ func runAgentsList(cmd *cobra.Command, args []string) error {
 
 func printAgentList(result *agent.ListResult) {
 	if result.NoSession {
-		fmt.Println("No agents session")
+		fmt.Println("No tmux session found")
 		fmt.Println()
-		fmt.Println("Start an agents session with:")
-		fmt.Println("  tmux new-session -s agents")
+		fmt.Println("Start an agent session with:")
+		fmt.Println("  cloudcoop agents add")
 		return
 	}
 

@@ -18,19 +18,22 @@ type Session struct {
 // ListResult contains the result of listing agent sessions.
 type ListResult struct {
 	Sessions  []Session // list of active agent sessions
-	NoSession bool      // true if no "agents" tmux session exists
+	NoSession bool      // true if no tmux session exists
 }
 
 // ErrTmuxNotInstalled indicates tmux is not available on the remote host.
 var ErrTmuxNotInstalled = errors.New("tmux not installed")
 
-// tmuxListCmd is the command to list tmux windows in the agents session.
-const tmuxListCmd = "tmux list-windows -t agents -F '#{window_index}|#{window_name}|#{pane_current_command}'"
+// tmuxListCmd builds the command to list tmux windows in the given session.
+func tmuxListCmd(sessionName string) string {
+	return "tmux list-windows -t " + shellEscape(sessionName) +
+		" -F '#{window_index}|#{window_name}|#{pane_current_command}'"
+}
 
 // ListSessions queries the remote host for active agent sessions.
-// It connects via SSH and lists windows in the "agents" tmux session.
-func ListSessions(runner ssh.Runner) (*ListResult, error) {
-	output, err := runner.Run(tmuxListCmd)
+// It connects via SSH and lists windows in the named tmux session.
+func ListSessions(runner ssh.Runner, sessionName string) (*ListResult, error) {
+	output, err := runner.Run(tmuxListCmd(sessionName))
 	if err != nil {
 		// Check for specific error conditions
 		errStr := strings.ToLower(output + err.Error())
@@ -106,7 +109,7 @@ func parseIndex(s string, index *int) (bool, error) {
 }
 
 // ErrNoSession indicates the tmux session does not exist.
-var ErrNoSession = errors.New("no agents session exists")
+var ErrNoSession = errors.New("no tmux session exists")
 
 // ErrWindowNotFound indicates the specified tmux window was not found.
 var ErrWindowNotFound = errors.New("window not found")
@@ -120,9 +123,9 @@ type CreateSessionOptions struct {
 	Command string // command to run (uses "bash" if empty)
 }
 
-// CreateSession creates a new tmux window in the agents session.
-// If no agents session exists, it creates the session first.
-func CreateSession(runner ssh.Runner, opts CreateSessionOptions) (*Session, error) {
+// CreateSession creates a new tmux window in the named session.
+// If no session exists, it creates the session first.
+func CreateSession(runner ssh.Runner, sessionName string, opts CreateSessionOptions) (*Session, error) {
 	// Default command to bash if not specified
 	command := opts.Command
 	if command == "" {
@@ -130,7 +133,7 @@ func CreateSession(runner ssh.Runner, opts CreateSessionOptions) (*Session, erro
 	}
 
 	// Check if session exists first
-	listResult, err := ListSessions(runner)
+	listResult, err := ListSessions(runner, sessionName)
 	if err != nil && !errors.Is(err, ErrTmuxNotInstalled) {
 		return nil, err
 	}
@@ -146,7 +149,7 @@ func CreateSession(runner ssh.Runner, opts CreateSessionOptions) (*Session, erro
 			name = "agent-0"
 		}
 		// Quote the command to handle spaces
-		cmd := "tmux new-session -d -s agents -n " + shellEscape(name) + " " + shellEscape(command)
+		cmd := "tmux new-session -d -s " + shellEscape(sessionName) + " -n " + shellEscape(name) + " " + shellEscape(command)
 		_, err := runner.Run(cmd)
 		if err != nil {
 			return nil, err
@@ -169,7 +172,7 @@ func CreateSession(runner ssh.Runner, opts CreateSessionOptions) (*Session, erro
 		}
 
 		// Create new window in existing session
-		cmd := "tmux new-window -t agents -n " + shellEscape(name) + " " + shellEscape(command)
+		cmd := "tmux new-window -t " + shellEscape(sessionName) + " -n " + shellEscape(name) + " " + shellEscape(command)
 		_, err := runner.Run(cmd)
 		if err != nil {
 			return nil, err
@@ -190,10 +193,10 @@ type KillSessionOptions struct {
 	Force bool // kill even if there's an active process
 }
 
-// KillSession kills a tmux window in the agents session.
-func KillSession(runner ssh.Runner, opts KillSessionOptions) error {
+// KillSession kills a tmux window in the named session.
+func KillSession(runner ssh.Runner, sessionName string, opts KillSessionOptions) error {
 	// First verify the window exists and check for active process
-	listResult, err := ListSessions(runner)
+	listResult, err := ListSessions(runner, sessionName)
 	if err != nil {
 		return err
 	}
@@ -221,7 +224,7 @@ func KillSession(runner ssh.Runner, opts KillSessionOptions) error {
 	}
 
 	// Kill the window
-	cmd := "tmux kill-window -t agents:" + itoa(opts.Index)
+	cmd := "tmux kill-window -t " + shellEscape(sessionName) + ":" + itoa(opts.Index)
 	_, err = runner.Run(cmd)
 	if err != nil {
 		// Check if the error is because the window doesn't exist

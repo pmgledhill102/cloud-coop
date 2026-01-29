@@ -110,7 +110,7 @@ func TestListSessions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runner := &mockRunner{output: tt.output, err: tt.err}
-			result, err := ListSessions(runner)
+			result, err := ListSessions(runner, "agents")
 
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
@@ -140,6 +140,22 @@ func TestListSessions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestListSessionsCustomName(t *testing.T) {
+	runner := &mockRunner{
+		output: "0|agent-0|claude\n",
+	}
+	result, err := ListSessions(runner, "acme-backend")
+	if err != nil {
+		t.Fatalf("ListSessions() unexpected error: %v", err)
+	}
+	if len(result.Sessions) != 1 {
+		t.Fatalf("ListSessions() got %d sessions, want 1", len(result.Sessions))
+	}
+	if result.Sessions[0].Name != "agent-0" {
+		t.Errorf("Session[0].Name = %q, want %q", result.Sessions[0].Name, "agent-0")
 	}
 }
 
@@ -226,6 +242,7 @@ func (m *sequenceMockRunner) Close() error {
 func TestCreateSession(t *testing.T) {
 	tests := []struct {
 		name        string
+		sessionName string
 		opts        CreateSessionOptions
 		calls       []mockCall
 		wantSession *Session
@@ -233,28 +250,31 @@ func TestCreateSession(t *testing.T) {
 		wantCmdPart string // partial command to check
 	}{
 		{
-			name: "create first session (no existing session)",
-			opts: CreateSessionOptions{},
+			name:        "create first session (no existing session)",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{},
 			calls: []mockCall{
 				{output: "can't find session: agents", err: errors.New("exit status 1")}, // list shows no session
 				{output: "", err: nil}, // create session succeeds
 			},
 			wantSession: &Session{Index: 0, Name: "", Command: "bash"},
-			wantCmdPart: "tmux new-session -d -s agents",
+			wantCmdPart: "tmux new-session -d -s 'agents'",
 		},
 		{
-			name: "create window in existing session",
-			opts: CreateSessionOptions{Name: "test-agent", Command: "claude"},
+			name:        "create window in existing session",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{Name: "test-agent", Command: "claude"},
 			calls: []mockCall{
 				{output: "0|agent-0|bash\n", err: nil}, // list shows one window
 				{output: "", err: nil},                 // create window succeeds
 			},
 			wantSession: &Session{Index: 1, Name: "test-agent", Command: "claude"},
-			wantCmdPart: "tmux new-window -t agents",
+			wantCmdPart: "tmux new-window -t 'agents'",
 		},
 		{
-			name: "create with custom command",
-			opts: CreateSessionOptions{Command: "claude --dangerously-skip-permissions"},
+			name:        "create with custom command",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{Command: "claude --dangerously-skip-permissions"},
 			calls: []mockCall{
 				{output: "can't find session: agents", err: errors.New("exit status 1")},
 				{output: "", err: nil},
@@ -262,16 +282,18 @@ func TestCreateSession(t *testing.T) {
 			wantSession: &Session{Index: 0, Name: "", Command: "claude --dangerously-skip-permissions"},
 		},
 		{
-			name: "tmux not installed",
-			opts: CreateSessionOptions{},
+			name:        "tmux not installed",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{},
 			calls: []mockCall{
 				{output: "bash: tmux: command not found", err: errors.New("exit status 127")},
 			},
 			wantErr: ErrTmuxNotInstalled,
 		},
 		{
-			name: "auto-generate name for new session",
-			opts: CreateSessionOptions{},
+			name:        "auto-generate name for new session",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{},
 			calls: []mockCall{
 				{output: "can't find session: agents", err: errors.New("exit status 1")},
 				{output: "", err: nil},
@@ -280,8 +302,9 @@ func TestCreateSession(t *testing.T) {
 			wantCmdPart: "'agent-0'",
 		},
 		{
-			name: "auto-generate name based on existing windows",
-			opts: CreateSessionOptions{},
+			name:        "auto-generate name based on existing windows",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{},
 			calls: []mockCall{
 				{output: "0|agent-0|bash\n1|agent-1|claude\n", err: nil},
 				{output: "", err: nil},
@@ -290,8 +313,9 @@ func TestCreateSession(t *testing.T) {
 			wantCmdPart: "'agent-2'",
 		},
 		{
-			name: "create 13th agent (12+ agents)",
-			opts: CreateSessionOptions{},
+			name:        "create 13th agent (12+ agents)",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{},
 			calls: []mockCall{
 				{output: "0|agent-0|bash\n1|agent-1|bash\n2|agent-2|bash\n3|agent-3|bash\n4|agent-4|bash\n5|agent-5|bash\n6|agent-6|bash\n7|agent-7|bash\n8|agent-8|bash\n9|agent-9|bash\n10|agent-10|bash\n11|agent-11|bash\n", err: nil},
 				{output: "", err: nil},
@@ -300,8 +324,9 @@ func TestCreateSession(t *testing.T) {
 			wantCmdPart: "'agent-12'",
 		},
 		{
-			name: "command with special characters",
-			opts: CreateSessionOptions{Command: "claude --flag='value with spaces'"},
+			name:        "command with special characters",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{Command: "claude --flag='value with spaces'"},
 			calls: []mockCall{
 				{output: "can't find session: agents", err: errors.New("exit status 1")},
 				{output: "", err: nil},
@@ -309,8 +334,9 @@ func TestCreateSession(t *testing.T) {
 			wantSession: &Session{Index: 0, Name: "", Command: "claude --flag='value with spaces'"},
 		},
 		{
-			name: "name with special characters",
-			opts: CreateSessionOptions{Name: "my-agent's-name"},
+			name:        "name with special characters",
+			sessionName: "agents",
+			opts:        CreateSessionOptions{Name: "my-agent's-name"},
 			calls: []mockCall{
 				{output: "can't find session: agents", err: errors.New("exit status 1")},
 				{output: "", err: nil},
@@ -318,12 +344,23 @@ func TestCreateSession(t *testing.T) {
 			wantSession: &Session{Index: 0, Name: "my-agent's-name", Command: "bash"},
 			wantCmdPart: "'my-agent'\"'\"'s-name'", // properly escaped single quote
 		},
+		{
+			name:        "create with non-default session name",
+			sessionName: "acme-backend",
+			opts:        CreateSessionOptions{Name: "test-agent", Command: "claude"},
+			calls: []mockCall{
+				{output: "can't find session: acme-backend", err: errors.New("exit status 1")},
+				{output: "", err: nil},
+			},
+			wantSession: &Session{Index: 0, Name: "test-agent", Command: "claude"},
+			wantCmdPart: "tmux new-session -d -s 'acme-backend'",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runner := &sequenceMockRunner{calls: tt.calls}
-			session, err := CreateSession(runner, tt.opts)
+			session, err := CreateSession(runner, tt.sessionName, tt.opts)
 
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
@@ -424,7 +461,7 @@ func TestKillSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runner := &sequenceMockRunner{calls: tt.calls}
-			err := KillSession(runner, tt.opts)
+			err := KillSession(runner, "agents", tt.opts)
 
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {

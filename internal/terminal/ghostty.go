@@ -80,6 +80,6 @@ func sshCommandForBash(cfg Config, windowIndex int) string {
 	if cfg.Port != 22 {
 		portArg = fmt.Sprintf("-p %d ", cfg.Port)
 	}
-	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
+	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", cfg.Session, windowIndex, cfg.Session)
 	return fmt.Sprintf("ssh %s-t %s@%s '%s'", portArg, cfg.User, cfg.Host, tmuxCmd)
 }

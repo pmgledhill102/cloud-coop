@@ -22,8 +22,8 @@ func TestPrintAgentList(t *testing.T) {
 				NoSession: true,
 			},
 			wantContains: []string{
-				"No agents session",
-				"tmux new-session",
+				"No tmux session",
+				"cloudcoop agents add",
 			},
 		},
 		{

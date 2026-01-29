@@ -117,7 +117,7 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 	defer func() { _ = client.Close() }()
 
 	// List agent sessions
-	result, err := agent.ListSessions(client)
+	result, err := agent.ListSessions(client, defaultSessionName)
 	if err != nil {
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")
@@ -127,7 +127,7 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	if result.NoSession {
-		fmt.Fprintln(os.Stderr, "No agents session exists on the VM")
+		fmt.Fprintln(os.Stderr, "No tmux session exists on the VM")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Create agents first with:")
 		fmt.Fprintln(os.Stderr, "  cloudcoop agents add")
@@ -157,6 +157,7 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 		Host:     ip,
 		User:     sshUser,
 		Port:     sshPort,
+		Session:  defaultSessionName,
 		Sessions: result.Sessions,
 	}
 
