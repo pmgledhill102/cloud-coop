@@ -236,7 +236,7 @@ func queryAgents(cfg *config.Config, info *cloud.VMInfo) *agent.ListResult {
 	defer func() { _ = client.Close() }()
 
 	// List agent sessions
-	result, err := agent.ListSessions(client, defaultSessionName)
+	result, err := agent.ListSessions(client, resolveSessionName())
 	if err != nil {
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Println("  (tmux not installed)")

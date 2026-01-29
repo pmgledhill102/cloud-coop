@@ -108,7 +108,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check agent exists
-	result, err := agent.ListSessions(client, defaultSessionName)
+	result, err := agent.ListSessions(client, resolveSessionName())
 	_ = client.Close() // Close before interactive session
 
 	if err != nil {
@@ -155,7 +155,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		Host:        ip,
 		User:        sshUser,
 		Port:        cfg.SSH.Port,
-		Session:     defaultSessionName,
+		Session:     resolveSessionName(),
 		WindowIndex: index,
 	}
 

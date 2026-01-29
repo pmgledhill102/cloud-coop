@@ -107,7 +107,7 @@ func runAgentsAdd(cmd *cobra.Command, args []string) error {
 		Command: command,
 	}
 
-	session, err := agent.CreateSession(client, defaultSessionName, opts)
+	session, err := agent.CreateSession(client, resolveSessionName(), opts)
 	if err != nil {
 		if err == agent.ErrTmuxNotInstalled {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")
