@@ -246,13 +246,20 @@ func registerKey(fs FileSystem, cmd CommandRunner, kp KeyPair, opts Options) err
 		return fmt.Errorf("read public key: %w", err)
 	}
 
-	// Register via gh api
-	body := fmt.Sprintf(`{"title":"cloudcoop-deploy-%s","key":%q,"read_only":true}`,
-		opts.Slug, strings.TrimSpace(string(pubKey)))
-
+	// Register via gh api using field flags (avoids stdin and unsupported --body flag)
 	endpoint := fmt.Sprintf("repos/%s/%s/keys", opts.Repo.Owner, opts.Repo.Name)
-	_, err = cmd.Run("gh", "api", endpoint, "--method", "POST", "--input", "-", "--body", body)
+	title := fmt.Sprintf("cloudcoop-deploy-%s", opts.Slug)
+	key := strings.TrimSpace(string(pubKey))
+	_, err = cmd.Run("gh", "api", endpoint, "--method", "POST",
+		"-f", "title="+title,
+		"-f", "key="+key,
+		"-F", "read_only=true")
 	if err != nil {
+		// "key is already in use" means the deploy key was registered in a
+		// previous run — treat as success for idempotent re-sync.
+		if strings.Contains(err.Error(), "key is already in use") {
+			return nil
+		}
 		return fmt.Errorf("%w: %s", ErrGHRegisterFailed, err)
 	}
 
@@ -269,16 +276,17 @@ func SetupVM(runner ssh.Runner, fs FileSystem, keyPair KeyPair, opts Options) (*
 		return nil, fmt.Errorf("read private key: %w", err)
 	}
 
-	// Transfer key via base64 encoding (avoids SCP dependency)
+	// Transfer key via base64 encoding (avoids SCP dependency).
+	// Use $HOME instead of ~ because ~ doesn't expand inside quotes.
 	b64Key := base64.StdEncoding.EncodeToString(privKey)
-	remoteKeyPath := "~/.ssh/cloudcoop-deploy-" + opts.Slug
+	remoteKeyPath := "$HOME/.ssh/cloudcoop-deploy-" + opts.Slug
 
 	// Create .ssh dir, write key, set permissions
 	writeCmd := fmt.Sprintf(
-		"mkdir -p ~/.ssh && echo %s | base64 -d > %s && chmod 600 %s",
+		`mkdir -p "$HOME/.ssh" && echo %s | base64 -d > "%s" && chmod 600 "%s"`,
 		shellEscape(b64Key),
-		shellEscape(remoteKeyPath),
-		shellEscape(remoteKeyPath),
+		remoteKeyPath,
+		remoteKeyPath,
 	)
 	_, err = runner.Run(writeCmd)
 	if err != nil {

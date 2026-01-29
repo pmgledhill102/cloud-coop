@@ -80,6 +80,7 @@ goroutine
 goroutines
 gosec
 gosimple
+gossh
 govet
 govulncheck
 gsutil
@@ -122,11 +123,14 @@ preemptible
 prettierignore
 prettierrc
 pubkey
+publickey
 pulumi
 readonly
 refactor
+refspec
 reviewdog
 revive
+RSASHA
 rubocop
 rustup
 sandboxed

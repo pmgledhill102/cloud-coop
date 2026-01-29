@@ -388,3 +388,205 @@ func TestExists(t *testing.T) {
 	// We can only verify it returns a boolean without error
 	_ = Exists() // Should not panic
 }
+
+func TestLoadFile_AgentsHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cloudcoop.toml")
+
+	content := `
+[cloud]
+provider = "gcp"
+
+[cloud.gcp]
+project = "test-project"
+zone = "us-central1-a"
+
+[vm]
+name = "test-vm"
+
+[agents]
+default_command = "claude"
+pre_commands = ["export BEADS_NO_DAEMON=1", "export FOO=bar"]
+
+[agents.repos.acme-backend]
+command = "claude"
+pre_commands = ["nvm use 18"]
+
+[agents.repos.acme-frontend]
+command = "aider"
+pre_commands = ["nvm use 20"]
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Agents.DefaultCommand != "claude" {
+		t.Errorf("default_command = %q, want %q", cfg.Agents.DefaultCommand, "claude")
+	}
+	if len(cfg.Agents.PreCommands) != 2 {
+		t.Fatalf("pre_commands len = %d, want 2", len(cfg.Agents.PreCommands))
+	}
+	if cfg.Agents.PreCommands[0] != "export BEADS_NO_DAEMON=1" {
+		t.Errorf("pre_commands[0] = %q, want %q", cfg.Agents.PreCommands[0], "export BEADS_NO_DAEMON=1")
+	}
+	if cfg.Agents.PreCommands[1] != "export FOO=bar" {
+		t.Errorf("pre_commands[1] = %q, want %q", cfg.Agents.PreCommands[1], "export FOO=bar")
+	}
+
+	if len(cfg.Agents.Repos) != 2 {
+		t.Fatalf("repos len = %d, want 2", len(cfg.Agents.Repos))
+	}
+
+	backend := cfg.Agents.Repos["acme-backend"]
+	if backend.Command != "claude" {
+		t.Errorf("acme-backend command = %q, want %q", backend.Command, "claude")
+	}
+	if len(backend.PreCommands) != 1 || backend.PreCommands[0] != "nvm use 18" {
+		t.Errorf("acme-backend pre_commands = %v, want [nvm use 18]", backend.PreCommands)
+	}
+
+	frontend := cfg.Agents.Repos["acme-frontend"]
+	if frontend.Command != "aider" {
+		t.Errorf("acme-frontend command = %q, want %q", frontend.Command, "aider")
+	}
+	if len(frontend.PreCommands) != 1 || frontend.PreCommands[0] != "nvm use 20" {
+		t.Errorf("acme-frontend pre_commands = %v, want [nvm use 20]", frontend.PreCommands)
+	}
+}
+
+func TestAgentsConfig_ResolveCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  AgentsConfig
+		slug string
+		want string
+	}{
+		{
+			name: "no repos map returns default",
+			cfg:  AgentsConfig{DefaultCommand: "claude"},
+			slug: "backend",
+			want: "claude",
+		},
+		{
+			name: "repo-specific command",
+			cfg: AgentsConfig{
+				DefaultCommand: "claude",
+				Repos: map[string]RepoConfig{
+					"backend": {Command: "aider"},
+				},
+			},
+			slug: "backend",
+			want: "aider",
+		},
+		{
+			name: "slug not in map falls back to default",
+			cfg: AgentsConfig{
+				DefaultCommand: "claude",
+				Repos: map[string]RepoConfig{
+					"frontend": {Command: "aider"},
+				},
+			},
+			slug: "backend",
+			want: "claude",
+		},
+		{
+			name: "empty repo command falls back to default",
+			cfg: AgentsConfig{
+				DefaultCommand: "claude",
+				Repos: map[string]RepoConfig{
+					"backend": {Command: ""},
+				},
+			},
+			slug: "backend",
+			want: "claude",
+		},
+		{
+			name: "empty default and no repo returns empty",
+			cfg:  AgentsConfig{},
+			slug: "backend",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.ResolveCommand(tt.slug)
+			if got != tt.want {
+				t.Errorf("ResolveCommand(%q) = %q, want %q", tt.slug, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAgentsConfig_ResolvePreCommands(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  AgentsConfig
+		slug string
+		want []string
+	}{
+		{
+			name: "global only",
+			cfg:  AgentsConfig{PreCommands: []string{"export A=1"}},
+			slug: "backend",
+			want: []string{"export A=1"},
+		},
+		{
+			name: "repo only",
+			cfg: AgentsConfig{
+				Repos: map[string]RepoConfig{
+					"backend": {PreCommands: []string{"nvm use 18"}},
+				},
+			},
+			slug: "backend",
+			want: []string{"nvm use 18"},
+		},
+		{
+			name: "both global and repo",
+			cfg: AgentsConfig{
+				PreCommands: []string{"export A=1"},
+				Repos: map[string]RepoConfig{
+					"backend": {PreCommands: []string{"nvm use 18"}},
+				},
+			},
+			slug: "backend",
+			want: []string{"export A=1", "nvm use 18"},
+		},
+		{
+			name: "neither",
+			cfg:  AgentsConfig{},
+			slug: "backend",
+			want: nil,
+		},
+		{
+			name: "slug not in map returns global only",
+			cfg: AgentsConfig{
+				PreCommands: []string{"export A=1"},
+				Repos: map[string]RepoConfig{
+					"frontend": {PreCommands: []string{"nvm use 20"}},
+				},
+			},
+			slug: "backend",
+			want: []string{"export A=1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.ResolvePreCommands(tt.slug)
+			if len(got) != len(tt.want) {
+				t.Fatalf("ResolvePreCommands(%q) len = %d, want %d\ngot: %v", tt.slug, len(got), len(tt.want), got)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("ResolvePreCommands(%q)[%d] = %q, want %q", tt.slug, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
