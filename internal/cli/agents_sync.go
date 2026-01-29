@@ -1,18 +1,14 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/deploykey"
 	"github.com/cloud-coop/cloudcoop/internal/log"
-	"github.com/cloud-coop/cloudcoop/internal/ssh"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
 
@@ -56,52 +52,14 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 	log.Debug("detected workspace", "slug", info.Slug, "worktrees", len(info.Worktrees))
 
 	// 2. Standard VM connection.
-	cfg, err := configLoader()
+	conn, err := connectToVM(cmd)
 	if err != nil {
-		return handleConfigError(err)
+		return err
 	}
-	if err := cfg.Validate(); err != nil {
-		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
-	}
-
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-	defer cancel()
-
-	provider, cleanup, err := createProvider(ctx, cfg)
-	if err != nil {
-		return handleProviderError(err)
-	}
-	defer cleanup()
-
-	log.Debug("querying VM status", "name", cfg.VM.Name, "provider", provider.Name())
-	vmInfo, err := provider.GetVMInfo(ctx, cfg.VM.Name)
-	if err != nil {
-		return fmt.Errorf("get VM status: %w", err)
-	}
-
-	if vmInfo.Status == cloud.VMStatusNotFound {
-		fmt.Fprintln(os.Stderr, "VM not found:", cfg.VM.Name)
+	if conn == nil {
 		return nil
 	}
-	if vmInfo.Status != cloud.VMStatusRunning {
-		fmt.Fprintf(os.Stderr, "VM is %s (must be running to sync)\n", vmInfo.Status)
-		return nil
-	}
-
-	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
-		return nil
-	}
-
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", cfg.SSH.Port)
-
-	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
-	if err != nil {
-		return fmt.Errorf("SSH connection failed: %w", err)
-	}
-	defer func() { _ = client.Close() }()
+	defer conn.Close()
 
 	// 3. Deploy key setup.
 	repo, err := deploykey.ParseRepoRef(info.RemoteURL)
@@ -127,7 +85,7 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	vmSetup, err := deploykey.SetupVM(client, fs, setupResult.KeyPair, dkOpts)
+	vmSetup, err := deploykey.SetupVM(conn.Client, fs, setupResult.KeyPair, dkOpts)
 	if err != nil {
 		if errors.Is(err, deploykey.ErrPreflightFailed) {
 			fmt.Fprintf(os.Stderr, "Deploy key verification failed: %s\n", vmSetup.VerifyError)
@@ -139,14 +97,14 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 	// 4. Resolve agent command: flag > repo-specific > default > "" (sync defaults to "bash").
 	agentCommand := syncCommand
 	if agentCommand == "" {
-		agentCommand = cfg.Agents.ResolveCommand(info.Slug)
+		agentCommand = conn.Config.Agents.ResolveCommand(info.Slug)
 	}
 
 	// 5. Resolve pre-commands: global + repo-specific.
-	preCommands := cfg.Agents.ResolvePreCommands(info.Slug)
+	preCommands := conn.Config.Agents.ResolvePreCommands(info.Slug)
 
 	// 6. Sync.
-	syncResult, err := workspace.Sync(client, info, workspace.SyncOptions{
+	syncResult, err := workspace.Sync(conn.Client, info, workspace.SyncOptions{
 		AgentCommand: agentCommand,
 		PreCommands:  preCommands,
 		RepoOwner:    repo.Owner,

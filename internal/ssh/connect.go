@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/cloud-coop/cloudcoop/internal/shell"
 )
 
 // ConnectOptions contains options for interactive SSH connection.
@@ -39,10 +41,11 @@ func ConnectInteractive(opts ConnectOptions) error {
 	// Build the tmux attach command
 	var tmuxCmd string
 	if opts.GroupedSession != "" {
-		tmuxCmd = fmt.Sprintf("tmux attach -t %s", opts.GroupedSession)
+		tmuxCmd = fmt.Sprintf("tmux attach -t %s", shell.Escape(opts.GroupedSession))
 	} else {
 		// First select the window, then attach to the session
-		tmuxCmd = fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", opts.Session, opts.WindowIndex, opts.Session)
+		session := shell.Escape(opts.Session)
+		tmuxCmd = fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", session, opts.WindowIndex, session)
 	}
 
 	// Build SSH command

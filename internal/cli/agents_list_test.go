@@ -103,3 +103,66 @@ func TestPrintAgentList(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBaseSessions(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   []string
+	}{
+		{
+			name:   "single base session no group",
+			output: "my-repo|",
+			want:   []string{"my-repo"},
+		},
+		{
+			name:   "base session with matching group",
+			output: "my-repo|my-repo",
+			want:   []string{"my-repo"},
+		},
+		{
+			name:   "grouped session filtered out",
+			output: "my-repo|my-repo\nmy-repo-abc123|my-repo",
+			want:   []string{"my-repo"},
+		},
+		{
+			name:   "multiple base sessions",
+			output: "backend|\nfrontend|",
+			want:   []string{"backend", "frontend"},
+		},
+		{
+			name:   "mixed base and grouped",
+			output: "backend|backend\nbackend-1234|backend\nfrontend|frontend\nfrontend-5678|frontend",
+			want:   []string{"backend", "frontend"},
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   nil,
+		},
+		{
+			name:   "whitespace only",
+			output: "  \n  ",
+			want:   nil,
+		},
+		{
+			name:   "no pipe separator",
+			output: "my-repo",
+			want:   []string{"my-repo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseBaseSessions(tt.output)
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseBaseSessions() returned %d sessions, want %d\ngot: %v", len(got), len(tt.want), got)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("parseBaseSessions()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
