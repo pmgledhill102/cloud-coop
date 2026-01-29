@@ -162,23 +162,25 @@ func TestSync_FreshSync(t *testing.T) {
 			{output: "", err: errors.New("exit status 1")},
 			// 3. git clone --bare
 			{output: "", err: nil},
-			// 4. git fetch
+			// 4. git config fetch refspec
 			{output: "", err: nil},
-			// 5. git worktree list --porcelain (bare repo only)
+			// 5. git fetch
+			{output: "", err: nil},
+			// 6. git worktree list --porcelain (bare repo only)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n"},
-			// 6. git worktree add /workspaces/backend/main main
+			// 7. git worktree add /workspaces/backend/main main
 			{output: "", err: nil},
-			// 7. git worktree add /workspaces/backend/feature-auth feature/auth
+			// 8. git worktree add /workspaces/backend/feature-auth feature/auth
 			{output: "", err: nil},
-			// 8. agent.ListSessions → tmux list-windows (no session)
+			// 9. agent.ListSessions → tmux list-windows (no session)
 			{output: "can't find session: backend", err: errors.New("exit status 1")},
-			// 9. agent.CreateSession("main") → ListSessions internally
+			// 10. agent.CreateSession("main") → ListSessions internally
 			{output: "can't find session: backend", err: errors.New("exit status 1")},
-			// 10. tmux new-session
+			// 11. tmux new-session
 			{output: "", err: nil},
-			// 11. agent.CreateSession("feature-auth") → ListSessions internally
+			// 12. agent.CreateSession("feature-auth") → ListSessions internally
 			{output: "0|main|cd '/workspaces/backend/main' && bash\n", err: nil},
-			// 12. tmux new-window
+			// 13. tmux new-window
 			{output: "", err: nil},
 		},
 	}
@@ -236,7 +238,9 @@ func TestSync_IdempotentReSync(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list --porcelain (main already exists)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
@@ -289,7 +293,9 @@ func TestSync_Incremental(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (main exists remotely)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
@@ -346,7 +352,9 @@ func TestSync_StaleDetection(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (main + old-experiment on remote)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
@@ -420,7 +428,9 @@ func TestSync_MixedTypes(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (empty besides bare)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n"},
@@ -475,7 +485,9 @@ func TestSync_CustomCommand(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (main exists)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
@@ -535,7 +547,9 @@ func TestSync_DefaultCommand(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (main exists remotely)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +
@@ -631,7 +645,9 @@ func TestSync_PreCommands(t *testing.T) {
 			{output: "", err: nil},
 			// 2. test -d (exists)
 			{output: "", err: nil},
-			// 3. git fetch
+			// 3. git config fetch refspec
+			{output: "", err: nil},
+			// 4. git fetch
 			{output: "", err: nil},
 			// 4. git worktree list (main exists remotely)
 			{output: "worktree /repos/backend.git\nHEAD abc\nbare\n\n" +

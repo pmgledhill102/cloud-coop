@@ -99,6 +99,10 @@ func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) 
 		result.Cloned = true
 	}
 
+	// Ensure fetch refspec is configured (git clone --bare doesn't set one).
+	_, _ = runner.Run("git -C " + shellEscape(bareRepo) +
+		" config remote.origin.fetch '+refs/heads/*:refs/heads/*'")
+
 	// 4. Fetch all.
 	_, err = runner.Run("git -C " + shellEscape(bareRepo) + " fetch --all --prune")
 	if err != nil {

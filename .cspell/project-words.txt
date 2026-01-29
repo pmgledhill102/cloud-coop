@@ -127,6 +127,7 @@ publickey
 pulumi
 readonly
 refactor
+refspec
 reviewdog
 revive
 RSASHA
