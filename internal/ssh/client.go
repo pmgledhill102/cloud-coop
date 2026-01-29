@@ -107,10 +107,15 @@ func (c *Client) Close() error {
 func discoverAuthMethods() []ssh.AuthMethod {
 	var methods []ssh.AuthMethod
 
-	// SSH agent (preferred)
+	// SSH agent (preferred, but only if it has keys — an empty agent
+	// consumes the server's publickey attempt and prevents file-based
+	// keys from being tried).
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		if conn, err := net.Dial("unix", sock); err == nil {
-			methods = append(methods, ssh.PublicKeysCallback(agent.NewClient(conn).Signers))
+			agentClient := agent.NewClient(conn)
+			if signers, err := agentClient.Signers(); err == nil && len(signers) > 0 {
+				methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
+			}
 		}
 	}
 
@@ -120,10 +125,33 @@ func discoverAuthMethods() []ssh.AuthMethod {
 		path := filepath.Join(home, ".ssh", name)
 		if key, err := os.ReadFile(path); err == nil {
 			if signer, err := ssh.ParsePrivateKey(key); err == nil {
-				methods = append(methods, ssh.PublicKeys(signer))
+				methods = append(methods, ssh.PublicKeys(upgradeRSASigner(signer)))
 			}
 		}
 	}
 
 	return methods
+}
+
+// upgradeRSASigner upgrades an RSA signer to prefer rsa-sha2-512 and
+// rsa-sha2-256 over the legacy ssh-rsa (SHA-1) algorithm. Modern OpenSSH
+// servers disable ssh-rsa by default, so without this upgrade RSA keys
+// (including GCP's google_compute_engine) are rejected.
+// Non-RSA signers are returned unchanged.
+func upgradeRSASigner(signer ssh.Signer) ssh.Signer {
+	if signer.PublicKey().Type() != ssh.KeyAlgoRSA {
+		return signer
+	}
+	algSigner, ok := signer.(ssh.AlgorithmSigner)
+	if !ok {
+		return signer
+	}
+	upgraded, err := ssh.NewSignerWithAlgorithms(algSigner, []string{
+		ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoRSASHA256,
+	})
+	if err != nil {
+		return signer
+	}
+	return upgraded
 }

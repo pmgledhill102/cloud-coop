@@ -95,6 +95,30 @@ func TestDiscoverAuthMethods_KeyFiles(t *testing.T) {
 	}
 }
 
+func TestDiscoverAuthMethods_SkipsEmptyAgent(t *testing.T) {
+	tmpHome := t.TempDir()
+	sshDir := filepath.Join(tmpHome, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatalf("create .ssh dir: %v", err)
+	}
+
+	// Point HOME to temp dir and clear SSH_AUTH_SOCK
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("SSH_AUTH_SOCK", "")
+
+	// Write a valid key file
+	keyData := generateTestKey(t)
+	if err := os.WriteFile(filepath.Join(sshDir, "id_ed25519"), keyData, 0600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+
+	// With no agent, we should get exactly 1 method (the key file)
+	methods := discoverAuthMethods()
+	if len(methods) != 1 {
+		t.Errorf("discoverAuthMethods() with no agent returned %d methods, want 1", len(methods))
+	}
+}
+
 func TestDiscoverAuthMethods_IgnoresInvalidKeys(t *testing.T) {
 	tmpHome := t.TempDir()
 	sshDir := filepath.Join(tmpHome, ".ssh")

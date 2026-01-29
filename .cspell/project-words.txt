@@ -123,11 +123,13 @@ preemptible
 prettierignore
 prettierrc
 pubkey
+publickey
 pulumi
 readonly
 refactor
 reviewdog
 revive
+RSASHA
 rubocop
 rustup
 sandboxed
