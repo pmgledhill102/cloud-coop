@@ -19,7 +19,7 @@ var agentsAddCmd = &cobra.Command{
 	Short: "Add a new agent session",
 	Long: `Add a new agent session in a tmux window on the cloud VM.
 
-Creates a new tmux window in the "agents" session. If no session exists,
+Creates a new tmux window in the tmux session. If no session exists,
 one will be created automatically.
 
 Examples:
@@ -107,7 +107,7 @@ func runAgentsAdd(cmd *cobra.Command, args []string) error {
 		Command: command,
 	}
 
-	session, err := agent.CreateSession(client, opts)
+	session, err := agent.CreateSession(client, defaultSessionName, opts)
 	if err != nil {
 		if err == agent.ErrTmuxNotInstalled {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")

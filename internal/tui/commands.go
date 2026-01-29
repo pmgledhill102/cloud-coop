@@ -16,6 +16,10 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
+// defaultSessionName is the tmux session name used until workspace detection
+// is integrated.
+const defaultSessionName = "agents"
+
 // Message types for async operations.
 
 type configLoadedMsg struct {
@@ -212,7 +216,7 @@ func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 		}
 		defer func() { _ = client.Close() }()
 
-		result, err := agent.ListSessions(client)
+		result, err := agent.ListSessions(client, defaultSessionName)
 		return agentsMsg{result: result, err: err}
 	}
 }
@@ -226,7 +230,7 @@ func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 		defer func() { _ = client.Close() }()
 
 		opts := agent.CreateSessionOptions{Command: cfg.Agents.DefaultCommand}
-		session, err := agent.CreateSession(client, opts)
+		session, err := agent.CreateSession(client, defaultSessionName, opts)
 		return agentAddedMsg{session: session, err: err}
 	}
 }
@@ -236,7 +240,7 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) t
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	port := ssh.ResolvePort(cfg.SSH.Port)
 
-	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
+	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", defaultSessionName, windowIndex, defaultSessionName)
 	c := exec.Command("ssh", "-t", "-p", fmt.Sprintf("%d", port),
 		fmt.Sprintf("%s@%s", sshUser, ip), tmuxCmd)
 
@@ -254,7 +258,7 @@ func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
 		defer func() { _ = client.Close() }()
 
 		opts := agent.KillSessionOptions{Index: index, Force: true}
-		err = agent.KillSession(client, opts)
+		err = agent.KillSession(client, defaultSessionName, opts)
 		return agentKilledMsg{index: index, err: err}
 	}
 }

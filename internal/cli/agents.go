@@ -4,12 +4,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// defaultSessionName is the tmux session name used until workspace detection
+// is integrated.
+const defaultSessionName = "agents"
+
 var agentsCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "Manage agent sessions",
 	Long: `Manage agent sessions running in tmux on the cloud VM.
 
-Agents run in tmux windows within an "agents" session on the VM.
+Agents run in tmux windows within a tmux session on the VM.
 This command group provides tools to list, monitor, and manage these sessions.`,
 }
 

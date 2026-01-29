@@ -90,7 +90,7 @@ func sshCommandForKitty(cfg Config, windowIndex int) string {
 	parts = append(parts, fmt.Sprintf("%s@%s", cfg.User, cfg.Host))
 
 	// The remote command needs to be a single argument
-	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", windowIndex)
+	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", cfg.Session, windowIndex, cfg.Session)
 	parts = append(parts, tmuxCmd)
 
 	return strings.Join(parts, " ")

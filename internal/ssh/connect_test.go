@@ -18,6 +18,7 @@ func TestConnectOptions_Defaults(t *testing.T) {
 	opts := ConnectOptions{
 		Host:        "example.com",
 		User:        "testuser",
+		Session:     "agents",
 		WindowIndex: 5,
 		// Port left as 0 to test default
 	}
@@ -33,6 +34,7 @@ func TestConnectOptions_AllFields(t *testing.T) {
 		Host:        "192.168.1.100",
 		User:        "ubuntu",
 		Port:        2222,
+		Session:     "agents",
 		WindowIndex: 3,
 	}
 
@@ -44,6 +46,9 @@ func TestConnectOptions_AllFields(t *testing.T) {
 	}
 	if opts.Port != 2222 {
 		t.Errorf("Port = %d, want %d", opts.Port, 2222)
+	}
+	if opts.Session != "agents" {
+		t.Errorf("Session = %q, want %q", opts.Session, "agents")
 	}
 	if opts.WindowIndex != 3 {
 		t.Errorf("WindowIndex = %d, want %d", opts.WindowIndex, 3)

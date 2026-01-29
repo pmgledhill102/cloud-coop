@@ -102,10 +102,11 @@ func TestCalculateGrid(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	cfg := Config{
-		Grid: Grid{Cols: 2, Rows: 2},
-		Host: "10.0.0.1",
-		User: "testuser",
-		Port: 22,
+		Grid:    Grid{Cols: 2, Rows: 2},
+		Host:    "10.0.0.1",
+		User:    "testuser",
+		Port:    22,
+		Session: "agents",
 		Sessions: []agent.Session{
 			{Index: 0, Name: "agent-0", Command: "claude"},
 			{Index: 1, Name: "agent-1", Command: "aider"},
@@ -139,11 +140,12 @@ func TestGenerate(t *testing.T) {
 
 func TestGenerateInvalidFormat(t *testing.T) {
 	cfg := Config{
-		Format: "invalid",
-		Grid:   Grid{Cols: 2, Rows: 2},
-		Host:   "10.0.0.1",
-		User:   "testuser",
-		Port:   22,
+		Format:  "invalid",
+		Grid:    Grid{Cols: 2, Rows: 2},
+		Host:    "10.0.0.1",
+		User:    "testuser",
+		Port:    22,
+		Session: "agents",
 	}
 
 	_, err := Generate(cfg)
@@ -154,11 +156,12 @@ func TestGenerateInvalidFormat(t *testing.T) {
 
 func TestGenerateGhostty(t *testing.T) {
 	cfg := Config{
-		Format: "ghostty",
-		Grid:   Grid{Cols: 2, Rows: 1},
-		Host:   "192.168.1.100",
-		User:   "ubuntu",
-		Port:   2222,
+		Format:  "ghostty",
+		Grid:    Grid{Cols: 2, Rows: 1},
+		Host:    "192.168.1.100",
+		User:    "ubuntu",
+		Port:    2222,
+		Session: "agents",
 		Sessions: []agent.Session{
 			{Index: 0, Name: "agent-0", Command: "claude"},
 			{Index: 1, Name: "agent-1", Command: "aider"},
@@ -188,11 +191,12 @@ func TestGenerateGhostty(t *testing.T) {
 
 func TestGenerateITerm2(t *testing.T) {
 	cfg := Config{
-		Format: "iterm2",
-		Grid:   Grid{Cols: 2, Rows: 2},
-		Host:   "10.0.0.5",
-		User:   "admin",
-		Port:   22,
+		Format:  "iterm2",
+		Grid:    Grid{Cols: 2, Rows: 2},
+		Host:    "10.0.0.5",
+		User:    "admin",
+		Port:    22,
+		Session: "agents",
 		Sessions: []agent.Session{
 			{Index: 0, Name: "agent-0", Command: "claude"},
 			{Index: 1, Name: "agent-1", Command: "aider"},
@@ -223,11 +227,12 @@ func TestGenerateITerm2(t *testing.T) {
 
 func TestGenerateKitty(t *testing.T) {
 	cfg := Config{
-		Format: "kitty",
-		Grid:   Grid{Cols: 3, Rows: 1},
-		Host:   "agent-vm.example.com",
-		User:   "dev",
-		Port:   22,
+		Format:  "kitty",
+		Grid:    Grid{Cols: 3, Rows: 1},
+		Host:    "agent-vm.example.com",
+		User:    "dev",
+		Port:    22,
+		Session: "agents",
 		Sessions: []agent.Session{
 			{Index: 0, Name: "claude-1", Command: "claude"},
 			{Index: 1, Name: "claude-2", Command: "claude"},

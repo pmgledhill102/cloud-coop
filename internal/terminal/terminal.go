@@ -24,6 +24,7 @@ type Config struct {
 	Host     string          // VM host (IP or hostname)
 	User     string          // SSH username
 	Port     int             // SSH port
+	Session  string          // tmux session name
 	Sessions []agent.Session // agent sessions to connect to
 }
 

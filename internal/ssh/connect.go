@@ -11,11 +11,12 @@ type ConnectOptions struct {
 	Host        string // VM host (IP or hostname)
 	User        string // SSH username
 	Port        int    // SSH port (default: 22)
+	Session     string // tmux session name
 	WindowIndex int    // tmux window index to attach to
 }
 
 // ConnectInteractive shells out to SSH for an interactive terminal session.
-// It attaches to the specified tmux window in the "agents" session.
+// It attaches to the specified tmux window in the named session.
 // This function blocks until the SSH session ends.
 func ConnectInteractive(opts ConnectOptions) error {
 	port := opts.Port
@@ -36,7 +37,7 @@ func ConnectInteractive(opts ConnectOptions) error {
 
 	// Build the tmux attach command
 	// First select the window, then attach to the session
-	tmuxCmd := fmt.Sprintf("tmux select-window -t agents:%d && tmux attach -t agents", opts.WindowIndex)
+	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", opts.Session, opts.WindowIndex, opts.Session)
 
 	// Build SSH command
 	// -t forces pseudo-terminal allocation (required for tmux)

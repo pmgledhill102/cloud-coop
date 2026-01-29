@@ -108,7 +108,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check agent exists
-	result, err := agent.ListSessions(client)
+	result, err := agent.ListSessions(client, defaultSessionName)
 	_ = client.Close() // Close before interactive session
 
 	if err != nil {
@@ -120,7 +120,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	}
 
 	if result.NoSession {
-		fmt.Fprintln(os.Stderr, "No agents session exists")
+		fmt.Fprintln(os.Stderr, "No tmux session exists")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Create an agent first with:")
 		fmt.Fprintln(os.Stderr, "  cloudcoop agents add")
@@ -155,6 +155,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		Host:        ip,
 		User:        sshUser,
 		Port:        cfg.SSH.Port,
+		Session:     defaultSessionName,
 		WindowIndex: index,
 	}
 
