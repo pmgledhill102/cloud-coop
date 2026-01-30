@@ -30,6 +30,7 @@ type Config struct {
 	User    string
 	Port    int
 	Timeout time.Duration
+	VM      *VMIdentity // optional; enables host-key pinning
 }
 
 // Client wraps an SSH connection and implements Runner.
@@ -58,7 +59,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 	// Ensure we have the host key before connecting
 	// This fetches/updates the key automatically for cloudcoop-managed VMs
-	if err := EnsureHostKey(cfg.Host, cfg.Port); err != nil {
+	if err := EnsureHostKeyPinned(cfg.Host, cfg.Port, cfg.VM); err != nil {
 		return nil, fmt.Errorf("fetch host key: %w", err)
 	}
 

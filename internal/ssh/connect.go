@@ -10,12 +10,13 @@ import (
 
 // ConnectOptions contains options for interactive SSH connection.
 type ConnectOptions struct {
-	Host           string // VM host (IP or hostname)
-	User           string // SSH username
-	Port           int    // SSH port (default: 22)
-	Session        string // tmux session name
-	WindowIndex    int    // tmux window index to attach to
-	GroupedSession string // if set, attach to this grouped session instead
+	Host           string      // VM host (IP or hostname)
+	User           string      // SSH username
+	Port           int         // SSH port (default: 22)
+	Session        string      // tmux session name
+	WindowIndex    int         // tmux window index to attach to
+	GroupedSession string      // if set, attach to this grouped session instead
+	VM             *VMIdentity // optional; enables host-key pinning
 }
 
 // ConnectInteractive shells out to SSH for an interactive terminal session.
@@ -28,7 +29,7 @@ func ConnectInteractive(opts ConnectOptions) error {
 	}
 
 	// Ensure host key is available (uses cloudcoop's managed known_hosts)
-	if err := EnsureHostKey(opts.Host, port); err != nil {
+	if err := EnsureHostKeyPinned(opts.Host, port, opts.VM); err != nil {
 		return fmt.Errorf("fetch host key: %w", err)
 	}
 

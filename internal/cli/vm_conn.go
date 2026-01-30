@@ -85,7 +85,9 @@ func connectToVM(cmd *cobra.Command) (*vmConn, error) {
 	sshPort := ssh.ResolvePort(cfg.SSH.Port)
 	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", sshPort)
 
-	client, err := sshClientFactory(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
+	sshCfg := ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port)
+	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+	client, err := sshClientFactory(sshCfg)
 	if err != nil {
 		return nil, handleSSHError(err, ip, sshPort)
 	}

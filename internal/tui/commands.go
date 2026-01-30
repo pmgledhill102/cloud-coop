@@ -194,6 +194,10 @@ func deleteVM(cfg *config.Config) tea.Cmd {
 		if err := provider.DeleteVM(ctx, cfg.VM.Name); err != nil {
 			return vmDeleteMsg{err: fmt.Errorf("delete VM: %w", err)}
 		}
+
+		// Clean up pinned host key for the deleted VM.
+		_ = ssh.ClearPinnedKey(cfg.VM.Name)
+
 		return vmDeleteMsg{}
 	}
 }
@@ -205,7 +209,9 @@ func connectSSH(cfg *config.Config, vmInfo *cloud.VMInfo) (*ssh.Client, error) {
 		return nil, fmt.Errorf("no IP address available")
 	}
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	return ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
+	sshCfg := ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port)
+	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+	return ssh.NewClient(sshCfg)
 }
 
 func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
@@ -239,9 +245,10 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) t
 	ip, _ := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	port := ssh.ResolvePort(cfg.SSH.Port)
+	vm := ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
 
 	// Ensure host key is in cloudcoop's managed known_hosts before connecting
-	if err := ssh.EnsureHostKey(ip, port); err != nil {
+	if err := ssh.EnsureHostKeyPinned(ip, port, vm); err != nil {
 		return func() tea.Msg {
 			return connectFinishedMsg{err: fmt.Errorf("fetch host key: %w", err)}
 		}
