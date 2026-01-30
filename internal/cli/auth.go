@@ -151,8 +151,9 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	port := ssh.ResolvePort(cfg.SSH.Port)
 
 	// Ensure host key is available (uses cloudcoop's managed known_hosts)
+	vm := ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
 	log.Debug("ensuring host key", "host", host, "port", port)
-	if err := ssh.EnsureHostKey(host, port); err != nil {
+	if err := ssh.EnsureHostKeyPinned(host, port, vm); err != nil {
 		return fmt.Errorf("fetch host key: %w", err)
 	}
 
@@ -262,7 +263,9 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", cfg.SSH.Port)
 
-	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
+	sshCfg := ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port)
+	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+	client, err := ssh.NewClient(sshCfg)
 	if err != nil {
 		return handleSSHError(err, ip, ssh.ResolvePort(cfg.SSH.Port))
 	}

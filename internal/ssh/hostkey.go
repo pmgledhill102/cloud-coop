@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -9,9 +10,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
+
+// pinnedKey is a single entry in the pin store.
+type pinnedKey struct {
+	Host    string `toml:"host"`
+	Port    int    `toml:"port"`
+	Created string `toml:"created"`
+}
+
+// pinnedKeysStore maps VM name to its pinned key metadata.
+type pinnedKeysStore map[string]pinnedKey
 
 // CloudcoopKnownHostsPath returns the path to cloudcoop's managed known_hosts file.
 // This is separate from ~/.ssh/known_hosts to avoid polluting the user's file
@@ -167,6 +179,142 @@ func CreateHostKeyCallback(host string, port int) (ssh.HostKeyCallback, error) {
 		}
 		return nil
 	}, nil
+}
+
+// EnsureHostKeyPinned is the pin-aware variant of EnsureHostKey.
+// When vm is non-nil it uses a TOML pin file to avoid unnecessary re-scans:
+//   - Pin matches (same created, host, port) and known_hosts entry exists: skip
+//   - Pin stale (different created or IP): remove old entry, re-scan, update pin
+//   - No pin (first connection): scan, create pin
+//
+// When vm is nil it falls back to the unpinned EnsureHostKey behavior.
+func EnsureHostKeyPinned(host string, port int, vm *VMIdentity) error {
+	if vm == nil {
+		return EnsureHostKey(host, port)
+	}
+
+	store, err := loadPinnedKeys()
+	if err != nil {
+		return err
+	}
+
+	if pin, ok := store[vm.Name]; ok && pin.Created == vm.Created &&
+		pin.Host == host && pin.Port == port {
+		// Pin matches — check known_hosts still has the entry.
+		if hostKeyExists(host, port) {
+			return nil // nothing to do
+		}
+		// Entry disappeared; fall through to re-scan.
+	}
+
+	// Remove any stale known_hosts entry for the previous host (if any).
+	if old, ok := store[vm.Name]; ok {
+		khPath, err := CloudcoopKnownHostsPath()
+		if err == nil {
+			_ = removeHostEntry(khPath, old.Host, old.Port)
+		}
+	}
+
+	// Fetch (or refresh) the host key.
+	if err := EnsureHostKey(host, port); err != nil {
+		return err
+	}
+
+	// Update the pin.
+	store[vm.Name] = pinnedKey{Host: host, Port: port, Created: vm.Created}
+	return savePinnedKeys(store)
+}
+
+// ClearPinnedKey removes the pin and the known_hosts entry for vmName.
+func ClearPinnedKey(vmName string) error {
+	store, err := loadPinnedKeys()
+	if err != nil {
+		return err
+	}
+
+	pin, ok := store[vmName]
+	if !ok {
+		return nil
+	}
+
+	// Remove from known_hosts.
+	khPath, khErr := CloudcoopKnownHostsPath()
+	if khErr == nil {
+		_ = removeHostEntry(khPath, pin.Host, pin.Port)
+	}
+
+	delete(store, vmName)
+	return savePinnedKeys(store)
+}
+
+// pinnedKeysPath returns the path to the TOML pin file.
+func pinnedKeysPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "cloudcoop", "pinned_keys.toml"), nil
+}
+
+// loadPinnedKeys reads the pin store from disk.
+// Returns an empty store on missing or corrupt file.
+func loadPinnedKeys() (pinnedKeysStore, error) {
+	path, err := pinnedKeysPath()
+	if err != nil {
+		return nil, err
+	}
+
+	store := make(pinnedKeysStore)
+	if _, err := toml.DecodeFile(path, &store); err != nil {
+		if os.IsNotExist(err) {
+			return store, nil
+		}
+		// Corrupt file — start fresh.
+		return make(pinnedKeysStore), nil
+	}
+	return store, nil
+}
+
+// savePinnedKeys writes the pin store to disk atomically.
+func savePinnedKeys(store pinnedKeysStore) error {
+	path, err := pinnedKeysPath()
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(store); err != nil {
+		return fmt.Errorf("encode pinned keys: %w", err)
+	}
+	return os.WriteFile(path, buf.Bytes(), 0600)
+}
+
+// hostKeyExists returns true if cloudcoop's known_hosts file contains at least
+// one entry for the given host and port.
+func hostKeyExists(host string, port int) bool {
+	khPath, err := CloudcoopKnownHostsPath()
+	if err != nil {
+		return false
+	}
+
+	content, err := os.ReadFile(khPath)
+	if err != nil {
+		return false
+	}
+
+	pattern := formatKnownHostsEntry(host, port)
+	scanner := bufio.NewScanner(strings.NewReader(string(content)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, pattern+" ") || strings.HasPrefix(line, pattern+",") {
+			return true
+		}
+	}
+	return false
 }
 
 // IsHostKeyError checks if an error is a host key related error.

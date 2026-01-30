@@ -109,6 +109,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		Port:        conn.Port,
 		Session:     sessionName,
 		WindowIndex: index,
+		VM:          ssh.NewVMIdentity(conn.VMInfo.Name, conn.VMInfo.CloudcoopCreated),
 	}
 
 	err = ssh.ConnectInteractive(opts)

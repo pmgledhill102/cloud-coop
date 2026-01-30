@@ -92,6 +92,7 @@ func runSSH(cmd *cobra.Command, args []string) error {
 	// Connect and run command
 	sshCfg := ssh.DefaultConfig(host, user)
 	sshCfg.Port = port
+	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
 	client, err := ssh.NewClient(sshCfg)
 	if err != nil {
 		return handleSSHError(err, host, port)

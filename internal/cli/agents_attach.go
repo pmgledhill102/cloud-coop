@@ -138,6 +138,7 @@ func runAgentsAttach(cmd *cobra.Command, args []string) error {
 		Session:        sessionName,
 		WindowIndex:    targetWindow.Index,
 		GroupedSession: groupedSessionName,
+		VM:             ssh.NewVMIdentity(conn.VMInfo.Name, conn.VMInfo.CloudcoopCreated),
 	}
 
 	return ssh.ConnectInteractive(connectOpts)

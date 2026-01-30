@@ -12,6 +12,7 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
 var deleteCmd = &cobra.Command{
@@ -93,6 +94,9 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if err := provider.DeleteVM(ctx, cfg.VM.Name); err != nil {
 		return fmt.Errorf("delete VM: %w", err)
 	}
+
+	// Clean up pinned host key for the deleted VM.
+	_ = ssh.ClearPinnedKey(cfg.VM.Name)
 
 	// Verify deletion
 	newInfo, err := provider.GetVMInfo(ctx, cfg.VM.Name)

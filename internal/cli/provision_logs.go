@@ -106,7 +106,8 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 		}
 
 		// Ensure host key is in cloudcoop's managed known_hosts
-		if err := ssh.EnsureHostKey(ip, port); err != nil {
+		vm := ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+		if err := ssh.EnsureHostKeyPinned(ip, port, vm); err != nil {
 			return fmt.Errorf("fetch host key: %w", err)
 		}
 
@@ -132,7 +133,9 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 	}
 
 	// For non-follow mode, use SSH client
-	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, port))
+	sshCfg := ssh.SetupClientConfig(ip, sshUser, port)
+	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+	client, err := ssh.NewClient(sshCfg)
 	if err != nil {
 		return fmt.Errorf("SSH connection failed: %w", err)
 	}

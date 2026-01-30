@@ -9,6 +9,23 @@ import (
 // ErrNoIPAvailable is returned when no IP address is available for connection.
 var ErrNoIPAvailable = fmt.Errorf("no IP address available")
 
+// VMIdentity holds the immutable identity of a VM for host-key pinning.
+// The Name+Created pair uniquely identifies a VM lifetime: if the VM is
+// deleted and recreated the Created timestamp changes, triggering a re-scan.
+type VMIdentity struct {
+	Name    string
+	Created string
+}
+
+// NewVMIdentity returns a VMIdentity if both name and created are non-empty,
+// otherwise nil (which causes callers to fall back to the unpinned path).
+func NewVMIdentity(name, created string) *VMIdentity {
+	if name == "" || created == "" {
+		return nil
+	}
+	return &VMIdentity{Name: name, Created: created}
+}
+
 // ResolveVMIP returns the best IP address for SSH connection.
 // It prefers external IP, falling back to internal IP.
 // Returns ErrNoIPAvailable if neither is available.
