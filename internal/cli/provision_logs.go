@@ -105,7 +105,18 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
+		// Ensure host key is in cloudcoop's managed known_hosts
+		if err := ssh.EnsureHostKey(ip, port); err != nil {
+			return fmt.Errorf("fetch host key: %w", err)
+		}
+
+		knownHostsPath, err := ssh.CloudcoopKnownHostsPath()
+		if err != nil {
+			return fmt.Errorf("get known_hosts path: %w", err)
+		}
+
 		sshArgs := []string{
+			"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
 			"-t", // Force PTY allocation
 			"-p", fmt.Sprintf("%d", port),
 			fmt.Sprintf("%s@%s", sshUser, ip),
