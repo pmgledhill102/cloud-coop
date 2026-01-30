@@ -53,21 +53,3 @@ func SetupClientConfig(host, user string, port int) Config {
 		Timeout: DefaultTimeout,
 	}
 }
-
-// QuickConnect creates an SSH client with common defaults applied.
-// It resolves the IP from external/internal, determines the user,
-// and connects with the specified port (0 uses default 22).
-func QuickConnect(externalIP, internalIP, configUser string, port int) (*Client, error) {
-	ip, err := ResolveVMIP(externalIP, internalIP)
-	if err != nil {
-		return nil, err
-	}
-
-	user := ResolveSSHUser(configUser)
-	if user == "" {
-		return nil, fmt.Errorf("could not determine SSH user")
-	}
-
-	cfg := SetupClientConfig(ip, user, port)
-	return NewClient(cfg)
-}
