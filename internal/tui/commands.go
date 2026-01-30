@@ -240,8 +240,25 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) t
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	port := ssh.ResolvePort(cfg.SSH.Port)
 
+	// Ensure host key is in cloudcoop's managed known_hosts before connecting
+	if err := ssh.EnsureHostKey(ip, port); err != nil {
+		return func() tea.Msg {
+			return connectFinishedMsg{err: fmt.Errorf("fetch host key: %w", err)}
+		}
+	}
+
+	knownHostsPath, err := ssh.CloudcoopKnownHostsPath()
+	if err != nil {
+		return func() tea.Msg {
+			return connectFinishedMsg{err: fmt.Errorf("get known_hosts path: %w", err)}
+		}
+	}
+
 	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", defaultSessionName, windowIndex, defaultSessionName)
-	c := exec.Command("ssh", "-t", "-p", fmt.Sprintf("%d", port),
+	c := exec.Command("ssh",
+		"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
+		"-t",
+		"-p", fmt.Sprintf("%d", port),
 		fmt.Sprintf("%s@%s", sshUser, ip), tmuxCmd)
 
 	return tea.ExecProcess(c, func(err error) tea.Msg {
