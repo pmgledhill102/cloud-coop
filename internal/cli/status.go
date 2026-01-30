@@ -30,19 +30,13 @@ This shows:
 	RunE: runStatus,
 }
 
-// ProviderFactory creates a cloud provider from configuration.
+// providerFactory creates a cloud provider from configuration.
 // This is a package-level variable to allow test injection.
-type ProviderFactory func(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error)
+var providerFactory func(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) = createProviderImpl
 
-// ConfigLoader loads the application configuration.
+// configLoader loads the application configuration.
 // This is a package-level variable to allow test injection.
-type ConfigLoader func() (*config.Config, error)
-
-// providerFactory is the active provider factory, defaults to createProviderImpl.
-var providerFactory ProviderFactory = createProviderImpl
-
-// configLoader is the active config loader, defaults to config.Load.
-var configLoader ConfigLoader = config.Load
+var configLoader func() (*config.Config, error) = config.Load
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	// Load configuration

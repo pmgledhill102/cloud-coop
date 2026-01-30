@@ -14,12 +14,9 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
-// SSHClientFactory creates an SSH client from a config.
+// sshClientFactory creates an SSH client from a config.
 // This is a package-level variable to allow test injection.
-type SSHClientFactory func(cfg ssh.Config) (ssh.Runner, error)
-
-// sshClientFactory is the active SSH client factory.
-var sshClientFactory SSHClientFactory = defaultSSHClientFactory
+var sshClientFactory func(cfg ssh.Config) (ssh.Runner, error) = defaultSSHClientFactory
 
 func defaultSSHClientFactory(cfg ssh.Config) (ssh.Runner, error) {
 	return ssh.NewClient(cfg)
