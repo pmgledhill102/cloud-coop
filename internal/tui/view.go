@@ -35,7 +35,7 @@ func (m Model) renderView() string {
 		content = m.renderKillConfirmation()
 	case m.operation != "":
 		content = m.renderOperation()
-	case m.loading:
+	case m.loading && m.vmInfo == nil:
 		content = boxStyle.Render("Loading VM status...")
 	case m.vmErr != nil:
 		content = boxStyle.Render(errorStyle.Render(fmt.Sprintf("Error: %v", m.vmErr)))
@@ -241,6 +241,11 @@ func (m Model) renderHelp() string {
 	}
 
 	actions := []string{"q: quit", "r: refresh"}
+	if m.autoRefreshPaused {
+		actions = append(actions, "a: resume auto")
+	} else {
+		actions = append(actions, "a: pause auto")
+	}
 	if m.vmInfo != nil && m.operation == "" {
 		switch m.vmInfo.Status {
 		case cloud.VMStatusNotFound:
@@ -282,6 +287,7 @@ func (m Model) renderHelpOverlay() string {
 
   General
     r           Refresh
+    a           Toggle auto-refresh pause
     ?           Toggle this help
     Esc         Close help
     q           Quit

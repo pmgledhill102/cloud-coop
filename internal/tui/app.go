@@ -12,11 +12,13 @@ import (
 
 // Model represents the TUI application state.
 type Model struct {
-	width     int
-	height    int
-	ready     bool
-	loading   bool
-	operation string // "", "starting", "stopping", "adding", "killing"
+	width             int
+	height            int
+	ready             bool
+	loading           bool
+	refreshing        bool // background refresh in progress (no loading flash)
+	autoRefreshPaused bool
+	operation         string // "", "starting", "stopping", "adding", "killing"
 
 	cfg     *config.Config
 	cfgErr  error

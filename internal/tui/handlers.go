@@ -137,6 +137,8 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
 			m.confirmingDelete = true
 		}
+	case "a":
+		m.autoRefreshPaused = !m.autoRefreshPaused
 	case "?":
 		m.showHelp = true
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
@@ -183,6 +185,7 @@ func (m Model) handleConfigLoaded(msg configLoadedMsg) (Model, tea.Cmd) {
 
 func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 	m.loading = false
+	m.refreshing = false
 	m.vmInfo = msg.info
 	m.vmErr = msg.err
 	if msg.cleanup != nil {
@@ -293,10 +296,13 @@ func (m Model) handleRefreshTick() (Model, tea.Cmd) {
 	if m.cfg == nil || m.cfgErr != nil {
 		return m, nil
 	}
-	if !m.loading {
-		m.loading = true
+	if m.autoRefreshPaused {
+		return m, scheduleRefresh(m.cfg)
+	}
+	if !m.loading && !m.refreshing {
+		m.refreshing = true
 		return m, tea.Batch(fetchVMInfo(m.cfg), scheduleRefresh(m.cfg))
 	}
-	// Already loading, just reschedule for later
+	// Already loading/refreshing, just reschedule for later
 	return m, scheduleRefresh(m.cfg)
 }

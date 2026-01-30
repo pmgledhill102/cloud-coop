@@ -540,9 +540,12 @@ func TestRefreshTickMsg_TriggersRefresh(t *testing.T) {
 	newModel, cmd := m.Update(msg)
 	updated := newModel.(Model)
 
-	// Should start loading
-	if !updated.loading {
-		t.Error("refresh tick should start loading")
+	// Should start refreshing (not loading)
+	if !updated.refreshing {
+		t.Error("refresh tick should set refreshing")
+	}
+	if updated.loading {
+		t.Error("refresh tick should not set loading (background refresh)")
 	}
 
 	// Should return a command (fetchVMInfo + scheduleRefresh batch)
@@ -562,14 +565,57 @@ func TestRefreshTickMsg_RefreshesWhenIdle(t *testing.T) {
 	newModel, cmd := m.Update(msg)
 	updated := newModel.(Model)
 
-	// Always-on: should start loading even when idle
-	if !updated.loading {
-		t.Error("refresh tick should start loading even when idle")
+	// Always-on: should set refreshing (not loading) for background refresh
+	if !updated.refreshing {
+		t.Error("refresh tick should set refreshing when idle")
+	}
+	if updated.loading {
+		t.Error("refresh tick should not set loading for background refresh")
 	}
 
 	// Should return a command (fetchVMInfo + scheduleRefresh batch)
 	if cmd == nil {
 		t.Error("refresh tick should return a command when idle with valid config")
+	}
+}
+
+func TestRefreshTickMsg_SkipsWhenPaused(t *testing.T) {
+	m := Model{
+		cfg:               &config.Config{},
+		autoRefreshPaused: true,
+		loading:           false,
+	}
+
+	msg := refreshTickMsg{}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should NOT start refreshing when paused
+	if updated.refreshing {
+		t.Error("refresh tick should not set refreshing when paused")
+	}
+	if updated.loading {
+		t.Error("refresh tick should not set loading when paused")
+	}
+
+	// Should still reschedule (so unpausing resumes)
+	if cmd == nil {
+		t.Error("refresh tick should reschedule even when paused")
+	}
+}
+
+func TestRefreshTickMsg_SkipsWhenAlreadyRefreshing(t *testing.T) {
+	m := Model{
+		cfg:        &config.Config{},
+		refreshing: true,
+	}
+
+	msg := refreshTickMsg{}
+	_, cmd := m.Update(msg)
+
+	// Should still return a command (to reschedule)
+	if cmd == nil {
+		t.Error("refresh tick should reschedule when already refreshing")
 	}
 }
 
@@ -920,6 +966,44 @@ func TestRenderHelp_ShowsHelpShortcut(t *testing.T) {
 
 	if !containsString(help, "?: help") {
 		t.Error("help bar should show '?: help'")
+	}
+}
+
+func TestKeyA_TogglesAutoRefreshPause(t *testing.T) {
+	m := Model{
+		cfg: &config.Config{},
+	}
+
+	// Press 'a' to pause
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.autoRefreshPaused {
+		t.Error("pressing a should pause auto-refresh")
+	}
+
+	// Press 'a' again to resume
+	newModel, _ = updated.Update(msg)
+	updated = newModel.(Model)
+
+	if updated.autoRefreshPaused {
+		t.Error("pressing a again should resume auto-refresh")
+	}
+}
+
+func TestRenderHelp_ShowsPauseAutoRefresh(t *testing.T) {
+	m := Model{}
+
+	help := m.renderHelp()
+	if !containsString(help, "a: pause auto") {
+		t.Error("help should show 'a: pause auto' when not paused")
+	}
+
+	m.autoRefreshPaused = true
+	help = m.renderHelp()
+	if !containsString(help, "a: resume auto") {
+		t.Error("help should show 'a: resume auto' when paused")
 	}
 }
 
