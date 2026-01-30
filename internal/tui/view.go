@@ -54,6 +54,7 @@ func (m Model) renderOperation() string {
 		"deleting": "Deleting VM... ◑",
 		"adding":   "Adding agent... ◐",
 		"killing":  "Killing agent... ◑",
+		"syncing":  "Syncing workspace... ◐",
 	}
 	return boxStyle.Render(msgs[m.operation])
 }
@@ -93,6 +94,9 @@ func (m Model) renderVMStatus() string {
 
 	if m.cfg.Cloud.Provider == "gcp" {
 		lines = append(lines, labelLine("Project:", m.cfg.Cloud.GCP.Project))
+	}
+	if m.workspaceInfo != nil {
+		lines = append(lines, labelLine("Workspace:", m.workspaceInfo.Slug))
 	}
 	lines = append(lines, "")
 
@@ -254,6 +258,9 @@ func (m Model) renderHelp() string {
 			actions = append(actions, "s: start", "d: delete")
 		case cloud.VMStatusRunning:
 			actions = append(actions, "t: stop")
+			if m.canModifyAgents() && m.workspaceInfo != nil {
+				actions = append(actions, "w: sync")
+			}
 			if m.canModifyAgents() {
 				actions = append(actions, "+: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
@@ -284,6 +291,7 @@ func (m Model) renderHelpOverlay() string {
     -           Kill agent (with confirmation)
     c           Connect to selected agent
     1-9         Connect to agent by index
+    w           Sync workspace worktrees
 
   General
     r           Refresh

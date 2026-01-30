@@ -8,6 +8,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
+	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
 
 // Model represents the TUI application state.
@@ -47,8 +48,20 @@ type Model struct {
 	selectedSizeIdx  int      // currently selected size index
 	confirmingDelete bool     // true when waiting for delete confirmation
 
+	// Workspace
+	workspaceInfo *workspace.Info // detected from CWD on startup (nil if not in a git repo)
+
 	// Help overlay
 	showHelp bool // true when help overlay is visible
+}
+
+// sessionName returns the tmux session name to use. It prefers the workspace
+// slug when available, falling back to the default "agents" session name.
+func (m Model) sessionName() string {
+	if m.workspaceInfo != nil {
+		return m.workspaceInfo.Slug
+	}
+	return defaultSessionName
 }
 
 // New creates a new TUI application model.
@@ -111,6 +124,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case connectFinishedMsg:
 		return m.handleConnectFinished(msg)
+
+	case syncMsg:
+		return m.handleSync(msg)
 	}
 
 	return m, nil
