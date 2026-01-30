@@ -4,8 +4,8 @@
   <img src="imgs/cloud-coop-banner.png" alt="cloudcoop banner" width="600">
 </p>
 
-[![Tests](https://github.com/cloud-coop/cloudcoop/actions/workflows/test.yml/badge.svg)](https://github.com/cloud-coop/cloudcoop/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/cloud-coop/cloudcoop/branch/main/graph/badge.svg)](https://codecov.io/gh/cloud-coop/cloudcoop)
+[![Tests](https://github.com/pmgledhill102/cloud-coop/actions/workflows/test.yml/badge.svg)](https://github.com/pmgledhill102/cloud-coop/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/pmgledhill102/cloud-coop/branch/main/graph/badge.svg)](https://codecov.io/gh/pmgledhill102/cloud-coop)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cloud-coop/cloudcoop)](https://goreportcard.com/report/github.com/cloud-coop/cloudcoop)
 
 A terminal UI for managing sandboxed AI coding agents on cloud VMs.
@@ -13,7 +13,7 @@ A terminal UI for managing sandboxed AI coding agents on cloud VMs.
 ## Overview
 
 cloudcoop provisions and manages cloud VMs configured as secure sandboxes for running multiple AI
-coding agents (Claude Code, Aider, Gemini CLI, etc.). Each agent runs in its own tmux session with
+coding agents (Claude Code, Aider, Gemini CLI, etc.). Each agent runs in its own tmux window with
 full development tooling.
 
 **Key features:**
@@ -27,39 +27,39 @@ full development tooling.
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Your Workstation                                               │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  cloudcoop TUI                                            │  │
-│  │  • VM status, start/stop                                   │  │
-│  │  • Agent session management                               │  │
-│  │  • IP-based firewall updates                              │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  │ SSH + Cloud SDK
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Cloud VM (GCP/AWS/Azure)                                       │
-│  c4a-highcpu-16 (ARM) · 50GB SSD · Spot instance               │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  tmux: agents                                             │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐     ┌─────────┐     │  │
-│  │  │ agent-1 │ │ agent-2 │ │ agent-3 │ ... │agent-12 │     │  │
-│  │  │ claude  │ │ claude  │ │  aider  │     │ claude  │     │  │
-│  │  └─────────┘ └─────────┘ └─────────┘     └─────────┘     │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  Shared: Docker · Dev tooling · Git credentials                 │
-│  Service account: Minimal GCP permissions                       │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  Your Workstation                                             │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  cloudcoop TUI                                          │  │
+│  │  • VM status, start/stop                                │  │
+│  │  • Agent session management                             │  │
+│  │  • IP-based firewall updates                            │  │
+│  └─────────────────────────────────────────────────────────┘  │
+└───────────────────────────────┬───────────────────────────────┘
+                                │ SSH + Cloud SDK
+                                ▼
+┌───────────────────────────────────────────────────────────────┐
+│  Cloud VM (GCP/AWS/Azure)                                     │
+│  c4a-highcpu-16 (ARM) · 50GB SSD · Spot instance              │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  tmux: agents                                           │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐     ┌─────────┐    │  │
+│  │  │ agent-1 │ │ agent-2 │ │ agent-3 │ ... │agent-12 │    │  │
+│  │  │ claude  │ │ claude  │ │  aider  │     │ claude  │    │  │
+│  │  └─────────┘ └─────────┘ └─────────┘     └─────────┘    │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                               │
+│  Shared: Docker · Dev tooling · Git credentials               │
+│  Service account: Minimal GCP permissions                     │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
 
 ```bash
 # Download latest release
-curl -fsSL https://github.com/yourorg/cloudcoop/releases/latest/download/cloudcoop-$(uname -s)-$(uname -m) -o cloudcoop
+curl -fsSL https://github.com/pmgledhill102/cloud-coop/releases/latest/download/cloudcoop-$(uname -s)-$(uname -m) -o cloudcoop
 chmod +x cloudcoop
 
 # Run setup wizard to configure
@@ -76,8 +76,8 @@ chmod +x cloudcoop
 
 ```bash
 # Clone and build
-git clone https://github.com/cloud-coop/cloudcoop.git
-cd cloudcoop
+git clone https://github.com/pmgledhill102/cloud-coop.git
+cd cloud-coop
 make build
 
 # Run
@@ -97,23 +97,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup details.
 ## TUI Interface
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  cloudcoop                                           v0.1.0     │
-├─────────────────────────────────────────────────────────────────┤
-│  Cloud: GCP (europe-north2-a)                                   │
-│  VM: claude-sandbox          ● Running                          │
-│  Type: c4a-highcpu-16        Cost: ~$0.12/hr (spot)            │
-│  IP Firewall: ✓ 203.0.113.42/32                                │
-│                                                                 │
-│  Agents (8 active)                                              │
-│  [1] agent-1   claude   ● issue-142       2h 30m               │
-│  [2] agent-2   claude   ● issue-143       2h 28m               │
-│  [3] agent-3   aider    ● quick-fix       0h 45m               │
-│  [4] agent-4   claude   ○ idle            -                    │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  [S]tart  s[T]op  [A]dd  [K]ill  [C]onnect  [r]efresh  [Q]uit  │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  cloudcoop                                         v0.1.0     │
+├───────────────────────────────────────────────────────────────┤
+│  Cloud: GCP (europe-north2-a)                                 │
+│  VM: claude-sandbox          ● Running                        │
+│  Type: c4a-highcpu-16        Cost: ~$0.26/hr (spot)           │
+│  IP Firewall: ✓ 203.0.113.42/32                               │
+│                                                               │
+│  Agents (4 active)                                            │
+│  [1] agent-1   claude   ● issue-142       2h 30m              │
+│  [2] agent-2   claude   ● issue-143       2h 28m              │
+│  [3] agent-3   aider    ● quick-fix       0h 45m              │
+│  [4] agent-4   claude   ○ idle            -                   │
+│                                                               │
+├───────────────────────────────────────────────────────────────┤
+│  q: quit • r: refresh • t: stop • +: add • c: connect • ?: …  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## Configuration
@@ -177,13 +177,13 @@ port = 22                    # SSH port (default: 22)
 
 ## Cost
 
-For c4a-highcpu-16 in europe-north2 (Stockholm):
+Approximate costs for c4a-highcpu-16 in europe-north2 (Stockholm). Spot prices vary.
 
 | Usage | Monthly Cost |
 |-------|-------------|
-| Spot 24/7 | ~$85 |
-| Spot 8h/day | ~$30 |
-| Stopped (disk only) | ~$5 |
+| Spot 24/7 | ~$190 |
+| Spot 8h/day | ~$65 |
+| Stopped (50GB disk only) | ~$5 |
 
 ## Documentation
 
