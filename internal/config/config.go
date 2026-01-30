@@ -170,7 +170,7 @@ func LoadFile(path string) (*Config, error) {
 		cfg.Provisioning.ScriptURL = "https://raw.githubusercontent.com/pmgledhill102/cloud-coop/main/scripts/provision-vm.sh"
 	}
 	if cfg.TUI.RefreshIntervalSec == 0 {
-		cfg.TUI.RefreshIntervalSec = 5
+		cfg.TUI.RefreshIntervalSec = 15
 	}
 
 	return &cfg, nil

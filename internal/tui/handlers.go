@@ -178,7 +178,7 @@ func (m Model) handleConfigLoaded(msg configLoadedMsg) (Model, tea.Cmd) {
 		m.loading = false
 		return m, nil
 	}
-	return m, fetchVMInfo(m.cfg)
+	return m, tea.Batch(fetchVMInfo(m.cfg), scheduleRefresh(m.cfg))
 }
 
 func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
@@ -204,10 +204,6 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 	m.agentsErr = nil
 	m.provisionStatus = nil
 	m.provisionErr = nil
-	// Continue auto-refresh if operation is still in progress
-	if m.shouldAutoRefresh() {
-		return m, scheduleRefresh(m.cfg)
-	}
 	return m, nil
 }
 
@@ -222,10 +218,6 @@ func (m Model) handleProvisionStatus(msg provisionStatusMsg) (Model, tea.Cmd) {
 	m.provisionLoading = false
 	m.provisionStatus = msg.status
 	m.provisionErr = msg.err
-	// Continue auto-refresh if provisioning is still in progress
-	if m.shouldAutoRefresh() {
-		return m, scheduleRefresh(m.cfg)
-	}
 	return m, nil
 }
 
@@ -296,33 +288,15 @@ func (m Model) canModifyAgents() bool {
 		provisioning.IsProvisioningComplete(m.provisionStatus)
 }
 
-// shouldAutoRefresh returns true if auto-refresh should be active.
-// Auto-refresh is active during operations or while provisioning is in progress.
-func (m Model) shouldAutoRefresh() bool {
-	// Auto-refresh during operations (starting, stopping, creating, deleting, adding, killing)
-	if m.operation != "" {
-		return true
-	}
-	// Auto-refresh while provisioning is pending or running
-	if m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusRunning &&
-		m.provisionStatus != nil &&
-		(m.provisionStatus.Status == provisioning.StatusPending ||
-			m.provisionStatus.Status == provisioning.StatusRunning) {
-		return true
-	}
-	return false
-}
-
-// handleRefreshTick handles the periodic refresh timer.
+// handleRefreshTick handles the periodic always-on refresh timer.
 func (m Model) handleRefreshTick() (Model, tea.Cmd) {
-	// Auto-refresh during operations or provisioning
-	if m.shouldAutoRefresh() && !m.loading {
+	if m.cfg == nil || m.cfgErr != nil {
+		return m, nil
+	}
+	if !m.loading {
 		m.loading = true
-		return m, fetchVMInfo(m.cfg)
+		return m, tea.Batch(fetchVMInfo(m.cfg), scheduleRefresh(m.cfg))
 	}
-	// If still in auto-refresh mode but already loading, reschedule
-	if m.shouldAutoRefresh() {
-		return m, scheduleRefresh(m.cfg)
-	}
-	return m, nil
+	// Already loading, just reschedule for later
+	return m, scheduleRefresh(m.cfg)
 }

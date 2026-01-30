@@ -530,104 +530,10 @@ func containsString(s, substr string) bool {
 	return false
 }
 
-func TestShouldAutoRefresh(t *testing.T) {
-	tests := []struct {
-		name string
-		m    Model
-		want bool
-	}{
-		{
-			name: "auto-refresh during starting operation",
-			m:    Model{operation: "starting"},
-			want: true,
-		},
-		{
-			name: "auto-refresh during stopping operation",
-			m:    Model{operation: "stopping"},
-			want: true,
-		},
-		{
-			name: "auto-refresh during creating operation",
-			m:    Model{operation: "creating"},
-			want: true,
-		},
-		{
-			name: "auto-refresh during deleting operation",
-			m:    Model{operation: "deleting"},
-			want: true,
-		},
-		{
-			name: "auto-refresh during adding operation",
-			m:    Model{operation: "adding"},
-			want: true,
-		},
-		{
-			name: "auto-refresh during killing operation",
-			m:    Model{operation: "killing"},
-			want: true,
-		},
-		{
-			name: "auto-refresh when provisioning is pending",
-			m: Model{
-				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusPending},
-			},
-			want: true,
-		},
-		{
-			name: "auto-refresh when provisioning is running",
-			m: Model{
-				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusRunning},
-			},
-			want: true,
-		},
-		{
-			name: "no auto-refresh when provisioning is completed",
-			m: Model{
-				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
-			},
-			want: false,
-		},
-		{
-			name: "no auto-refresh when provisioning is failed",
-			m: Model{
-				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
-				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusFailed},
-			},
-			want: false,
-		},
-		{
-			name: "no auto-refresh when idle with no operation",
-			m:    Model{},
-			want: false,
-		},
-		{
-			name: "no auto-refresh when VM stopped even with provision status running",
-			m: Model{
-				vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusStopped},
-				provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusRunning},
-			},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.m.shouldAutoRefresh()
-			if got != tt.want {
-				t.Errorf("shouldAutoRefresh() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestRefreshTickMsg_TriggersRefresh(t *testing.T) {
 	m := Model{
-		cfg:       &config.Config{},
-		operation: "starting", // During operation, should refresh
-		loading:   false,
+		cfg:     &config.Config{},
+		loading: false,
 	}
 
 	msg := refreshTickMsg{}
@@ -639,20 +545,16 @@ func TestRefreshTickMsg_TriggersRefresh(t *testing.T) {
 		t.Error("refresh tick should start loading")
 	}
 
-	// Should return a command
+	// Should return a command (fetchVMInfo + scheduleRefresh batch)
 	if cmd == nil {
 		t.Error("refresh tick should return a command")
 	}
 }
 
-func TestRefreshTickMsg_NoRefreshWhenNotNeeded(t *testing.T) {
+func TestRefreshTickMsg_RefreshesWhenIdle(t *testing.T) {
 	m := Model{
-		cfg:       &config.Config{},
-		operation: "", // No operation, no auto-refresh needed
-		vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning},
-		provisionStatus: &provisioning.StatusInfo{
-			Status: provisioning.StatusCompleted, // Provisioning complete
-		},
+		cfg:     &config.Config{},
+		vmInfo:  &cloud.VMInfo{Status: cloud.VMStatusRunning},
 		loading: false,
 	}
 
@@ -660,22 +562,21 @@ func TestRefreshTickMsg_NoRefreshWhenNotNeeded(t *testing.T) {
 	newModel, cmd := m.Update(msg)
 	updated := newModel.(Model)
 
-	// Should NOT start loading
-	if updated.loading {
-		t.Error("refresh tick should not start loading when idle")
+	// Always-on: should start loading even when idle
+	if !updated.loading {
+		t.Error("refresh tick should start loading even when idle")
 	}
 
-	// Should NOT return a command
-	if cmd != nil {
-		t.Error("refresh tick should not return a command when idle")
+	// Should return a command (fetchVMInfo + scheduleRefresh batch)
+	if cmd == nil {
+		t.Error("refresh tick should return a command when idle with valid config")
 	}
 }
 
 func TestRefreshTickMsg_ReschedulesWhenAlreadyLoading(t *testing.T) {
 	m := Model{
-		cfg:       &config.Config{},
-		operation: "starting",
-		loading:   true, // Already loading
+		cfg:     &config.Config{},
+		loading: true, // Already loading
 	}
 
 	msg := refreshTickMsg{}
@@ -683,7 +584,50 @@ func TestRefreshTickMsg_ReschedulesWhenAlreadyLoading(t *testing.T) {
 
 	// Should still return a command (to reschedule)
 	if cmd == nil {
-		t.Error("refresh tick should reschedule when already loading during operation")
+		t.Error("refresh tick should reschedule when already loading")
+	}
+}
+
+func TestRefreshTickMsg_NoRefreshWhenConfigError(t *testing.T) {
+	m := Model{
+		cfg:     &config.Config{},
+		cfgErr:  errTestConfig,
+		loading: false,
+	}
+
+	msg := refreshTickMsg{}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should NOT start loading when config has error
+	if updated.loading {
+		t.Error("refresh tick should not start loading when config has error")
+	}
+
+	// Should NOT return a command
+	if cmd != nil {
+		t.Error("refresh tick should not return a command when config has error")
+	}
+}
+
+func TestRefreshTickMsg_NoRefreshWhenNilConfig(t *testing.T) {
+	m := Model{
+		cfg:     nil,
+		loading: false,
+	}
+
+	msg := refreshTickMsg{}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should NOT start loading when config is nil
+	if updated.loading {
+		t.Error("refresh tick should not start loading when config is nil")
+	}
+
+	// Should NOT return a command
+	if cmd != nil {
+		t.Error("refresh tick should not return a command when config is nil")
 	}
 }
 
