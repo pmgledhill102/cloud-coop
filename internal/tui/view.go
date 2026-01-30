@@ -8,6 +8,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
+	"github.com/cloud-coop/cloudcoop/internal/version"
 )
 
 func (m Model) renderView() string {
@@ -15,7 +16,7 @@ func (m Model) renderView() string {
 		return "Loading..."
 	}
 
-	title := titleStyle.Render("cloudcoop")
+	title := titleStyle.Render("cloudcoop") + " " + versionStyle.Render(version.Short())
 	subtitle := subtitleStyle.Render("Manage sandboxed AI coding agents on cloud VMs")
 
 	if m.showHelp {

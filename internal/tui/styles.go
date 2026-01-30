@@ -34,4 +34,7 @@ var (
 	labelStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("244")).
 			Width(14)
+
+	versionStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
 )
