@@ -101,7 +101,7 @@ func TestCanModifyAgents(t *testing.T) {
 	}
 }
 
-func TestKeyA_AddAgent(t *testing.T) {
+func TestKeyPlus_AddAgent(t *testing.T) {
 	// Setup model in state where adding is allowed
 	m := Model{
 		cfg:             &config.Config{},
@@ -110,42 +110,42 @@ func TestKeyA_AddAgent(t *testing.T) {
 		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
-	// Simulate pressing 'A'
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}}
+	// Simulate pressing '+'
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
 	newModel, cmd := m.Update(msg)
 	updated := newModel.(Model)
 
 	// Should trigger adding operation
 	if updated.operation != "adding" {
-		t.Errorf("pressing A should set operation to 'adding', got %q", updated.operation)
+		t.Errorf("pressing + should set operation to 'adding', got %q", updated.operation)
 	}
 
 	// Should return a command (the addAgent command)
 	if cmd == nil {
-		t.Error("pressing A should return a command")
+		t.Error("pressing + should return a command")
 	}
 }
 
-func TestKeyA_NotAllowedWhenVMStopped(t *testing.T) {
+func TestKeyPlus_NotAllowedWhenVMStopped(t *testing.T) {
 	m := Model{
 		cfg:    &config.Config{},
 		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusStopped},
 	}
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}}
 	newModel, cmd := m.Update(msg)
 	updated := newModel.(Model)
 
 	// Should NOT trigger adding operation
 	if updated.operation == "adding" {
-		t.Error("pressing A when VM stopped should not trigger add")
+		t.Error("pressing + when VM stopped should not trigger add")
 	}
 	if cmd != nil {
-		t.Error("pressing A when VM stopped should not return a command")
+		t.Error("pressing + when VM stopped should not return a command")
 	}
 }
 
-func TestKeyK_KillConfirmation(t *testing.T) {
+func TestKeyMinus_KillConfirmation(t *testing.T) {
 	// Setup model with agents to kill
 	m := Model{
 		cfg:    &config.Config{},
@@ -160,14 +160,14 @@ func TestKeyK_KillConfirmation(t *testing.T) {
 		provisionStatus:  &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
-	// Simulate pressing 'K'
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}
+	// Simulate pressing '-'
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}
 	newModel, _ := m.Update(msg)
 	updated := newModel.(Model)
 
 	// Should enter confirmation mode
 	if !updated.confirmingKill {
-		t.Error("pressing K should enter confirmation mode")
+		t.Error("pressing - should enter confirmation mode")
 	}
 	if updated.killTargetIndex != 1 {
 		t.Errorf("kill target should be index 1, got %d", updated.killTargetIndex)
@@ -177,7 +177,7 @@ func TestKeyK_KillConfirmation(t *testing.T) {
 	}
 }
 
-func TestKeyK_NotAllowedWithNoAgents(t *testing.T) {
+func TestKeyMinus_NotAllowedWithNoAgents(t *testing.T) {
 	m := Model{
 		cfg:             &config.Config{},
 		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
@@ -185,13 +185,13 @@ func TestKeyK_NotAllowedWithNoAgents(t *testing.T) {
 		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
 	}
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'-'}}
 	newModel, _ := m.Update(msg)
 	updated := newModel.(Model)
 
 	// Should NOT enter confirmation mode
 	if updated.confirmingKill {
-		t.Error("pressing K with no agents should not enter confirmation mode")
+		t.Error("pressing - with no agents should not enter confirmation mode")
 	}
 }
 
@@ -394,12 +394,12 @@ func TestRenderHelp_ShowsAgentActions(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include agent actions
-	if !containsString(help, "A: add agent") {
-		t.Error("help should show 'A: add agent'")
+	// Should include agent actions with new labels
+	if !containsString(help, "+: add agent") {
+		t.Error("help should show '+: add agent'")
 	}
-	if !containsString(help, "K: kill agent") {
-		t.Error("help should show 'K: kill agent'")
+	if !containsString(help, "-: kill agent") {
+		t.Error("help should show '-: kill agent'")
 	}
 }
 
@@ -410,12 +410,12 @@ func TestRenderHelp_ConfirmationMode(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should show confirmation options only
-	if !containsString(help, "Y: confirm") {
-		t.Error("help in confirmation mode should show 'Y: confirm'")
+	// Should show confirmation options only (lowercase)
+	if !containsString(help, "y: confirm") {
+		t.Error("help in confirmation mode should show 'y: confirm'")
 	}
-	if !containsString(help, "N: cancel") {
-		t.Error("help in confirmation mode should show 'N: cancel'")
+	if !containsString(help, "n: cancel") {
+		t.Error("help in confirmation mode should show 'n: cancel'")
 	}
 }
 
@@ -515,9 +515,9 @@ func TestRenderHelp_ShowsConnectAction(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include connect action (lowercase c)
-	if !containsString(help, "c: connect") {
-		t.Error("help should show 'c: connect'")
+	// Should include connect action with number keys
+	if !containsString(help, "c/1-9: connect") {
+		t.Error("help should show 'c/1-9: connect'")
 	}
 }
 
@@ -726,5 +726,277 @@ func TestKeyT_StopVM_SchedulesAutoRefresh(t *testing.T) {
 	// Should return a batched command (stopVM + scheduleRefresh)
 	if cmd == nil {
 		t.Error("pressing T should return a command")
+	}
+}
+
+func TestUppercaseQ_Quits(t *testing.T) {
+	m := Model{}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Q'}}
+	_, cmd := m.Update(msg)
+
+	// Should return quit command
+	if cmd == nil {
+		t.Error("pressing Q should return a command (quit)")
+	}
+}
+
+func TestUppercaseR_Refreshes(t *testing.T) {
+	m := Model{
+		cfg: &config.Config{},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should trigger loading
+	if !updated.loading {
+		t.Error("pressing R should start loading")
+	}
+	if cmd == nil {
+		t.Error("pressing R should return a command")
+	}
+}
+
+func TestUppercaseC_Connects(t *testing.T) {
+	// Uppercase C should now connect (not create), via normalization
+	m := Model{
+		cfg:    &config.Config{SSH: config.SSHConfig{Port: 22}},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+			},
+		},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}}
+	_, cmd := m.Update(msg)
+
+	// Should return a command (connect)
+	if cmd == nil {
+		t.Error("pressing C should connect to agent")
+	}
+}
+
+func TestUppercaseK_NavigatesUp(t *testing.T) {
+	// Uppercase K should navigate up (not kill), since kill is now '-'
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+				{Index: 1, Name: "agent-1", Command: "claude"},
+			},
+		},
+		selectedAgentIdx: 1,
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should navigate up, not enter kill confirmation
+	if updated.confirmingKill {
+		t.Error("pressing K should not enter kill confirmation (kill is now '-')")
+	}
+	if updated.selectedAgentIdx != 0 {
+		t.Errorf("pressing K should navigate up to index 0, got %d", updated.selectedAgentIdx)
+	}
+}
+
+func TestNumberKey_DirectConnect(t *testing.T) {
+	m := Model{
+		cfg:    &config.Config{SSH: config.SSHConfig{Port: 22}},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+				{Index: 1, Name: "agent-1", Command: "claude"},
+				{Index: 2, Name: "agent-2", Command: "aider"},
+			},
+		},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	// Press '2' to connect to second agent
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
+	_, cmd := m.Update(msg)
+
+	// Should return a command (connect)
+	if cmd == nil {
+		t.Error("pressing 2 should connect to agent at index 1")
+	}
+}
+
+func TestNumberKey_OutOfRange(t *testing.T) {
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+			},
+		},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	// Press '5' when only 1 agent exists
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}}
+	_, cmd := m.Update(msg)
+
+	// Should NOT return a command (out of range)
+	if cmd != nil {
+		t.Error("pressing 5 with only 1 agent should not return a command")
+	}
+}
+
+func TestQuestionMark_TogglesHelp(t *testing.T) {
+	m := Model{ready: true}
+
+	// Press '?' to show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.showHelp {
+		t.Error("pressing ? should show help overlay")
+	}
+
+	// Press '?' again to dismiss
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	newModel, _ = updated.Update(msg)
+	updated = newModel.(Model)
+
+	if updated.showHelp {
+		t.Error("pressing ? again should hide help overlay")
+	}
+}
+
+func TestHelpOverlay_EscDismisses(t *testing.T) {
+	m := Model{showHelp: true}
+
+	msg := tea.KeyMsg{Type: tea.KeyEscape}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.showHelp {
+		t.Error("pressing Esc should dismiss help overlay")
+	}
+}
+
+func TestRenderAgents_ShowsIndices(t *testing.T) {
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+				{Index: 1, Name: "agent-1", Command: "claude"},
+			},
+		},
+	}
+
+	lines := m.renderAgents()
+
+	// Should include [1] and [2] indices
+	found1 := false
+	found2 := false
+	for _, line := range lines {
+		if containsString(line, "[1]") {
+			found1 = true
+		}
+		if containsString(line, "[2]") {
+			found2 = true
+		}
+	}
+	if !found1 {
+		t.Error("agent list should show [1] index")
+	}
+	if !found2 {
+		t.Error("agent list should show [2] index")
+	}
+}
+
+func TestKeyN_CreateVM(t *testing.T) {
+	// 'n' should now open size selection (was 'C')
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusNotFound},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.selectingSize {
+		t.Error("pressing n should open size selection for VM creation")
+	}
+}
+
+func TestKeyN_UppercaseCreateVM(t *testing.T) {
+	// 'N' should also create VM via normalization
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusNotFound},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.selectingSize {
+		t.Error("pressing N should open size selection for VM creation")
+	}
+}
+
+func TestKeyD_DeleteVM(t *testing.T) {
+	// lowercase 'd' should now delete (was 'D' only)
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusStopped},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.confirmingDelete {
+		t.Error("pressing d should enter delete confirmation")
+	}
+}
+
+func TestRenderHelp_ShowsHelpShortcut(t *testing.T) {
+	m := Model{}
+
+	help := m.renderHelp()
+
+	if !containsString(help, "?: help") {
+		t.Error("help bar should show '?: help'")
+	}
+}
+
+func TestUppercaseJ_NavigatesDown(t *testing.T) {
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+				{Index: 1, Name: "agent-1", Command: "claude"},
+			},
+		},
+		selectedAgentIdx: 0,
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.selectedAgentIdx != 1 {
+		t.Errorf("pressing J should navigate down to index 1, got %d", updated.selectedAgentIdx)
 	}
 }

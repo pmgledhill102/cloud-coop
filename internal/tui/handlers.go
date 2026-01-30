@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -11,6 +12,9 @@ import (
 
 // handleKeyMsg dispatches keyboard input to the appropriate handler.
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.showHelp {
+		return m.handleHelpOverlayKeys(msg)
+	}
 	if m.selectingSize {
 		return m.handleSizeSelectionKeys(msg)
 	}
@@ -24,7 +28,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleSizeSelectionKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
+	key := strings.ToLower(msg.String())
+	switch key {
 	case "up", "k":
 		if m.selectedSizeIdx > 0 {
 			m.selectedSizeIdx--
@@ -38,38 +43,54 @@ func (m Model) handleSizeSelectionKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		machineType := m.cfg.VM.MachineSizes[m.sizeOptions[m.selectedSizeIdx]]
 		m.operation = "creating"
 		return m, tea.Batch(createVM(m.cfg, machineType), scheduleRefresh(m.cfg))
-	case "esc", "escape", "n", "N":
+	case "esc", "escape", "n":
 		m.selectingSize = false
 	}
 	return m, nil
 }
 
 func (m Model) handleDeleteConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "Y":
+	key := strings.ToLower(msg.String())
+	switch key {
+	case "y":
 		m.confirmingDelete = false
 		m.operation = "deleting"
 		return m, tea.Batch(deleteVM(m.cfg), scheduleRefresh(m.cfg))
-	case "n", "N", "esc", "escape":
+	case "n", "esc", "escape":
 		m.confirmingDelete = false
 	}
 	return m, nil
 }
 
 func (m Model) handleKillConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "Y":
+	key := strings.ToLower(msg.String())
+	switch key {
+	case "y":
 		m.confirmingKill = false
 		m.operation = "killing"
 		return m, tea.Batch(killAgent(m.cfg, m.vmInfo, m.killTargetIndex), scheduleRefresh(m.cfg))
-	case "n", "N", "esc", "escape":
+	case "n", "esc", "escape":
 		m.confirmingKill = false
 	}
 	return m, nil
 }
 
-func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) handleHelpOverlayKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
+	case "?", "esc", "escape":
+		m.showHelp = false
+	case "q", "ctrl+c":
+		if m.cleanup != nil {
+			m.cleanup()
+		}
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+	key := strings.ToLower(msg.String())
+	switch key {
 	case "q", "ctrl+c":
 		if m.cleanup != nil {
 			m.cleanup()
@@ -80,22 +101,22 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loading = true
 			return m, fetchVMInfo(m.cfg)
 		}
-	case "s", "S":
+	case "s":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
 			m.operation = "starting"
 			return m, tea.Batch(startVM(m.cfg), scheduleRefresh(m.cfg))
 		}
-	case "t", "T":
+	case "t":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusRunning {
 			m.operation = "stopping"
 			return m, tea.Batch(stopVM(m.cfg), scheduleRefresh(m.cfg))
 		}
-	case "a", "A":
+	case "+":
 		if m.canModifyAgents() {
 			m.operation = "adding"
 			return m, tea.Batch(addAgent(m.cfg, m.vmInfo), scheduleRefresh(m.cfg))
 		}
-	case "K":
+	case "-":
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
 			selected := m.agents.Sessions[m.selectedAgentIdx]
 			m.killTargetIndex = selected.Index
@@ -106,15 +127,22 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
 			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[m.selectedAgentIdx].Index)
 		}
-	case "C":
+	case "n":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound {
 			m.sizeOptions = []string{"small", "medium", "large", "xlarge"}
 			m.selectedSizeIdx = 0
 			m.selectingSize = true
 		}
-	case "D":
+	case "d":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
 			m.confirmingDelete = true
+		}
+	case "?":
+		m.showHelp = true
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		idx := int(key[0]-'0') - 1 // convert "1"-"9" to 0-based index
+		if m.canModifyAgents() && m.hasAgents() && idx < len(m.agents.Sessions) {
+			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[idx].Index)
 		}
 	case "up", "k":
 		if m.hasAgents() && m.selectedAgentIdx > 0 {

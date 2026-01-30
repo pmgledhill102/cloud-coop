@@ -18,6 +18,10 @@ func (m Model) renderView() string {
 	title := titleStyle.Render("cloudcoop")
 	subtitle := subtitleStyle.Render("Manage sandboxed AI coding agents on cloud VMs")
 
+	if m.showHelp {
+		return fmt.Sprintf("\n%s\n%s\n\n%s\n", title, subtitle, m.renderHelpOverlay())
+	}
+
 	var content string
 	switch {
 	case m.cfgErr != nil:
@@ -195,13 +199,17 @@ func (m Model) renderAgents() []string {
 		if i == m.selectedAgentIdx {
 			sel = "> "
 		}
-		lines = append(lines, fmt.Sprintf("%s%s%s (%s)", labelStyle.Render(""), sel, s.Name, s.Command))
+		idx := ""
+		if i < 9 {
+			idx = fmt.Sprintf("[%d] ", i+1)
+		}
+		lines = append(lines, fmt.Sprintf("%s%s%s%s (%s)", labelStyle.Render(""), sel, idx, s.Name, s.Command))
 	}
 	return lines
 }
 
 func (m Model) renderKillConfirmation() string {
-	return boxStyle.Render(fmt.Sprintf("Kill agent %q (index %d)?\n\nPress Y to confirm, N to cancel.",
+	return boxStyle.Render(fmt.Sprintf("Kill agent %q (index %d)?\n\nPress y to confirm, n to cancel.",
 		m.killTargetName, m.killTargetIndex))
 }
 
@@ -219,7 +227,7 @@ func (m Model) renderSizeSelection() string {
 }
 
 func (m Model) renderDeleteConfirmation() string {
-	return boxStyle.Render(fmt.Sprintf("Delete VM %q?\n\nThis will permanently delete the VM and its boot disk.\n\nPress Y to confirm, N to cancel.",
+	return boxStyle.Render(fmt.Sprintf("Delete VM %q?\n\nThis will permanently delete the VM and its boot disk.\n\nPress y to confirm, n to cancel.",
 		m.cfg.VM.Name))
 }
 
@@ -228,25 +236,55 @@ func (m Model) renderHelp() string {
 		return helpStyle.Render("↑/↓: select • Enter: create • Esc: cancel")
 	}
 	if m.confirmingDelete || m.confirmingKill {
-		return helpStyle.Render("Y: confirm • N: cancel")
+		return helpStyle.Render("y: confirm • n: cancel")
 	}
 
 	actions := []string{"q: quit", "r: refresh"}
 	if m.vmInfo != nil && m.operation == "" {
 		switch m.vmInfo.Status {
 		case cloud.VMStatusNotFound:
-			actions = append(actions, "C: create")
+			actions = append(actions, "n: new VM")
 		case cloud.VMStatusStopped:
-			actions = append(actions, "S: start", "D: delete")
+			actions = append(actions, "s: start", "d: delete")
 		case cloud.VMStatusRunning:
-			actions = append(actions, "T: stop")
+			actions = append(actions, "t: stop")
 			if m.canModifyAgents() {
-				actions = append(actions, "A: add agent")
+				actions = append(actions, "+: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
-					actions = append(actions, "c: connect", "K: kill agent", "↑/↓: select")
+					actions = append(actions, "c/1-9: connect", "-: kill agent", "↑/↓: select")
 				}
 			}
 		}
 	}
+	actions = append(actions, "?: help")
 	return helpStyle.Render(strings.Join(actions, " • "))
+}
+
+func (m Model) renderHelpOverlay() string {
+	help := `Keyboard Shortcuts
+
+  Navigation
+    k/↑         Move up
+    j/↓         Move down
+
+  VM Management
+    s           Start VM
+    t           Stop VM
+    n           New VM (create)
+    d           Delete VM (when stopped)
+
+  Agent Management
+    +           Add agent
+    -           Kill agent (with confirmation)
+    c           Connect to selected agent
+    1-9         Connect to agent by index
+
+  General
+    r           Refresh
+    ?           Toggle this help
+    Esc         Close help
+    q           Quit
+
+Press ? or Esc to dismiss.`
+	return boxStyle.Render(help)
 }

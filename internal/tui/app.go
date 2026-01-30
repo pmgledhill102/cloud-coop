@@ -44,6 +44,9 @@ type Model struct {
 	sizeOptions      []string // available size names (e.g., "small", "medium", "large", "xlarge")
 	selectedSizeIdx  int      // currently selected size index
 	confirmingDelete bool     // true when waiting for delete confirmation
+
+	// Help overlay
+	showHelp bool // true when help overlay is visible
 }
 
 // New creates a new TUI application model.
