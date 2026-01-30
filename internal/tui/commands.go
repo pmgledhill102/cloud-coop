@@ -60,12 +60,13 @@ type provisionStatusMsg struct {
 
 type connectFinishedMsg struct{ err error }
 
-// refreshTickMsg is sent periodically to trigger auto-refresh during operations.
+// refreshTickMsg is sent periodically to trigger always-on auto-refresh.
 type refreshTickMsg struct{}
 
 // scheduleRefresh returns a command that sends a refreshTickMsg after the configured interval.
+// The TUI always keeps a refresh timer running to stay current.
 func scheduleRefresh(cfg *config.Config) tea.Cmd {
-	interval := 5 * time.Second
+	interval := 15 * time.Second
 	if cfg != nil && cfg.TUI.RefreshIntervalSec > 0 {
 		interval = time.Duration(cfg.TUI.RefreshIntervalSec) * time.Second
 	}
