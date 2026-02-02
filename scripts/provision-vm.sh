@@ -221,6 +221,7 @@ sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     actionlint \
     hadolint \
     shellcheck \
+    tflint \
     git-delta \
     ripgrep \
     fd \
@@ -282,6 +283,7 @@ uv tool install pytest
 uv tool install pre-commit
 uv tool install httpie
 uv tool install yamllint
+uv tool install checkov
 
 # ============================================
 # Ruby gems
