@@ -10,6 +10,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
+	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
 
 var errTestConfig = errors.New("test config error")
@@ -1004,6 +1005,127 @@ func TestRenderHelp_ShowsPauseAutoRefresh(t *testing.T) {
 	help = m.renderHelp()
 	if !containsString(help, "a: resume auto") {
 		t.Error("help should show 'a: resume auto' when paused")
+	}
+}
+
+func TestSessionName_DefaultWhenNoWorkspace(t *testing.T) {
+	m := Model{}
+	if got := m.sessionName(); got != "agents" {
+		t.Errorf("sessionName() = %q, want %q", got, "agents")
+	}
+}
+
+func TestSessionName_ReturnsSlug(t *testing.T) {
+	m := Model{
+		workspaceInfo: &workspace.Info{Slug: "acme-backend"},
+	}
+	if got := m.sessionName(); got != "acme-backend" {
+		t.Errorf("sessionName() = %q, want %q", got, "acme-backend")
+	}
+}
+
+func TestKeyW_TriggersSyncWhenWorkspaceDetected(t *testing.T) {
+	m := Model{
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+		workspaceInfo:   &workspace.Info{Slug: "my-repo", RemoteURL: "git@github.com:owner/my-repo.git"},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "syncing" {
+		t.Errorf("pressing w should set operation to 'syncing', got %q", updated.operation)
+	}
+	if cmd == nil {
+		t.Error("pressing w should return a command")
+	}
+}
+
+func TestKeyW_NoOpWhenNoWorkspace(t *testing.T) {
+	m := Model{
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation == "syncing" {
+		t.Error("pressing w without workspace should not trigger sync")
+	}
+	if cmd != nil {
+		t.Error("pressing w without workspace should not return a command")
+	}
+}
+
+func TestSyncMsg_Success_RefreshesAgents(t *testing.T) {
+	ws := &workspace.Info{Slug: "my-repo", RemoteURL: "git@github.com:owner/my-repo.git"}
+	m := Model{
+		cfg:       &config.Config{},
+		vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		operation: "syncing",
+	}
+
+	msg := syncMsg{
+		workspace: ws,
+		result:    &workspace.SyncResult{Slug: "my-repo"},
+	}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("operation should be cleared, got %q", updated.operation)
+	}
+	if !updated.agentsLoading {
+		t.Error("should start loading agents after sync")
+	}
+	if updated.workspaceInfo != ws {
+		t.Error("should store workspace info from sync result")
+	}
+	if cmd == nil {
+		t.Error("should return command to refresh agents")
+	}
+}
+
+func TestSyncMsg_Error_StoresError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		operation: "syncing",
+	}
+
+	msg := syncMsg{err: errors.New("sync failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("operation should be cleared, got %q", updated.operation)
+	}
+	if updated.agentsErr == nil {
+		t.Error("should store error in agentsErr")
+	}
+	if cmd != nil {
+		t.Error("should not return a command on error")
+	}
+}
+
+func TestRenderHelp_ShowsSyncWhenWorkspaceDetected(t *testing.T) {
+	m := Model{
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning},
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+		workspaceInfo:   &workspace.Info{Slug: "my-repo"},
+	}
+
+	help := m.renderHelp()
+
+	if !containsString(help, "w: sync") {
+		t.Error("help should show 'w: sync' when workspace is detected")
 	}
 }
 

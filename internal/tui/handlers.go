@@ -68,7 +68,7 @@ func (m Model) handleKillConfirmationKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "y":
 		m.confirmingKill = false
 		m.operation = "killing"
-		return m, tea.Batch(killAgent(m.cfg, m.vmInfo, m.killTargetIndex), scheduleRefresh(m.cfg))
+		return m, tea.Batch(killAgent(m.cfg, m.vmInfo, m.killTargetIndex, m.sessionName()), scheduleRefresh(m.cfg))
 	case "n", "esc", "escape":
 		m.confirmingKill = false
 	}
@@ -114,7 +114,12 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "+":
 		if m.canModifyAgents() {
 			m.operation = "adding"
-			return m, tea.Batch(addAgent(m.cfg, m.vmInfo), scheduleRefresh(m.cfg))
+			return m, tea.Batch(addAgent(m.cfg, m.vmInfo, m.sessionName()), scheduleRefresh(m.cfg))
+		}
+	case "w":
+		if m.canModifyAgents() && m.workspaceInfo != nil {
+			m.operation = "syncing"
+			return m, tea.Batch(syncWorkspace(m.cfg, m.vmInfo, m.workspaceInfo), scheduleRefresh(m.cfg))
 		}
 	case "-":
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
@@ -125,7 +130,7 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	case "c":
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
-			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[m.selectedAgentIdx].Index)
+			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[m.selectedAgentIdx].Index, m.sessionName())
 		}
 	case "n":
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound {
@@ -144,7 +149,7 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		idx := int(key[0]-'0') - 1 // convert "1"-"9" to 0-based index
 		if m.canModifyAgents() && m.hasAgents() && idx < len(m.agents.Sessions) {
-			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[idx].Index)
+			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[idx].Index, m.sessionName())
 		}
 	case "up", "k":
 		if m.hasAgents() && m.selectedAgentIdx > 0 {
@@ -171,6 +176,7 @@ func (m Model) hasAgents() bool {
 func (m Model) handleConfigLoaded(msg configLoadedMsg) (Model, tea.Cmd) {
 	m.cfg = msg.cfg
 	m.cfgErr = msg.err
+	m.workspaceInfo = msg.workspace
 	if msg.err != nil {
 		m.loading = false
 		return m, nil
@@ -201,7 +207,7 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 		m.agentsErr = nil
 		m.provisionStatus = nil
 		m.provisionErr = nil
-		return m, tea.Batch(fetchAgents(m.cfg, msg.info), fetchProvisionStatus(m.cfg, msg.info))
+		return m, tea.Batch(fetchAgents(m.cfg, msg.info, m.sessionName()), fetchProvisionStatus(m.cfg, msg.info))
 	}
 	m.agents = nil
 	m.agentsErr = nil
@@ -257,7 +263,7 @@ func (m Model) handleAgentAdded(msg agentAddedMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	m.agentsLoading = true
-	return m, fetchAgents(m.cfg, m.vmInfo)
+	return m, fetchAgents(m.cfg, m.vmInfo, m.sessionName())
 }
 
 func (m Model) handleAgentKilled(msg agentKilledMsg) (Model, tea.Cmd) {
@@ -270,7 +276,7 @@ func (m Model) handleAgentKilled(msg agentKilledMsg) (Model, tea.Cmd) {
 	if m.agents != nil && m.selectedAgentIdx >= len(m.agents.Sessions)-1 {
 		m.selectedAgentIdx = max(0, len(m.agents.Sessions)-2)
 	}
-	return m, fetchAgents(m.cfg, m.vmInfo)
+	return m, fetchAgents(m.cfg, m.vmInfo, m.sessionName())
 }
 
 func (m Model) handleConnectFinished(msg connectFinishedMsg) (Model, tea.Cmd) {
@@ -280,7 +286,21 @@ func (m Model) handleConnectFinished(msg connectFinishedMsg) (Model, tea.Cmd) {
 		}
 	}
 	m.agentsLoading = true
-	return m, fetchAgents(m.cfg, m.vmInfo)
+	return m, fetchAgents(m.cfg, m.vmInfo, m.sessionName())
+}
+
+func (m Model) handleSync(msg syncMsg) (Model, tea.Cmd) {
+	m.operation = ""
+	if msg.err != nil {
+		m.agentsErr = msg.err
+		return m, nil
+	}
+	if msg.workspace != nil {
+		m.workspaceInfo = msg.workspace
+	}
+	// Refresh agent list using the (possibly updated) session name
+	m.agentsLoading = true
+	return m, fetchAgents(m.cfg, m.vmInfo, m.sessionName())
 }
 
 // canModifyAgents returns true if agent add/kill operations are allowed.

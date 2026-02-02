@@ -12,8 +12,10 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/deploykey"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
+	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
 
 // defaultSessionName is the tmux session name used until workspace detection
@@ -23,8 +25,9 @@ const defaultSessionName = "agents"
 // Message types for async operations.
 
 type configLoadedMsg struct {
-	cfg *config.Config
-	err error
+	cfg       *config.Config
+	err       error
+	workspace *workspace.Info
 }
 
 type vmInfoMsg struct {
@@ -91,7 +94,8 @@ func newProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(
 
 func loadConfig() tea.Msg {
 	cfg, err := config.Load()
-	return configLoadedMsg{cfg: cfg, err: err}
+	ws, _ := workspace.Detect(workspace.NewGitRunner(".")) // nil if not in a git repo
+	return configLoadedMsg{cfg: cfg, err: err, workspace: ws}
 }
 
 func fetchVMInfo(cfg *config.Config) tea.Cmd {
@@ -215,7 +219,7 @@ func connectSSH(cfg *config.Config, vmInfo *cloud.VMInfo) (*ssh.Client, error) {
 	return ssh.NewClient(sshCfg)
 }
 
-func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.Cmd {
 	return func() tea.Msg {
 		client, err := connectSSH(cfg, vmInfo)
 		if err != nil {
@@ -223,12 +227,12 @@ func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 		}
 		defer func() { _ = client.Close() }()
 
-		result, err := agent.ListSessions(client, defaultSessionName)
+		result, err := agent.ListSessions(client, sessionName)
 		return agentsMsg{result: result, err: err}
 	}
 }
 
-func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.Cmd {
 	return func() tea.Msg {
 		client, err := connectSSH(cfg, vmInfo)
 		if err != nil {
@@ -237,12 +241,12 @@ func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 		defer func() { _ = client.Close() }()
 
 		opts := agent.CreateSessionOptions{Command: cfg.Agents.DefaultCommand}
-		session, err := agent.CreateSession(client, defaultSessionName, opts)
+		session, err := agent.CreateSession(client, sessionName, opts)
 		return agentAddedMsg{session: session, err: err}
 	}
 }
 
-func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) tea.Cmd {
+func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int, sessionName string) tea.Cmd {
 	ip, _ := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 	port := ssh.ResolvePort(cfg.SSH.Port)
@@ -262,7 +266,7 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) t
 		}
 	}
 
-	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", defaultSessionName, windowIndex, defaultSessionName)
+	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", sessionName, windowIndex, sessionName)
 	c := exec.Command("ssh",
 		"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
 		"-t",
@@ -274,7 +278,7 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int) t
 	})
 }
 
-func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
+func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int, sessionName string) tea.Cmd {
 	return func() tea.Msg {
 		client, err := connectSSH(cfg, vmInfo)
 		if err != nil {
@@ -283,8 +287,65 @@ func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int) tea.Cmd {
 		defer func() { _ = client.Close() }()
 
 		opts := agent.KillSessionOptions{Index: index, Force: true}
-		err = agent.KillSession(client, defaultSessionName, opts)
+		err = agent.KillSession(client, sessionName, opts)
 		return agentKilledMsg{index: index, err: err}
+	}
+}
+
+type syncMsg struct {
+	workspace *workspace.Info
+	result    *workspace.SyncResult
+	err       error
+}
+
+func syncWorkspace(cfg *config.Config, vmInfo *cloud.VMInfo, wsInfo *workspace.Info) tea.Cmd {
+	return func() tea.Msg {
+		// 1. Connect SSH
+		client, err := connectSSH(cfg, vmInfo)
+		if err != nil {
+			return syncMsg{err: fmt.Errorf("SSH: %w", err)}
+		}
+		defer func() { _ = client.Close() }()
+
+		// 2. Deploy key setup
+		repo, err := deploykey.ParseRepoRef(wsInfo.RemoteURL)
+		if err != nil {
+			return syncMsg{err: fmt.Errorf("parse repo: %w", err)}
+		}
+
+		fs := deploykey.NewFileSystem()
+		cmd := deploykey.NewCommandRunner()
+		dkOpts := deploykey.Options{
+			Slug:      wsInfo.Slug,
+			RemoteURL: wsInfo.RemoteURL,
+			Repo:      repo,
+		}
+
+		setupResult, err := deploykey.EnsureKey(fs, cmd, dkOpts)
+		if err != nil {
+			return syncMsg{err: fmt.Errorf("deploy key: %w", err)}
+		}
+		if setupResult.ManualNeeded {
+			return syncMsg{err: fmt.Errorf("deploy key requires manual setup: %s", setupResult.ManualMessage)}
+		}
+
+		_, err = deploykey.SetupVM(client, fs, setupResult.KeyPair, dkOpts)
+		if err != nil {
+			return syncMsg{err: fmt.Errorf("VM key setup: %w", err)}
+		}
+
+		// 3. Resolve agent command + pre-commands from config
+		agentCommand := cfg.Agents.ResolveCommand(wsInfo.Slug)
+		preCommands := cfg.Agents.ResolvePreCommands(wsInfo.Slug)
+
+		// 4. Sync
+		result, err := workspace.Sync(client, wsInfo, workspace.SyncOptions{
+			AgentCommand: agentCommand,
+			PreCommands:  preCommands,
+			RepoOwner:    repo.Owner,
+			RepoName:     repo.Name,
+		})
+		return syncMsg{workspace: wsInfo, result: result, err: err}
 	}
 }
 

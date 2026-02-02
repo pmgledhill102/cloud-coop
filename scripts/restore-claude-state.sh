@@ -32,8 +32,9 @@ log "Found saved state: $SAVE_DIR"
 
 # Read instance info
 if [ -f "$SAVE_DIR/instance-info.txt" ]; then
+    # shellcheck source=/dev/null
     source "$SAVE_DIR/instance-info.txt"
-    log "Previous instance: $instance_name (preempted: $preempted)"
+    log "Previous instance: ${instance_name:-unknown} (preempted: ${preempted:-unknown})"
 fi
 
 # 1. Restore git stashes
