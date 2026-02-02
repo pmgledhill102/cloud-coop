@@ -83,21 +83,7 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 	port := ssh.ResolvePort(cfg.SSH.Port)
 
 	// Build the command
-	logFile := "/var/log/cloudcoop/provision.log"
-	var remoteCmd string
-	if provisionLogsFollow {
-		if provisionLogsTail > 0 {
-			remoteCmd = fmt.Sprintf("tail -n %d -f %s", provisionLogsTail, logFile)
-		} else {
-			remoteCmd = fmt.Sprintf("tail -f %s", logFile)
-		}
-	} else {
-		if provisionLogsTail > 0 {
-			remoteCmd = fmt.Sprintf("tail -n %d %s", provisionLogsTail, logFile)
-		} else {
-			remoteCmd = fmt.Sprintf("cat %s", logFile)
-		}
-	}
+	remoteCmd := buildLogCommand(provisionLogsFollow, provisionLogsTail)
 
 	// For follow mode, use interactive SSH (shells out to ssh command)
 	if provisionLogsFollow {
@@ -152,4 +138,20 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 
 	fmt.Print(output)
 	return nil
+}
+
+const provisionLogFile = "/var/log/cloudcoop/provision.log"
+
+// buildLogCommand constructs the remote command to read provisioning logs.
+func buildLogCommand(follow bool, tail int) string {
+	if follow {
+		if tail > 0 {
+			return fmt.Sprintf("tail -n %d -f %s", tail, provisionLogFile)
+		}
+		return fmt.Sprintf("tail -f %s", provisionLogFile)
+	}
+	if tail > 0 {
+		return fmt.Sprintf("tail -n %d %s", tail, provisionLogFile)
+	}
+	return fmt.Sprintf("cat %s", provisionLogFile)
 }
