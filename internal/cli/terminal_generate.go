@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
-	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/log"
-	"github.com/cloud-coop/cloudcoop/internal/ssh"
 	"github.com/cloud-coop/cloudcoop/internal/terminal"
 )
 
@@ -60,64 +55,17 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid format %q: supported formats are ghostty, iterm2, kitty", terminalFormat)
 	}
 
-	// Load configuration
-	cfg, err := configLoader()
+	conn, err := connectToVM(cmd)
 	if err != nil {
-		return handleConfigError(err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
-	}
-
-	// Create provider to get VM info
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-	defer cancel()
-
-	provider, cleanup, err := createProvider(ctx, cfg)
-	if err != nil {
-		return handleProviderError(err)
-	}
-	defer cleanup()
-
-	// Get VM info
-	log.Debug("querying VM status", "name", cfg.VM.Name, "provider", provider.Name())
-	vmInfo, err := provider.GetVMInfo(ctx, cfg.VM.Name)
-	if err != nil {
-		return fmt.Errorf("get VM status: %w", err)
-	}
-
-	// Check if VM exists and is running
-	if vmInfo.Status == cloud.VMStatusNotFound {
-		fmt.Fprintln(os.Stderr, "VM not found:", cfg.VM.Name)
+	if conn == nil {
 		return nil
 	}
-
-	if vmInfo.Status != cloud.VMStatusRunning {
-		fmt.Fprintf(os.Stderr, "VM is %s (must be running to generate config)\n", vmInfo.Status)
-		return nil
-	}
-
-	// Resolve SSH connection parameters
-	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
-		return nil
-	}
-
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	sshPort := ssh.ResolvePort(cfg.SSH.Port)
-
-	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", sshPort)
-
-	client, err := ssh.NewClient(ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port))
-	if err != nil {
-		return fmt.Errorf("SSH connection failed: %w", err)
-	}
-	defer func() { _ = client.Close() }()
+	defer conn.Close()
 
 	// List agent sessions
-	result, err := agent.ListSessions(client, defaultSessionName)
+	result, err := agent.ListSessions(conn.Client, defaultSessionName)
 	if err != nil {
 		if errors.Is(err, agent.ErrTmuxNotInstalled) {
 			fmt.Fprintln(os.Stderr, "tmux is not installed on the VM")
@@ -154,9 +102,9 @@ func runTerminalGenerate(cmd *cobra.Command, args []string) error {
 	genConfig := terminal.Config{
 		Format:   terminalFormat,
 		Grid:     grid,
-		Host:     ip,
-		User:     sshUser,
-		Port:     sshPort,
+		Host:     conn.IP,
+		User:     conn.User,
+		Port:     conn.Port,
 		Session:  defaultSessionName,
 		Sessions: result.Sessions,
 	}

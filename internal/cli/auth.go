@@ -15,6 +15,24 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
+// classifyAuthStatus parses the output of an auth status check command and
+// returns a status string and optional detail.
+func classifyAuthStatus(output string, runErr error) (status, detail string) {
+	if strings.Contains(output, "command not found") || strings.Contains(output, "not found") {
+		return "not_installed", ""
+	}
+	if strings.Contains(output, "AUTH_OK") {
+		return "authenticated", ""
+	}
+	if strings.Contains(output, "Invalid API key") ||
+		strings.Contains(output, "Please run /login") ||
+		strings.Contains(output, "authentication") ||
+		runErr != nil {
+		return "not_authenticated", ""
+	}
+	return "unknown", output
+}
+
 // Supported agent types for authentication.
 const (
 	AgentClaude = "claude"
@@ -216,98 +234,40 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unsupported agent: %s (supported: claude)", agentType)
 	}
 
-	// Load configuration
-	cfg, err := configLoader()
+	conn, err := connectToVM(cmd)
 	if err != nil {
-		return handleConfigError(err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
-	}
-
-	// Get VM info
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-	defer cancel()
-
-	provider, cleanup, err := createProvider(ctx, cfg)
-	if err != nil {
-		return handleProviderError(err)
-	}
-	defer cleanup()
-
-	log.Debug("querying VM status", "name", cfg.VM.Name, "provider", provider.Name())
-	vmInfo, err := provider.GetVMInfo(ctx, cfg.VM.Name)
-	if err != nil {
-		return fmt.Errorf("get VM status: %w", err)
-	}
-
-	// Check VM state
-	if vmInfo.Status == cloud.VMStatusNotFound {
-		fmt.Fprintln(os.Stderr, "VM not found:", cfg.VM.Name)
+	if conn == nil {
 		return nil
 	}
-
-	if vmInfo.Status != cloud.VMStatusRunning {
-		fmt.Fprintf(os.Stderr, "VM is %s (must be running to check auth status)\n", vmInfo.Status)
-		return nil
-	}
-
-	// Connect via SSH
-	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")
-		return nil
-	}
-
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	log.Debug("connecting to VM via SSH", "host", ip, "user", sshUser, "port", cfg.SSH.Port)
-
-	sshCfg := ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port)
-	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
-	client, err := ssh.NewClient(sshCfg)
-	if err != nil {
-		return handleSSHError(err, ip, ssh.ResolvePort(cfg.SSH.Port))
-	}
-	defer func() { _ = client.Close() }()
+	defer conn.Close()
 
 	// Run auth status check
 	log.Debug("running auth status check", "agent", agentType, "command", agentCmds.statusCheck)
-	output, err := client.Run(agentCmds.statusCheck)
+	output, runErr := conn.Client.Run(agentCmds.statusCheck)
 
 	// Print header
-	fmt.Printf("Auth status for %s on %s:\n", agentType, cfg.VM.Name)
+	fmt.Printf("Auth status for %s on %s:\n", agentType, conn.Config.VM.Name)
 	fmt.Println()
 
-	// Check for command not found
-	if strings.Contains(output, "command not found") || strings.Contains(output, "not found") {
+	status, detail := classifyAuthStatus(output, runErr)
+	switch status {
+	case "not_installed":
 		fmt.Printf("  %s is not installed on the VM.\n", agentType)
 		fmt.Println()
 		fmt.Println("  Install it with:")
 		fmt.Println("    cloudcoop provision")
-		return nil
-	}
-
-	// Check for successful auth (our test prompt returns AUTH_OK)
-	if strings.Contains(output, "AUTH_OK") {
+	case "authenticated":
 		fmt.Println("  ✓ Authenticated")
-		return nil
-	}
-
-	// Check for common auth error messages
-	if strings.Contains(output, "Invalid API key") ||
-		strings.Contains(output, "Please run /login") ||
-		strings.Contains(output, "authentication") ||
-		err != nil {
+	case "not_authenticated":
 		fmt.Println("  ✗ Not authenticated")
 		fmt.Println()
 		fmt.Println("  To authenticate, start an agent session and follow the login prompt:")
 		fmt.Println("    cloudcoop agents add")
 		fmt.Println("    cloudcoop agents attach 0")
-		return nil
+	default:
+		fmt.Printf("  Status unknown. Output:\n%s\n", detail)
 	}
-
-	// Unknown output - print it for debugging
-	fmt.Printf("  Status unknown. Output:\n%s\n", output)
 	return nil
 }

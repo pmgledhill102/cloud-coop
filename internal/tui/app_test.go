@@ -1129,6 +1129,545 @@ func TestRenderHelp_ShowsSyncWhenWorkspaceDetected(t *testing.T) {
 	}
 }
 
+// --- Handler error path tests ---
+
+func TestConfigLoadedMsg_WithError(t *testing.T) {
+	m := Model{loading: true}
+
+	msg := configLoadedMsg{err: errTestConfig}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.cfgErr == nil {
+		t.Error("configLoadedMsg with error should set cfgErr")
+	}
+	if updated.loading {
+		t.Error("configLoadedMsg with error should clear loading")
+	}
+	if cmd != nil {
+		t.Error("configLoadedMsg with error should not return a command")
+	}
+}
+
+func TestConfigLoadedMsg_WithValidationError(t *testing.T) {
+	m := Model{loading: true}
+
+	// Config with missing required fields triggers validation error
+	msg := configLoadedMsg{cfg: &config.Config{}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.cfgErr == nil {
+		t.Error("configLoadedMsg with invalid config should set cfgErr")
+	}
+	if updated.loading {
+		t.Error("configLoadedMsg with validation error should clear loading")
+	}
+	if cmd != nil {
+		t.Error("configLoadedMsg with validation error should not return a command")
+	}
+}
+
+func TestVMInfoMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:     &config.Config{},
+		loading: true,
+	}
+
+	msg := vmInfoMsg{err: errors.New("API error")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.vmErr == nil {
+		t.Error("vmInfoMsg with error should set vmErr")
+	}
+	if updated.loading {
+		t.Error("vmInfoMsg with error should clear loading")
+	}
+	if cmd != nil {
+		t.Error("vmInfoMsg with error should not return a command")
+	}
+}
+
+func TestVMInfoMsg_NonRunningVM(t *testing.T) {
+	m := Model{
+		cfg:     &config.Config{},
+		loading: true,
+		agents:  &agent.ListResult{Sessions: []agent.Session{{Index: 0, Name: "test"}}},
+	}
+
+	msg := vmInfoMsg{info: &cloud.VMInfo{Status: cloud.VMStatusStopped}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.loading {
+		t.Error("vmInfoMsg should clear loading")
+	}
+	if updated.agents != nil {
+		t.Error("vmInfoMsg with non-running VM should clear agents")
+	}
+	if cmd != nil {
+		t.Error("vmInfoMsg with non-running VM should not fetch agents")
+	}
+}
+
+func TestVMStartMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "starting",
+	}
+
+	msg := vmStartMsg{err: errors.New("start failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmStartMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.vmErr == nil {
+		t.Error("vmStartMsg with error should set vmErr")
+	}
+	if cmd != nil {
+		t.Error("vmStartMsg with error should not return a command")
+	}
+}
+
+func TestVMStopMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "stopping",
+	}
+
+	msg := vmStopMsg{err: errors.New("stop failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmStopMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.vmErr == nil {
+		t.Error("vmStopMsg with error should set vmErr")
+	}
+	if cmd != nil {
+		t.Error("vmStopMsg with error should not return a command")
+	}
+}
+
+func TestAgentAddedMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		operation: "adding",
+	}
+
+	msg := agentAddedMsg{err: errors.New("add failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("agentAddedMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.agentsErr == nil {
+		t.Error("agentAddedMsg with error should set agentsErr")
+	}
+	if cmd != nil {
+		t.Error("agentAddedMsg with error should not return a command")
+	}
+}
+
+func TestAgentKilledMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		vmInfo:    &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		operation: "killing",
+	}
+
+	msg := agentKilledMsg{index: 0, err: errors.New("kill failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("agentKilledMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.agentsErr == nil {
+		t.Error("agentKilledMsg with error should set agentsErr")
+	}
+	if cmd != nil {
+		t.Error("agentKilledMsg with error should not return a command")
+	}
+}
+
+func TestConnectFinishedMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:    &config.Config{},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+	}
+
+	msg := connectFinishedMsg{err: errors.New("connect failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	// Should still refresh agents even on error
+	if !updated.agentsLoading {
+		t.Error("connectFinishedMsg should still refresh agents even on error")
+	}
+	if cmd == nil {
+		t.Error("connectFinishedMsg should return a command to refresh agents")
+	}
+}
+
+// --- View/render tests ---
+
+func TestRenderView_NotReady(t *testing.T) {
+	m := Model{ready: false}
+	view := m.renderView()
+	if !containsString(view, "Loading...") {
+		t.Error("renderView when not ready should show Loading...")
+	}
+}
+
+func TestRenderView_ShowsHelp(t *testing.T) {
+	m := Model{ready: true, showHelp: true}
+	view := m.renderView()
+	if !containsString(view, "Keyboard Shortcuts") {
+		t.Error("renderView with showHelp should render help overlay")
+	}
+}
+
+func TestRenderView_ConfigError(t *testing.T) {
+	m := Model{ready: true, cfgErr: errTestConfig}
+	view := m.renderView()
+	if !containsString(view, "Configuration Error") {
+		t.Error("renderView with cfgErr should show config error")
+	}
+}
+
+func TestRenderView_SizeSelection(t *testing.T) {
+	m := Model{
+		ready:         true,
+		selectingSize: true,
+		cfg:           &config.Config{VM: config.VMConfig{MachineSizes: map[string]string{"small": "e2-small"}}},
+		sizeOptions:   []string{"small"},
+	}
+	view := m.renderView()
+	if !containsString(view, "Select VM size") {
+		t.Error("renderView with selectingSize should show size selection")
+	}
+}
+
+func TestRenderView_DeleteConfirmation(t *testing.T) {
+	m := Model{
+		ready:            true,
+		confirmingDelete: true,
+		cfg:              &config.Config{VM: config.VMConfig{Name: "test-vm"}},
+	}
+	view := m.renderView()
+	if !containsString(view, "Delete VM") {
+		t.Error("renderView with confirmingDelete should show delete confirmation")
+	}
+	if !containsString(view, "test-vm") {
+		t.Error("renderView delete confirmation should show VM name")
+	}
+}
+
+func TestRenderView_KillConfirmation(t *testing.T) {
+	m := Model{
+		ready:           true,
+		confirmingKill:  true,
+		killTargetName:  "agent-1",
+		killTargetIndex: 1,
+	}
+	view := m.renderView()
+	if !containsString(view, "Kill agent") {
+		t.Error("renderView with confirmingKill should show kill confirmation")
+	}
+	if !containsString(view, "agent-1") {
+		t.Error("renderView kill confirmation should show agent name")
+	}
+}
+
+func TestRenderView_Operation(t *testing.T) {
+	ops := map[string]string{
+		"starting": "Starting VM",
+		"stopping": "Stopping VM",
+		"creating": "Creating VM",
+		"deleting": "Deleting VM",
+		"adding":   "Adding agent",
+		"killing":  "Killing agent",
+		"syncing":  "Syncing workspace",
+	}
+	for op, expected := range ops {
+		t.Run(op, func(t *testing.T) {
+			m := Model{ready: true, operation: op}
+			view := m.renderView()
+			if !containsString(view, expected) {
+				t.Errorf("renderView with operation %q should contain %q", op, expected)
+			}
+		})
+	}
+}
+
+func TestRenderView_Loading(t *testing.T) {
+	m := Model{ready: true, loading: true, vmInfo: nil}
+	view := m.renderView()
+	if !containsString(view, "Loading VM status") {
+		t.Error("renderView loading with nil vmInfo should show loading message")
+	}
+}
+
+func TestRenderView_VMError(t *testing.T) {
+	m := Model{ready: true, vmErr: errors.New("API failed")}
+	view := m.renderView()
+	if !containsString(view, "API failed") {
+		t.Error("renderView with vmErr should show the error message")
+	}
+}
+
+func TestFormatStatus_AllValues(t *testing.T) {
+	m := Model{}
+	tests := []struct {
+		status cloud.VMStatus
+		want   string
+	}{
+		{cloud.VMStatusRunning, "running"},
+		{cloud.VMStatusStopped, "stopped"},
+		{cloud.VMStatusStarting, "starting"},
+		{cloud.VMStatusStopping, "stopping"},
+		{cloud.VMStatusUnknown, string(cloud.VMStatusUnknown)},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			got := m.formatStatus(tt.status)
+			if !containsString(got, tt.want) {
+				t.Errorf("formatStatus(%q) = %q, want containing %q", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatProvisionStatus_AllStates(t *testing.T) {
+	tests := []struct {
+		name string
+		m    Model
+		want string
+	}{
+		{
+			name: "loading",
+			m:    Model{provisionLoading: true},
+			want: "checking",
+		},
+		{
+			name: "error",
+			m:    Model{provisionErr: errors.New("ssh failed")},
+			want: "error",
+		},
+		{
+			name: "nil status",
+			m:    Model{},
+			want: "unknown",
+		},
+		{
+			name: "pending",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusPending}},
+			want: "pending",
+		},
+		{
+			name: "running",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusRunning}},
+			want: "running",
+		},
+		{
+			name: "running with progress",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusRunning, Progress: "step 3/5"}},
+			want: "step 3/5",
+		},
+		{
+			name: "completed",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted}},
+			want: "completed",
+		},
+		{
+			name: "failed",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusFailed}},
+			want: "failed",
+		},
+		{
+			name: "failed with detail",
+			m:    Model{provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusFailed, Error: "script exited"}},
+			want: "script exited",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.m.formatProvisionStatus()
+			if !containsString(got, tt.want) {
+				t.Errorf("formatProvisionStatus() = %q, want containing %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderConfigError_ContainsInstructions(t *testing.T) {
+	m := Model{cfgErr: errors.New("config not found")}
+	rendered := m.renderConfigError()
+	if !containsString(rendered, "cloudcoop config init") {
+		t.Error("renderConfigError should contain setup wizard instruction")
+	}
+	if !containsString(rendered, "cloudcoop.toml") {
+		t.Error("renderConfigError should contain config file path")
+	}
+}
+
+func TestRenderSizeSelection_ShowsOptions(t *testing.T) {
+	m := Model{
+		cfg: &config.Config{VM: config.VMConfig{MachineSizes: map[string]string{
+			"small":  "e2-small",
+			"medium": "e2-medium",
+		}}},
+		sizeOptions:     []string{"small", "medium"},
+		selectedSizeIdx: 0,
+	}
+	rendered := m.renderSizeSelection()
+	if !containsString(rendered, "small") {
+		t.Error("renderSizeSelection should show 'small' option")
+	}
+	if !containsString(rendered, "medium") {
+		t.Error("renderSizeSelection should show 'medium' option")
+	}
+	if !containsString(rendered, ">") {
+		t.Error("renderSizeSelection should show selection indicator")
+	}
+}
+
+func TestRenderDeleteConfirmation_ShowsVMName(t *testing.T) {
+	m := Model{cfg: &config.Config{VM: config.VMConfig{Name: "my-sandbox"}}}
+	rendered := m.renderDeleteConfirmation()
+	if !containsString(rendered, "my-sandbox") {
+		t.Error("renderDeleteConfirmation should show VM name")
+	}
+	if !containsString(rendered, "permanently delete") {
+		t.Error("renderDeleteConfirmation should warn about permanent deletion")
+	}
+}
+
+func TestRenderKillConfirmation_ShowsAgentName(t *testing.T) {
+	m := Model{killTargetName: "feature-auth", killTargetIndex: 2}
+	rendered := m.renderKillConfirmation()
+	if !containsString(rendered, "feature-auth") {
+		t.Error("renderKillConfirmation should show agent name")
+	}
+}
+
+// --- VM operation success tests ---
+
+func TestVMStartMsg_Success(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "starting",
+	}
+
+	msg := vmStartMsg{err: nil}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmStartMsg success should clear operation, got %q", updated.operation)
+	}
+	if !updated.loading {
+		t.Error("vmStartMsg success should set loading to refresh VM info")
+	}
+	if cmd == nil {
+		t.Error("vmStartMsg success should return a command to fetch VM info")
+	}
+}
+
+func TestVMStopMsg_Success(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "stopping",
+	}
+
+	msg := vmStopMsg{err: nil}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmStopMsg success should clear operation, got %q", updated.operation)
+	}
+	if !updated.loading {
+		t.Error("vmStopMsg success should set loading to refresh VM info")
+	}
+	if cmd == nil {
+		t.Error("vmStopMsg success should return a command to fetch VM info")
+	}
+}
+
+func TestVMCreateMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "creating",
+	}
+
+	msg := vmCreateMsg{err: errors.New("quota exceeded")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmCreateMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.vmErr == nil {
+		t.Error("vmCreateMsg with error should set vmErr")
+	}
+	if cmd != nil {
+		t.Error("vmCreateMsg with error should not return a command")
+	}
+}
+
+func TestVMDeleteMsg_WithError(t *testing.T) {
+	m := Model{
+		cfg:       &config.Config{},
+		operation: "deleting",
+	}
+
+	msg := vmDeleteMsg{err: errors.New("delete failed")}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.operation != "" {
+		t.Errorf("vmDeleteMsg with error should clear operation, got %q", updated.operation)
+	}
+	if updated.vmErr == nil {
+		t.Error("vmDeleteMsg with error should set vmErr")
+	}
+	if cmd != nil {
+		t.Error("vmDeleteMsg with error should not return a command")
+	}
+}
+
+func TestVMInfoMsg_RunningVM_FetchesAgents(t *testing.T) {
+	m := Model{
+		cfg:     &config.Config{},
+		loading: true,
+	}
+
+	msg := vmInfoMsg{info: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"}}
+	newModel, cmd := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.loading {
+		t.Error("vmInfoMsg should clear loading")
+	}
+	if !updated.agentsLoading {
+		t.Error("vmInfoMsg with running VM should set agentsLoading")
+	}
+	if !updated.provisionLoading {
+		t.Error("vmInfoMsg with running VM should set provisionLoading")
+	}
+	if cmd == nil {
+		t.Error("vmInfoMsg with running VM should return commands to fetch agents and provision status")
+	}
+}
+
 func TestUppercaseJ_NavigatesDown(t *testing.T) {
 	m := Model{
 		cfg:    &config.Config{},

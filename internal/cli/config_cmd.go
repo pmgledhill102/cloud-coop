@@ -87,7 +87,7 @@ func init() {
 }
 
 func runConfigShow(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load()
+	cfg, err := configLoader()
 	if err != nil {
 		return handleConfigError(err)
 	}
