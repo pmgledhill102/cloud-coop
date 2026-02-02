@@ -27,7 +27,7 @@ func NewGitRepo(t testing.TB) *GitRepo {
 
 	// Create initial commit
 	dummy := filepath.Join(dir, "README.md")
-	if err := os.WriteFile(dummy, []byte("# test\n"), 0o644); err != nil {
+	if err := os.WriteFile(dummy, []byte("# test\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r.git("add", "README.md")
