@@ -23,6 +23,8 @@ linters:
     # Code quality
     - misspell      # Find misspelled words
     - revive        # Fast, configurable linter (golint replacement)
+    # Security
+    - gosec         # Security-focused linter (matches CI security.yml)
 
   settings:
     errcheck:
@@ -72,6 +74,14 @@ linters:
         - name: unreachable-code
         - name: redefines-builtin-id
 
+    gosec:
+      excludes:
+        - G106  # SSH InsecureIgnoreHostKey — tracked in cc-xzi
+        - G204  # Subprocess with variable args — expected for SSH tool
+        - G304  # File path traversal — test utilities use dynamic paths
+      severity: medium
+      confidence: medium
+
     staticcheck:
       # SA/S/ST/QF checks from staticcheck.io
       checks:
@@ -95,6 +105,7 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
+          - gosec
           - unused
 
       # Allow dot imports in test files (for testing frameworks)
@@ -149,4 +160,7 @@ severity:
       severity: error
     - linters:
         - staticcheck
+      severity: error
+    - linters:
+        - gosec
       severity: error
