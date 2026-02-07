@@ -4,7 +4,12 @@
 // IAM bindings, and firewall rules.
 package setup
 
-import "context"
+import (
+	"context"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
 
 // ProjectInfo describes a cloud project.
 type ProjectInfo struct {
@@ -69,11 +74,46 @@ var RequiredIAMRoles = []string{
 	"roles/monitoring.metricWriter",
 }
 
-// ServiceAccountName is the default name for the cloudcoop VM service account.
-const ServiceAccountName = "cloudcoop-vm"
-
 // ServiceAccountDisplayName is the display name for the service account.
 const ServiceAccountDisplayName = "cloudcoop VM service account"
+
+// saNameRegexp matches characters NOT allowed in GCP service account IDs.
+var saNameRegexp = regexp.MustCompile(`[^a-z0-9-]`)
+
+// ServiceAccountNameForDir derives a service account name from a directory path.
+// The name is based on the directory basename, prefixed with "cc-" and sanitized
+// for GCP constraints (6-30 chars, lowercase alphanumeric and hyphens).
+func ServiceAccountNameForDir(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "cc-cloudcoop"
+	}
+	base := filepath.Base(abs)
+	name := "cc-" + strings.ToLower(base)
+
+	// Replace invalid characters with hyphens
+	name = saNameRegexp.ReplaceAllString(name, "-")
+
+	// Collapse consecutive hyphens
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+
+	// Trim trailing hyphens
+	name = strings.TrimRight(name, "-")
+
+	// Truncate to 30 chars (GCP max)
+	if len(name) > 30 {
+		name = strings.TrimRight(name[:30], "-")
+	}
+
+	// Ensure minimum length of 6 (GCP min)
+	if len(name) < 6 {
+		name = name + "-vm"
+	}
+
+	return name
+}
 
 // IAPFirewallRuleName is the name of the IAP SSH firewall rule.
 const IAPFirewallRuleName = "cloudcoop-allow-iap-ssh"

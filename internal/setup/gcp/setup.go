@@ -9,6 +9,8 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/cloud-coop/cloudcoop/internal/setup"
 )
@@ -301,11 +303,15 @@ func (p *Provider) Close() error {
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T { return &v }
 
-// isNotFoundError checks if the error is a 404 "not found" error.
+// isNotFoundError checks if the error is a "not found" error.
+// It handles both REST (googleapi.Error 404) and gRPC (codes.NotFound) errors.
 func isNotFoundError(err error) bool {
 	var apiErr *googleapi.Error
 	if errors.As(err, &apiErr) {
 		return apiErr.Code == 404
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.NotFound
 	}
 	return false
 }

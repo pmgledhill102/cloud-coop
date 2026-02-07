@@ -25,6 +25,9 @@ var sshKeyChecker func() setup.PrereqStatus = setup.CheckSSHKey
 // sshKeyGenerator generates an SSH key. Injectable for testing.
 var sshKeyGenerator func() (string, error) = setup.GenerateSSHKey
 
+// saNameDeriver derives a service account name from a directory. Injectable for testing.
+var saNameDeriver func(dir string) string = setup.ServiceAccountNameForDir
+
 func defaultSetupProviderFactory(ctx context.Context) (setup.SetupProvider, error) {
 	return gcpsetup.New(ctx)
 }
@@ -158,18 +161,21 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("Checking project %q...\n", projectID)
 
+	// Derive service account name from repo directory
+	saName := saNameDeriver(".")
+
 	// Phase 1: Check current state
 	apiStatuses, err := provider.CheckAPIs(ctx, projectID)
 	if err != nil {
 		return fmt.Errorf("check APIs: %w", err)
 	}
 
-	saExists, err := provider.ServiceAccountExists(ctx, projectID, setup.ServiceAccountName)
+	saExists, err := provider.ServiceAccountExists(ctx, projectID, saName)
 	if err != nil {
 		return fmt.Errorf("check service account: %w", err)
 	}
 
-	saEmail := setup.ServiceAccountEmail(projectID, setup.ServiceAccountName)
+	saEmail := setup.ServiceAccountEmail(projectID, saName)
 	saMember := "serviceAccount:" + saEmail
 
 	// Check IAM bindings (only if SA exists)
@@ -200,9 +206,9 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	if saExists {
-		fmt.Printf("  [ok] Service account %s (exists)\n", setup.ServiceAccountName)
+		fmt.Printf("  [ok] Service account %s (exists)\n", saName)
 	} else {
-		fmt.Printf("  [--] Service account %s (not found)\n", setup.ServiceAccountName)
+		fmt.Printf("  [--] Service account %s (not found)\n", saName)
 	}
 
 	if saExists {
@@ -268,7 +274,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(rolesToGrant) > 0 {
-			fmt.Printf("  Grant IAM roles to %s:\n", setup.ServiceAccountName)
+			fmt.Printf("  Grant IAM roles to %s:\n", saName)
 			for _, role := range rolesToGrant {
 				fmt.Printf("    - %s\n", role)
 			}
@@ -312,7 +318,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsSA {
 			fmt.Print("Creating service account...")
-			email, createErr := provider.CreateServiceAccount(ctx, projectID, setup.ServiceAccountName, setup.ServiceAccountDisplayName)
+			email, createErr := provider.CreateServiceAccount(ctx, projectID, saName, setup.ServiceAccountDisplayName)
 			if createErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create service account: %w", createErr)
