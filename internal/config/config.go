@@ -110,6 +110,15 @@ func DefaultConfigPath() (string, error) {
 	return filepath.Join(home, ".config", "cloudcoop", "cloudcoop.toml"), nil
 }
 
+// ProjectConfigDir is the directory name for per-project configuration.
+const ProjectConfigDir = ".cloudcoop"
+
+// ProjectConfigPath returns the project config file path relative to the given directory.
+// The project config lives at <dir>/.cloudcoop/config.toml.
+func ProjectConfigPath(dir string) string {
+	return filepath.Join(dir, ProjectConfigDir, "config.toml")
+}
+
 // Load loads configuration from the default locations.
 // It checks ./cloudcoop.toml first, then ~/.config/cloudcoop/cloudcoop.toml.
 func Load() (*Config, error) {
@@ -127,6 +136,130 @@ func Load() (*Config, error) {
 	return LoadFile(path)
 }
 
+// LoadMerged loads global config and overlays project config on top.
+// Global: ~/.config/cloudcoop/cloudcoop.toml
+// Project: .cloudcoop/config.toml (in current directory)
+// Non-zero project values override global values.
+func LoadMerged() (*Config, error) {
+	// Start with global config (or empty if not found)
+	globalPath, err := DefaultConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := loadFileRaw(globalPath)
+	if err != nil {
+		// Global config not found is OK - use empty config
+		cfg = &Config{}
+	}
+
+	// Also check legacy local config (./cloudcoop.toml) for backwards compat
+	if legacyCfg, err := loadFileRaw("cloudcoop.toml"); err == nil {
+		mergeConfig(cfg, legacyCfg)
+	}
+
+	// Overlay project config if it exists
+	projectPath := ProjectConfigPath(".")
+	if projectCfg, err := loadFileRaw(projectPath); err == nil {
+		mergeConfig(cfg, projectCfg)
+	}
+
+	applyDefaults(cfg)
+	return cfg, nil
+}
+
+// SaveProject writes only project-specific fields to .cloudcoop/config.toml.
+// It creates the .cloudcoop/ directory if needed.
+func SaveProject(dir string, project, zone, serviceAccount, vmName string) error {
+	cfg := &Config{
+		Cloud: CloudConfig{
+			GCP: GCPConfig{
+				Project:        project,
+				Zone:           zone,
+				ServiceAccount: serviceAccount,
+			},
+		},
+		VM: VMConfig{
+			Name: vmName,
+		},
+	}
+
+	path := ProjectConfigPath(dir)
+	return cfg.Save(path)
+}
+
+// loadFileRaw loads a config file without applying defaults.
+func loadFileRaw(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, apperrors.Wrap(err, "parse config file")
+	}
+	return &cfg, nil
+}
+
+// mergeConfig overlays non-zero values from src onto dst.
+func mergeConfig(dst, src *Config) {
+	if src.Cloud.Provider != "" {
+		dst.Cloud.Provider = src.Cloud.Provider
+	}
+	if src.Cloud.GCP.Project != "" {
+		dst.Cloud.GCP.Project = src.Cloud.GCP.Project
+	}
+	if src.Cloud.GCP.Zone != "" {
+		dst.Cloud.GCP.Zone = src.Cloud.GCP.Zone
+	}
+	if src.Cloud.GCP.ServiceAccount != "" {
+		dst.Cloud.GCP.ServiceAccount = src.Cloud.GCP.ServiceAccount
+	}
+	if src.VM.Name != "" {
+		dst.VM.Name = src.VM.Name
+	}
+	if src.VM.DiskSizeGB != 0 {
+		dst.VM.DiskSizeGB = src.VM.DiskSizeGB
+	}
+	if src.VM.Image != "" {
+		dst.VM.Image = src.VM.Image
+	}
+	if src.VM.Spot {
+		dst.VM.Spot = true
+	}
+	if src.VM.Network != "" {
+		dst.VM.Network = src.VM.Network
+	}
+	if len(src.VM.Tags) > 0 {
+		dst.VM.Tags = src.VM.Tags
+	}
+	if len(src.VM.MachineSizes) > 0 {
+		dst.VM.MachineSizes = src.VM.MachineSizes
+	}
+	if src.SSH.Port != 0 {
+		dst.SSH.Port = src.SSH.Port
+	}
+	if src.SSH.User != "" {
+		dst.SSH.User = src.SSH.User
+	}
+	if src.Agents.DefaultCommand != "" {
+		dst.Agents.DefaultCommand = src.Agents.DefaultCommand
+	}
+	if len(src.Agents.PreCommands) > 0 {
+		dst.Agents.PreCommands = src.Agents.PreCommands
+	}
+	if len(src.Agents.Repos) > 0 {
+		dst.Agents.Repos = src.Agents.Repos
+	}
+	if src.Provisioning.ScriptURL != "" {
+		dst.Provisioning.ScriptURL = src.Provisioning.ScriptURL
+	}
+	if src.TUI.RefreshIntervalSec != 0 {
+		dst.TUI.RefreshIntervalSec = src.TUI.RefreshIntervalSec
+	}
+}
+
 // LoadFile loads configuration from a specific file.
 func LoadFile(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -142,7 +275,12 @@ func LoadFile(path string) (*Config, error) {
 		return nil, apperrors.Wrap(err, "parse config file")
 	}
 
-	// Set defaults
+	applyDefaults(&cfg)
+	return &cfg, nil
+}
+
+// applyDefaults sets default values for any unset fields.
+func applyDefaults(cfg *Config) {
 	if cfg.Cloud.Provider == "" {
 		cfg.Cloud.Provider = "gcp"
 	}
@@ -172,8 +310,6 @@ func LoadFile(path string) (*Config, error) {
 	if cfg.TUI.RefreshIntervalSec == 0 {
 		cfg.TUI.RefreshIntervalSec = 15
 	}
-
-	return &cfg, nil
 }
 
 // Exists checks if a configuration file exists at the default location.

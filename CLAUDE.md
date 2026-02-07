@@ -52,6 +52,7 @@ cmd/              # Main binary entry point
 internal/
   tui/            # Bubbletea TUI components
   cloud/          # Provider interface + implementations (gcp/, aws/, azure/)
+  setup/          # GCP project setup automation (setup command)
   agent/          # Agent configuration
   ssh/            # SSH/tmux operations
 config/           # Default configurations
@@ -70,6 +71,9 @@ make fmt          # Format Go source files
 make all          # Format, lint, test, and build
 make clean        # Remove build artifacts
 make help         # Show all available targets
+
+# First-time setup
+cloudcoop setup   # Automated GCP project provisioning + config
 ```
 
 ## Important Patterns and Constraints
