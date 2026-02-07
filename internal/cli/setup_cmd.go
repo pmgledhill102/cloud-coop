@@ -176,6 +176,16 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		network = "default"
 	}
 
+	// Load merged config for extra APIs/IAM roles
+	mergedCfg, _ := config.LoadMerged()
+	var extraAPIs, extraRoles []string
+	if mergedCfg != nil {
+		extraAPIs = mergedCfg.Setup.ExtraAPIs
+		extraRoles = mergedCfg.Setup.ExtraIAMRoles
+	}
+	apis := setup.MergedAPIs(extraAPIs)
+	iamRoles := setup.MergedIAMRoles(extraRoles)
+
 	fmt.Println()
 	fmt.Printf("Checking project %q...\n", projectID)
 
@@ -183,7 +193,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	saName := saNameDeriver(".")
 
 	// Phase 1: Check current state
-	apiStatuses, err := provider.CheckAPIs(ctx, projectID)
+	apiStatuses, err := provider.CheckAPIs(ctx, projectID, apis)
 	if err != nil {
 		return fmt.Errorf("check APIs: %w", err)
 	}
@@ -199,7 +209,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	// Check IAM bindings (only if SA exists)
 	iamBindings := make(map[string]bool)
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			bound, bindErr := provider.CheckIAMBinding(ctx, projectID, saMember, role)
 			if bindErr != nil {
 				return fmt.Errorf("check IAM binding: %w", bindErr)
@@ -230,7 +240,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			if iamBindings[role] {
 				fmt.Printf("  [ok] IAM %s (bound)\n", role)
 			} else {
@@ -257,13 +267,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	var rolesToGrant []string
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			if !iamBindings[role] {
 				rolesToGrant = append(rolesToGrant, role)
 			}
 		}
 	} else {
-		rolesToGrant = setup.RequiredIAMRoles
+		rolesToGrant = iamRoles
 	}
 
 	needsSA := !saExists

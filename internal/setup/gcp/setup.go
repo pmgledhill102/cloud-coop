@@ -107,10 +107,10 @@ func (p *Provider) ListProjects(ctx context.Context) ([]setup.ProjectInfo, error
 	return projects, nil
 }
 
-// CheckAPIs checks which required APIs are enabled.
-func (p *Provider) CheckAPIs(ctx context.Context, project string) ([]setup.APIStatus, error) {
-	statuses := make([]setup.APIStatus, len(setup.RequiredAPIs))
-	for i, api := range setup.RequiredAPIs {
+// CheckAPIs checks which of the given APIs are enabled.
+func (p *Provider) CheckAPIs(ctx context.Context, project string, apis []string) ([]setup.APIStatus, error) {
+	statuses := make([]setup.APIStatus, len(apis))
+	for i, api := range apis {
 		name := fmt.Sprintf("projects/%s/services/%s", project, api)
 		state, err := p.serviceUsage.GetService(ctx, name)
 		if err != nil {

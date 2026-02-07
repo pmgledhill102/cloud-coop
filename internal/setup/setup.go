@@ -29,8 +29,8 @@ type SetupProvider interface {
 	// ListProjects returns available cloud projects.
 	ListProjects(ctx context.Context) ([]ProjectInfo, error)
 
-	// CheckAPIs checks which required APIs are enabled in the project.
-	CheckAPIs(ctx context.Context, project string) ([]APIStatus, error)
+	// CheckAPIs checks which of the given APIs are enabled in the project.
+	CheckAPIs(ctx context.Context, project string, apis []string) ([]APIStatus, error)
 
 	// EnableAPI enables a single API in the project.
 	EnableAPI(ctx context.Context, project, api string) error
@@ -72,6 +72,34 @@ var RequiredAPIs = []string{
 var RequiredIAMRoles = []string{
 	"roles/logging.logWriter",
 	"roles/monitoring.metricWriter",
+}
+
+// MergedAPIs returns RequiredAPIs plus any extra APIs, deduplicated.
+func MergedAPIs(extraAPIs []string) []string {
+	return mergeUnique(RequiredAPIs, extraAPIs)
+}
+
+// MergedIAMRoles returns RequiredIAMRoles plus any extra roles, deduplicated.
+func MergedIAMRoles(extraRoles []string) []string {
+	return mergeUnique(RequiredIAMRoles, extraRoles)
+}
+
+func mergeUnique(base, extra []string) []string {
+	seen := make(map[string]bool, len(base))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // ServiceAccountDisplayName is the display name for the service account.

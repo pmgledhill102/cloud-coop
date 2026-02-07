@@ -41,7 +41,7 @@ func (m *mockSetupProvider) ListProjects(ctx context.Context) ([]setup.ProjectIn
 	return m.projects, m.projectsErr
 }
 
-func (m *mockSetupProvider) CheckAPIs(ctx context.Context, project string) ([]setup.APIStatus, error) {
+func (m *mockSetupProvider) CheckAPIs(ctx context.Context, project string, apis []string) ([]setup.APIStatus, error) {
 	if m.apiErr != nil {
 		return nil, m.apiErr
 	}
@@ -50,7 +50,7 @@ func (m *mockSetupProvider) CheckAPIs(ctx context.Context, project string) ([]se
 	}
 	// Default: all enabled
 	var statuses []setup.APIStatus
-	for _, api := range setup.RequiredAPIs {
+	for _, api := range apis {
 		statuses = append(statuses, setup.APIStatus{Name: api, Enabled: true})
 	}
 	return statuses, nil

@@ -189,7 +189,7 @@ func TestCheckAPIs(t *testing.T) {
 		&mockFirewallsClient{},
 	)
 
-	statuses, err := p.CheckAPIs(context.Background(), "test-proj")
+	statuses, err := p.CheckAPIs(context.Background(), "test-proj", setup.RequiredAPIs)
 	if err != nil {
 		t.Fatalf("CheckAPIs() error = %v", err)
 	}
