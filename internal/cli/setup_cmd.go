@@ -111,11 +111,9 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Check if we already have a project config
 	existingProject := ""
-	existingNetwork := ""
 	projectPath := config.ProjectConfigPath(".")
 	if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil {
 		existingProject = existingCfg.Cloud.GCP.Project
-		existingNetwork = existingCfg.VM.Network
 	}
 
 	if flagProject != "" {
@@ -162,13 +160,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		projectID = projects[idx-1].ID
 	}
 
-	// Resolve network name: flag → existing config → global config → "default"
+	// Resolve network name: flag → merged config (global + project) → "default"
 	network := flagNetwork
 	if network == "" {
-		network = existingNetwork
-	}
-	if network == "" {
-		if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.VM.Network != "" {
+		if merged, mergeErr := config.LoadMerged(); mergeErr == nil {
 			network = merged.VM.Network
 		}
 	}
