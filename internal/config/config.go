@@ -2,12 +2,14 @@
 package config
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -126,6 +128,12 @@ func ProjectConfigPath(dir string) string {
 	return filepath.Join(dir, ProjectConfigDir, "config.toml")
 }
 
+// InstanceConfigPath returns the instance config file path relative to the given directory.
+// The instance config lives at <dir>/.cloudcoop/local.toml and is gitignored.
+func InstanceConfigPath(dir string) string {
+	return filepath.Join(dir, ProjectConfigDir, "local.toml")
+}
+
 // Load loads configuration from the default locations.
 // It checks ./cloudcoop.toml first, then ~/.config/cloudcoop/cloudcoop.toml.
 func Load() (*Config, error) {
@@ -143,10 +151,12 @@ func Load() (*Config, error) {
 	return LoadFile(path)
 }
 
-// LoadMerged loads global config and overlays project config on top.
-// Global: ~/.config/cloudcoop/cloudcoop.toml
-// Project: .cloudcoop/config.toml (in current directory)
-// Non-zero project values override global values.
+// LoadMerged loads config from all layers (lowest to highest priority):
+//  1. Global: ~/.config/cloudcoop/cloudcoop.toml
+//  2. Legacy: ./cloudcoop.toml
+//  3. Repo: .cloudcoop/config.toml (git-tracked, team settings)
+//  4. Instance: .cloudcoop/local.toml (gitignored, per-developer)
+//  5. Apply defaults
 func LoadMerged() (*Config, error) {
 	// Start with global config (or empty if not found)
 	globalPath, err := DefaultConfigPath()
@@ -165,19 +175,26 @@ func LoadMerged() (*Config, error) {
 		mergeConfig(cfg, legacyCfg)
 	}
 
-	// Overlay project config if it exists
+	// Overlay repo config if it exists
 	projectPath := ProjectConfigPath(".")
 	if projectCfg, err := loadFileRaw(projectPath); err == nil {
 		mergeConfig(cfg, projectCfg)
+	}
+
+	// Overlay instance config if it exists (highest priority)
+	instancePath := InstanceConfigPath(".")
+	if instanceCfg, err := loadFileRaw(instancePath); err == nil {
+		mergeConfig(cfg, instanceCfg)
 	}
 
 	applyDefaults(cfg)
 	return cfg, nil
 }
 
-// SaveProject writes only project-specific fields to .cloudcoop/config.toml.
-// It creates the .cloudcoop/ directory if needed.
-func SaveProject(dir string, project, zone, serviceAccount, vmName string) error {
+// SaveInstance writes instance-specific fields to .cloudcoop/local.toml.
+// It creates the .cloudcoop/ directory if needed and ensures local.toml
+// is listed in .cloudcoop/.gitignore.
+func SaveInstance(dir string, project, zone, serviceAccount, vmName string) error {
 	cfg := &Config{
 		Cloud: CloudConfig{
 			GCP: GCPConfig{
@@ -191,8 +208,59 @@ func SaveProject(dir string, project, zone, serviceAccount, vmName string) error
 		},
 	}
 
-	path := ProjectConfigPath(dir)
-	return cfg.Save(path)
+	path := InstanceConfigPath(dir)
+	if err := cfg.Save(path); err != nil {
+		return err
+	}
+	return ensureGitignore(dir)
+}
+
+// SaveProject is deprecated: use SaveInstance instead.
+// It delegates to SaveInstance which writes to .cloudcoop/local.toml.
+func SaveProject(dir string, project, zone, serviceAccount, vmName string) error {
+	return SaveInstance(dir, project, zone, serviceAccount, vmName)
+}
+
+// ensureGitignore adds "local.toml" to .cloudcoop/.gitignore if not already present.
+func ensureGitignore(dir string) error {
+	gitignorePath := filepath.Join(dir, ProjectConfigDir, ".gitignore")
+
+	// Read existing content if any
+	existing, err := os.ReadFile(gitignorePath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return apperrors.Wrap(err, "read .cloudcoop/.gitignore")
+	}
+
+	const entry = "local.toml"
+
+	// Check if already present
+	if existing != nil {
+		scanner := bufio.NewScanner(bytes.NewReader(existing))
+		for scanner.Scan() {
+			if strings.TrimSpace(scanner.Text()) == entry {
+				return nil // already present
+			}
+		}
+	}
+
+	// Append the entry
+	f, err := os.OpenFile(gitignorePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return apperrors.Wrap(err, "open .cloudcoop/.gitignore")
+	}
+	defer f.Close()
+
+	// Add newline before entry if file has content and doesn't end with newline
+	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return apperrors.Wrap(err, "write .cloudcoop/.gitignore")
+		}
+	}
+	if _, err := f.WriteString(entry + "\n"); err != nil {
+		return apperrors.Wrap(err, "write .cloudcoop/.gitignore")
+	}
+
+	return nil
 }
 
 // loadFileRaw loads a config file without applying defaults.

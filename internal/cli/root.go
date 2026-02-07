@@ -74,6 +74,7 @@ func Execute() error {
 func printSetupRequired(heading string, err error) error {
 	globalPath, _ := config.DefaultConfigPath()
 	projectPath := config.ProjectConfigPath(".")
+	instancePath := config.InstanceConfigPath(".")
 
 	fmt.Fprintf(os.Stderr, "%s: %v\n", heading, err)
 	fmt.Fprintln(os.Stderr)
@@ -83,8 +84,9 @@ func printSetupRequired(heading string, err error) error {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Or edit the configuration files directly:")
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintf(os.Stderr, "  Global:  %s\n", globalPath)
-	fmt.Fprintf(os.Stderr, "  Project: %s\n", projectPath)
+	fmt.Fprintf(os.Stderr, "  Global:   %s\n", globalPath)
+	fmt.Fprintf(os.Stderr, "  Project:  %s\n", projectPath)
+	fmt.Fprintf(os.Stderr, "  Instance: %s\n", instancePath)
 	fmt.Fprintln(os.Stderr)
 	return nil
 }

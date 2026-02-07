@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -531,19 +532,27 @@ func TestProjectConfigPath(t *testing.T) {
 	}
 }
 
-func TestSaveProject(t *testing.T) {
+func TestInstanceConfigPath(t *testing.T) {
+	got := InstanceConfigPath("/home/user/project")
+	want := "/home/user/project/.cloudcoop/local.toml"
+	if got != want {
+		t.Errorf("InstanceConfigPath() = %q, want %q", got, want)
+	}
+}
+
+func TestSaveInstance(t *testing.T) {
 	dir := t.TempDir()
 
-	err := SaveProject(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
 	if err != nil {
-		t.Fatalf("SaveProject() error = %v", err)
+		t.Fatalf("SaveInstance() error = %v", err)
 	}
 
-	// Load and verify
-	path := ProjectConfigPath(dir)
-	cfg, err := LoadFile(path)
+	// Verify writes to local.toml, not config.toml
+	instancePath := InstanceConfigPath(dir)
+	cfg, err := LoadFile(instancePath)
 	if err != nil {
-		t.Fatalf("LoadFile() error = %v", err)
+		t.Fatalf("LoadFile(instance) error = %v", err)
 	}
 
 	if cfg.Cloud.GCP.Project != "my-project" {
@@ -557,6 +566,106 @@ func TestSaveProject(t *testing.T) {
 	}
 	if cfg.VM.Name != "my-vm" {
 		t.Errorf("vm.name = %q, want %q", cfg.VM.Name, "my-vm")
+	}
+
+	// Verify config.toml was NOT created
+	projectPath := ProjectConfigPath(dir)
+	if _, err := os.Stat(projectPath); !os.IsNotExist(err) {
+		t.Error("SaveInstance() should not create config.toml")
+	}
+
+	// Verify .gitignore was created with local.toml entry
+	gitignorePath := filepath.Join(dir, ".cloudcoop", ".gitignore")
+	data, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf("expected .gitignore to be created: %v", err)
+	}
+	if !strings.Contains(string(data), "local.toml") {
+		t.Errorf(".gitignore does not contain 'local.toml': %q", string(data))
+	}
+}
+
+func TestSaveProject_DelegatesToSaveInstance(t *testing.T) {
+	dir := t.TempDir()
+
+	err := SaveProject(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	if err != nil {
+		t.Fatalf("SaveProject() error = %v", err)
+	}
+
+	// SaveProject now delegates to SaveInstance, so verify it writes to local.toml
+	instancePath := InstanceConfigPath(dir)
+	cfg, err := LoadFile(instancePath)
+	if err != nil {
+		t.Fatalf("LoadFile(instance) error = %v", err)
+	}
+
+	if cfg.Cloud.GCP.Project != "my-project" {
+		t.Errorf("project = %q, want %q", cfg.Cloud.GCP.Project, "my-project")
+	}
+	if cfg.VM.Name != "my-vm" {
+		t.Errorf("vm.name = %q, want %q", cfg.VM.Name, "my-vm")
+	}
+}
+
+func TestEnsureGitignore_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create the .cloudcoop directory
+	if err := os.MkdirAll(filepath.Join(dir, ".cloudcoop"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Call twice
+	if err := ensureGitignore(dir); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if err := ensureGitignore(dir); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	// Verify single entry
+	data, err := os.ReadFile(filepath.Join(dir, ".cloudcoop", ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := strings.Count(string(data), "local.toml")
+	if count != 1 {
+		t.Errorf("expected 1 'local.toml' entry, got %d in: %q", count, string(data))
+	}
+}
+
+func TestEnsureGitignore_PreservesExisting(t *testing.T) {
+	dir := t.TempDir()
+	gitignoreDir := filepath.Join(dir, ".cloudcoop")
+	if err := os.MkdirAll(gitignoreDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write pre-existing content
+	existing := "*.bak\nsecrets.toml\n"
+	if err := os.WriteFile(filepath.Join(gitignoreDir, ".gitignore"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensureGitignore(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(gitignoreDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "*.bak") {
+		t.Error("pre-existing '*.bak' entry was lost")
+	}
+	if !strings.Contains(content, "secrets.toml") {
+		t.Error("pre-existing 'secrets.toml' entry was lost")
+	}
+	if !strings.Contains(content, "local.toml") {
+		t.Error("'local.toml' entry was not added")
 	}
 }
 
