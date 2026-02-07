@@ -1510,11 +1510,8 @@ func TestFormatProvisionStatus_AllStates(t *testing.T) {
 func TestRenderConfigError_ContainsInstructions(t *testing.T) {
 	m := Model{cfgErr: errors.New("config not found")}
 	rendered := m.renderConfigError()
-	if !containsString(rendered, "cloudcoop config init") {
-		t.Error("renderConfigError should contain setup wizard instruction")
-	}
-	if !containsString(rendered, "cloudcoop.toml") {
-		t.Error("renderConfigError should contain config file path")
+	if !containsString(rendered, "cloudcoop setup") {
+		t.Error("renderConfigError should contain setup command instruction")
 	}
 }
 

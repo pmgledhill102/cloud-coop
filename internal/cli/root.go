@@ -11,6 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/cloud-coop/cloudcoop/internal/apperrors"
+	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
 	"github.com/cloud-coop/cloudcoop/internal/tui"
 )
@@ -69,6 +70,25 @@ func Execute() error {
 	return err
 }
 
+// printSetupRequired prints a helpful message when setup hasn't been completed.
+func printSetupRequired(heading string, err error) error {
+	globalPath, _ := config.DefaultConfigPath()
+	projectPath := config.ProjectConfigPath(".")
+
+	fmt.Fprintf(os.Stderr, "%s: %v\n", heading, err)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Run the setup wizard to configure cloudcoop:")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "  cloudcoop setup")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Or edit the configuration files directly:")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "  Global:  %s\n", globalPath)
+	fmt.Fprintf(os.Stderr, "  Project: %s\n", projectPath)
+	fmt.Fprintln(os.Stderr)
+	return nil
+}
+
 // runTUI launches the interactive terminal UI.
 func runTUI(cmd *cobra.Command, args []string) error {
 	// Check if we're running in an interactive terminal
@@ -78,6 +98,15 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "Use 'cloudcoop status' for non-interactive output,")
 		fmt.Fprintln(os.Stderr, "or run cloudcoop in a terminal emulator.")
 		return nil
+	}
+
+	// Check that setup has been completed before launching the TUI
+	cfg, cfgErr := configLoader()
+	if cfgErr != nil {
+		return printSetupRequired("Configuration not found", cfgErr)
+	}
+	if validErr := cfg.Validate(); validErr != nil {
+		return printSetupRequired("Configuration incomplete", validErr)
 	}
 
 	log.Debug("launching TUI")
