@@ -193,6 +193,12 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 		},
 	}
 
+	// Set subnet if specified (required for custom-mode VPC networks)
+	if config.Subnet != "" {
+		region := regionFromZone(p.zone)
+		instance.NetworkInterfaces[0].Subnetwork = ptr(fmt.Sprintf("regions/%s/subnetworks/%s", region, config.Subnet))
+	}
+
 	// Configure spot instance with STOP on preemption (per ADR-0003)
 	if config.Spot {
 		instance.Scheduling = &computepb.Scheduling{
@@ -367,6 +373,15 @@ func mapStatus(status string) cloud.VMStatus {
 	default:
 		return cloud.VMStatusUnknown
 	}
+}
+
+// regionFromZone derives the region from a zone by stripping the trailing component.
+// e.g., "us-central1-a" -> "us-central1"
+func regionFromZone(zone string) string {
+	if i := strings.LastIndex(zone, "-"); i >= 0 {
+		return zone[:i]
+	}
+	return zone
 }
 
 // extractZoneName extracts the zone name from a full zone URL.

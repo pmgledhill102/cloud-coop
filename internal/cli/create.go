@@ -86,6 +86,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		Image:              cfg.VM.Image,
 		Spot:               cfg.VM.Spot,
 		Network:            cfg.VM.Network,
+		Subnet:             cfg.VM.Subnet,
 		Tags:               cfg.VM.Tags,
 		SSHPort:            cfg.SSH.Port,
 		ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,

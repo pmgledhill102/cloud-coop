@@ -616,6 +616,85 @@ func TestProvider_CreateVM_ServiceAccount(t *testing.T) {
 	}
 }
 
+func TestProvider_CreateVM_Subnet(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "us-central1-a", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:           "subnet-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "my-vpc",
+		Subnet:         "my-subnet",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	nis := inst.GetNetworkInterfaces()
+	if len(nis) != 1 {
+		t.Fatalf("NetworkInterfaces count = %d, want 1", len(nis))
+	}
+
+	wantSubnet := "regions/us-central1/subnetworks/my-subnet"
+	if nis[0].GetSubnetwork() != wantSubnet {
+		t.Errorf("Subnetwork = %q, want %q", nis[0].GetSubnetwork(), wantSubnet)
+	}
+}
+
+func TestProvider_CreateVM_NoSubnet(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "us-central1-a", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:           "no-subnet-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "default",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	nis := inst.GetNetworkInterfaces()
+	if len(nis) != 1 {
+		t.Fatalf("NetworkInterfaces count = %d, want 1", len(nis))
+	}
+
+	if nis[0].GetSubnetwork() != "" {
+		t.Errorf("Subnetwork = %q, want empty (not set)", nis[0].GetSubnetwork())
+	}
+}
+
+func TestRegionFromZone(t *testing.T) {
+	tests := []struct {
+		zone string
+		want string
+	}{
+		{"us-central1-a", "us-central1"},
+		{"europe-north2-b", "europe-north2"},
+		{"asia-east1-c", "asia-east1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.zone, func(t *testing.T) {
+			if got := regionFromZone(tt.zone); got != tt.want {
+				t.Errorf("regionFromZone(%q) = %q, want %q", tt.zone, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProvider_DeleteVM(t *testing.T) {
 	tests := []struct {
 		name       string

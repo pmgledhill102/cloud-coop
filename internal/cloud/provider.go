@@ -81,6 +81,8 @@ type VMCreateConfig struct {
 	Spot bool
 	// Network is the VPC network name (e.g., "default").
 	Network string
+	// Subnet is the VPC subnet name. Required for custom-mode VPC networks.
+	Subnet string
 	// Tags are network tags for firewall rules.
 	Tags []string
 	// SSHPort is the port SSH should listen on (default: 22).

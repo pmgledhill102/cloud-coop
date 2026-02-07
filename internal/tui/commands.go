@@ -172,6 +172,7 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 			Image:              cfg.VM.Image,
 			Spot:               cfg.VM.Spot,
 			Network:            cfg.VM.Network,
+			Subnet:             cfg.VM.Subnet,
 			Tags:               cfg.VM.Tags,
 			SSHPort:            cfg.SSH.Port,
 			ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,

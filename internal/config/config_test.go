@@ -278,6 +278,18 @@ func TestConfig_SetValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			key:     "vm.network",
+			value:   "my-vpc",
+			check:   func(c *Config) bool { return c.VM.Network == "my-vpc" },
+			wantErr: false,
+		},
+		{
+			key:     "vm.subnet",
+			value:   "my-subnet",
+			check:   func(c *Config) bool { return c.VM.Subnet == "my-subnet" },
+			wantErr: false,
+		},
+		{
 			key:     "unknown.key",
 			value:   "value",
 			check:   func(c *Config) bool { return true },
@@ -322,7 +334,9 @@ func TestConfig_GetValue(t *testing.T) {
 			},
 		},
 		VM: VMConfig{
-			Name: "test-vm",
+			Name:    "test-vm",
+			Network: "my-vpc",
+			Subnet:  "my-subnet",
 		},
 		SSH: SSHConfig{
 			Port: 2222,
@@ -343,6 +357,8 @@ func TestConfig_GetValue(t *testing.T) {
 		{"cloud.gcp.zone", "us-central1-a", false},
 		{"cloud.gcp.service_account", "sa@my-project.iam.gserviceaccount.com", false},
 		{"vm.name", "test-vm", false},
+		{"vm.network", "my-vpc", false},
+		{"vm.subnet", "my-subnet", false},
 		{"ssh.port", "2222", false},
 		{"ssh.user", "ubuntu", false},
 		{"agents.default_command", "claude", false},

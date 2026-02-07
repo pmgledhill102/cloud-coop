@@ -106,6 +106,7 @@ type VMConfig struct {
 	Image        string            `toml:"image"`         // Boot disk image (default: Ubuntu 24.04 ARM)
 	Spot         bool              `toml:"spot"`          // Use spot/preemptible instances
 	Network      string            `toml:"network"`       // VPC network name (default: "default")
+	Subnet       string            `toml:"subnet"`        // VPC subnet name (required for custom-mode VPCs)
 	Tags         []string          `toml:"tags"`          // Network tags for firewall rules
 	MachineSizes map[string]string `toml:"machine_sizes"` // Size name -> machine type mapping
 }
@@ -306,6 +307,9 @@ func mergeConfig(dst, src *Config) {
 	if src.VM.Network != "" {
 		dst.VM.Network = src.VM.Network
 	}
+	if src.VM.Subnet != "" {
+		dst.VM.Subnet = src.VM.Subnet
+	}
 	if len(src.VM.Tags) > 0 {
 		dst.VM.Tags = src.VM.Tags
 	}
@@ -372,7 +376,7 @@ func applyDefaults(cfg *Config) {
 		cfg.VM.DiskSizeGB = 50
 	}
 	if cfg.VM.Image == "" {
-		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2504-arm64"
+		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64"
 	}
 	if cfg.VM.Network == "" {
 		cfg.VM.Network = "default"
@@ -441,6 +445,10 @@ func (c *Config) SetValue(key, value string) error {
 		c.Cloud.GCP.ServiceAccount = value
 	case "vm.name":
 		c.VM.Name = value
+	case "vm.network":
+		c.VM.Network = value
+	case "vm.subnet":
+		c.VM.Subnet = value
 	case "ssh.port":
 		port, err := strconv.Atoi(value)
 		if err != nil {
@@ -484,6 +492,10 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.Cloud.GCP.ServiceAccount, nil
 	case "vm.name":
 		return c.VM.Name, nil
+	case "vm.network":
+		return c.VM.Network, nil
+	case "vm.subnet":
+		return c.VM.Subnet, nil
 	case "ssh.port":
 		return strconv.Itoa(c.SSH.Port), nil
 	case "ssh.user":
@@ -507,6 +519,8 @@ func AllKeys() []string {
 		"cloud.gcp.zone",
 		"cloud.gcp.service_account",
 		"vm.name",
+		"vm.network",
+		"vm.subnet",
 		"ssh.port",
 		"ssh.user",
 		"agents.default_command",
