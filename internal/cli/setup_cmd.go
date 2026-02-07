@@ -53,6 +53,7 @@ Examples:
 func init() {
 	setupCmd.Flags().String("project", "", "GCP project ID (skip project selection)")
 	setupCmd.Flags().String("zone", "", "GCP zone (skip zone prompt)")
+	setupCmd.Flags().String("network", "", "VPC network name (default: \"default\")")
 	setupCmd.Flags().Bool("dry-run", false, "show what would be done without making changes")
 }
 
@@ -60,6 +61,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	flagProject, _ := cmd.Flags().GetString("project")
 	flagZone, _ := cmd.Flags().GetString("zone")
+	flagNetwork, _ := cmd.Flags().GetString("network")
 
 	fmt.Println("cloudcoop setup")
 	fmt.Println("================")
@@ -109,9 +111,11 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Check if we already have a project config
 	existingProject := ""
+	existingNetwork := ""
 	projectPath := config.ProjectConfigPath(".")
 	if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil {
 		existingProject = existingCfg.Cloud.GCP.Project
+		existingNetwork = existingCfg.VM.Network
 	}
 
 	if flagProject != "" {
@@ -156,6 +160,20 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			idx = parsed
 		}
 		projectID = projects[idx-1].ID
+	}
+
+	// Resolve network name: flag → existing config → global config → "default"
+	network := flagNetwork
+	if network == "" {
+		network = existingNetwork
+	}
+	if network == "" {
+		if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.VM.Network != "" {
+			network = merged.VM.Network
+		}
+	}
+	if network == "" {
+		network = "default"
 	}
 
 	fmt.Println()
@@ -341,7 +359,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsFW {
 			fmt.Print("Creating firewall rule...")
-			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, "default"); fwErr != nil {
+			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network); fwErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create firewall rule: %w", fwErr)
 			}
