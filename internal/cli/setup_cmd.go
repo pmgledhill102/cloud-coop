@@ -22,6 +22,9 @@ var setupProviderFactory func(ctx context.Context) (setup.SetupProvider, error) 
 // sshKeyChecker checks for SSH key presence. Injectable for testing.
 var sshKeyChecker func() setup.PrereqStatus = setup.CheckSSHKey
 
+// sshKeyGenerator generates an SSH key. Injectable for testing.
+var sshKeyGenerator func() (string, error) = setup.GenerateSSHKey
+
 func defaultSetupProviderFactory(ctx context.Context) (setup.SetupProvider, error) {
 	return gcpsetup.New(ctx)
 }
@@ -67,10 +70,15 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	if sshStatus.OK {
 		fmt.Printf("  [ok] SSH key found (%s)\n", sshStatus.Detail)
 	} else {
-		fmt.Printf("  [!!] %s\n", sshStatus.Detail)
-		fmt.Printf("       %s\n", sshStatus.HelpMsg)
-		fmt.Println()
-		return nil
+		fmt.Printf("  [--] %s\n", sshStatus.Detail)
+		fmt.Print("  Generating ed25519 SSH key...")
+		pubPath, genErr := sshKeyGenerator()
+		if genErr != nil {
+			fmt.Println(" failed")
+			return fmt.Errorf("generate SSH key: %w", genErr)
+		}
+		fmt.Println(" done")
+		fmt.Printf("  [ok] SSH key created (%s)\n", pubPath)
 	}
 
 	// Create setup provider (tests ADC)

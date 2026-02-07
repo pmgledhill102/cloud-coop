@@ -1,8 +1,14 @@
 package setup
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
+	"fmt"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // PrereqStatus describes the result of a prerequisite check.
@@ -54,4 +60,59 @@ func CheckSSHKeyAt(homeDir string) PrereqStatus {
 		Detail:  "no SSH key found in " + sshDir,
 		HelpMsg: "Generate an SSH key with: ssh-keygen -t ed25519",
 	}
+}
+
+// GenerateSSHKey creates an ed25519 SSH key pair at ~/.ssh/id_ed25519.
+// It returns the path to the public key file.
+func GenerateSSHKey() (string, error) {
+	return GenerateSSHKeyAt("")
+}
+
+// GenerateSSHKeyAt creates an ed25519 SSH key pair in the given home directory.
+// If homeDir is empty, uses the current user's home directory.
+func GenerateSSHKeyAt(homeDir string) (string, error) {
+	if homeDir == "" {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("determine home directory: %w", err)
+		}
+	}
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		return "", fmt.Errorf("create .ssh directory: %w", err)
+	}
+
+	privPath := filepath.Join(sshDir, "id_ed25519")
+	pubPath := privPath + ".pub"
+
+	// Generate key pair
+	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", fmt.Errorf("generate ed25519 key: %w", err)
+	}
+
+	// Marshal private key to OpenSSH format
+	privPEM, err := ssh.MarshalPrivateKey(privKey, "")
+	if err != nil {
+		return "", fmt.Errorf("marshal private key: %w", err)
+	}
+
+	if err := os.WriteFile(privPath, pem.EncodeToMemory(privPEM), 0o600); err != nil {
+		return "", fmt.Errorf("write private key: %w", err)
+	}
+
+	// Marshal public key to authorized_keys format
+	sshPub, err := ssh.NewPublicKey(pubKey)
+	if err != nil {
+		return "", fmt.Errorf("convert public key: %w", err)
+	}
+
+	pubBytes := ssh.MarshalAuthorizedKey(sshPub)
+	if err := os.WriteFile(pubPath, pubBytes, 0o600); err != nil {
+		return "", fmt.Errorf("write public key: %w", err)
+	}
+
+	return pubPath, nil
 }
