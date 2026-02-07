@@ -523,6 +523,124 @@ func TestAgentsConfig_ResolveCommand(t *testing.T) {
 	}
 }
 
+func TestProjectConfigPath(t *testing.T) {
+	got := ProjectConfigPath("/home/user/project")
+	want := "/home/user/project/.cloudcoop/config.toml"
+	if got != want {
+		t.Errorf("ProjectConfigPath() = %q, want %q", got, want)
+	}
+}
+
+func TestSaveProject(t *testing.T) {
+	dir := t.TempDir()
+
+	err := SaveProject(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	if err != nil {
+		t.Fatalf("SaveProject() error = %v", err)
+	}
+
+	// Load and verify
+	path := ProjectConfigPath(dir)
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+
+	if cfg.Cloud.GCP.Project != "my-project" {
+		t.Errorf("project = %q, want %q", cfg.Cloud.GCP.Project, "my-project")
+	}
+	if cfg.Cloud.GCP.Zone != "us-central1-a" {
+		t.Errorf("zone = %q, want %q", cfg.Cloud.GCP.Zone, "us-central1-a")
+	}
+	if cfg.Cloud.GCP.ServiceAccount != "sa@my-project.iam.gserviceaccount.com" {
+		t.Errorf("service_account = %q, want %q", cfg.Cloud.GCP.ServiceAccount, "sa@my-project.iam.gserviceaccount.com")
+	}
+	if cfg.VM.Name != "my-vm" {
+		t.Errorf("vm.name = %q, want %q", cfg.VM.Name, "my-vm")
+	}
+}
+
+func TestMergeConfig(t *testing.T) {
+	dst := &Config{
+		Cloud: CloudConfig{
+			Provider: "gcp",
+			GCP: GCPConfig{
+				Zone: "us-central1-a",
+			},
+		},
+		VM: VMConfig{
+			Name:       "default-vm",
+			DiskSizeGB: 50,
+		},
+		SSH: SSHConfig{
+			Port: 22,
+		},
+	}
+
+	src := &Config{
+		Cloud: CloudConfig{
+			GCP: GCPConfig{
+				Project:        "my-project",
+				Zone:           "europe-north2-a", // Override
+				ServiceAccount: "sa@my-project.iam.gserviceaccount.com",
+			},
+		},
+		VM: VMConfig{
+			Name: "my-vm", // Override
+		},
+	}
+
+	mergeConfig(dst, src)
+
+	// Overridden values
+	if dst.Cloud.GCP.Project != "my-project" {
+		t.Errorf("project = %q, want %q", dst.Cloud.GCP.Project, "my-project")
+	}
+	if dst.Cloud.GCP.Zone != "europe-north2-a" {
+		t.Errorf("zone = %q, want %q", dst.Cloud.GCP.Zone, "europe-north2-a")
+	}
+	if dst.Cloud.GCP.ServiceAccount != "sa@my-project.iam.gserviceaccount.com" {
+		t.Errorf("service_account = %q, want %q", dst.Cloud.GCP.ServiceAccount, "sa@my-project.iam.gserviceaccount.com")
+	}
+	if dst.VM.Name != "my-vm" {
+		t.Errorf("vm.name = %q, want %q", dst.VM.Name, "my-vm")
+	}
+
+	// Preserved values (not in src)
+	if dst.Cloud.Provider != "gcp" {
+		t.Errorf("provider = %q, want %q", dst.Cloud.Provider, "gcp")
+	}
+	if dst.VM.DiskSizeGB != 50 {
+		t.Errorf("disk_size_gb = %d, want 50", dst.VM.DiskSizeGB)
+	}
+	if dst.SSH.Port != 22 {
+		t.Errorf("ssh.port = %d, want 22", dst.SSH.Port)
+	}
+}
+
+func TestMergeConfig_EmptySrc(t *testing.T) {
+	dst := &Config{
+		Cloud: CloudConfig{
+			Provider: "gcp",
+			GCP: GCPConfig{
+				Project: "original",
+				Zone:    "us-central1-a",
+			},
+		},
+	}
+
+	src := &Config{}
+	mergeConfig(dst, src)
+
+	// Nothing should change
+	if dst.Cloud.Provider != "gcp" {
+		t.Errorf("provider = %q, want %q", dst.Cloud.Provider, "gcp")
+	}
+	if dst.Cloud.GCP.Project != "original" {
+		t.Errorf("project = %q, want %q", dst.Cloud.GCP.Project, "original")
+	}
+}
+
 func TestAgentsConfig_ResolvePreCommands(t *testing.T) {
 	tests := []struct {
 		name string

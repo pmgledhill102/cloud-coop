@@ -25,6 +25,7 @@
 # Technical terms
 # Testing
 actionlint
+adminpb
 amd64
 anthropics
 apiv
@@ -39,6 +40,7 @@ changelog
 charmbracelet
 clippy
 cloudcoop
+cloudresourcemanager
 cobra
 codecov
 codeowners
@@ -60,6 +62,7 @@ errcheck
 errorf
 func
 funcs
+gcpsetup
 gcloud
 ghostty
 gitattributes
@@ -121,6 +124,7 @@ pre-commit
 precommit
 preemptible
 prettierignore
+prereq
 prettierrc
 pubkey
 publickey
@@ -129,6 +133,8 @@ readonly
 refactor
 refspec
 reviewdog
+resourcemanager
+resourcemanagerpb
 revive
 RSASHA
 rubocop
@@ -141,6 +147,8 @@ scpt
 secretmanager
 securego
 semver
+serviceusage
+serviceusagepb
 setuid
 shellcheck
 slog

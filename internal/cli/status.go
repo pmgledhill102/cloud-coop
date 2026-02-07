@@ -36,7 +36,7 @@ var providerFactory func(ctx context.Context, cfg *config.Config) (cloud.Provide
 
 // configLoader loads the application configuration.
 // This is a package-level variable to allow test injection.
-var configLoader func() (*config.Config, error) = config.Load
+var configLoader func() (*config.Config, error) = config.LoadMerged
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	// Load configuration
@@ -95,25 +95,13 @@ func handleConfigError(err error) error {
 	if errors.As(err, &pathErr) || errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintln(os.Stderr, "Configuration not found.")
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "To get started, run the setup wizard:")
+		fmt.Fprintln(os.Stderr, "To get started, run the automated setup:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "  cloudcoop setup")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Or create a configuration file manually:")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "  cloudcoop config init")
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Or create a configuration file manually at:")
-		path, _ := config.DefaultConfigPath()
-		fmt.Fprintf(os.Stderr, "  %s\n", path)
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Example configuration:")
-		fmt.Fprintln(os.Stderr, `
-[cloud]
-provider = "gcp"
-
-[cloud.gcp]
-project = "your-gcp-project-id"
-zone = "us-central1-a"
-
-[vm]
-name = "your-vm-name"`)
 		fmt.Fprintln(os.Stderr)
 		return nil // Don't propagate error, we've handled it
 	}

@@ -45,6 +45,7 @@ func init() {
 	rootCmd.AddCommand(agentsCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(provisionCmd)
 	rootCmd.AddCommand(terminalCmd)
 }

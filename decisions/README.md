@@ -33,6 +33,7 @@ This directory contains Architecture Decision Records (ADRs) for cloudcoop.
 | [ADR-0025](0025-terminal-native-split-workflow.md) | Terminal-Native Split Workflow | Proposed | 2026-01-28 |
 | [ADR-0026](0026-vm-git-authentication.md) | VM Git Authentication | Proposed | 2026-01-28 |
 | [ADR-0027](0027-agent-startup-hooks.md) | Agent Startup Hooks | Proposed | 2026-01-28 |
+| [ADR-0028](0028-automated-gcp-setup.md) | Automated GCP Project Setup | Accepted | 2026-02-07 |
 
 ## About ADRs
 

@@ -2,6 +2,45 @@
 
 This document describes the user experience when running cloudcoop for the first time.
 
+## Automated Setup (Recommended)
+
+The fastest way to get started is the automated setup command:
+
+```bash
+cloudcoop setup
+```
+
+This command:
+
+1. Checks prerequisites (SSH key, GCP Application Default Credentials)
+2. Lists your GCP projects for selection
+3. Enables required APIs (Compute, IAM, Logging, Monitoring)
+4. Creates a dedicated `cloudcoop-vm` service account with minimal permissions
+5. Grants IAM roles (`roles/logging.logWriter`, `roles/monitoring.metricWriter`)
+6. Creates an IAP firewall rule for secure SSH access
+7. Writes project config to `.cloudcoop/config.toml`
+
+All operations are idempotent - re-running `cloudcoop setup` will skip completed steps and fix any gaps.
+
+### Layered Configuration
+
+Configuration is split into two layers:
+
+- **Global** (`~/.config/cloudcoop/cloudcoop.toml`) - user preferences (zone, VM settings, agent defaults)
+- **Project** (`.cloudcoop/config.toml`) - which GCP sandbox this repo connects to (check into git for team sharing)
+
+Project values override global values. The merged result is used at runtime.
+
+### Flags
+
+```bash
+cloudcoop setup --project my-sandbox   # Skip project selection
+cloudcoop setup --zone europe-north2-a # Skip zone prompt
+cloudcoop setup --dry-run              # Show what would be done without changes
+```
+
+See [ADR-0028](../decisions/0028-automated-gcp-setup.md) for the design rationale.
+
 ## Overview
 
 The TUI guides users through setup interactively, creating resources as needed. No manual pre-configuration required.

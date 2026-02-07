@@ -75,6 +75,9 @@ This will prompt you for:
 
 The configuration will be saved to ~/.config/cloudcoop/cloudcoop.toml.
 
+For automated GCP project setup (enabling APIs, creating service accounts,
+and IAM permissions), use 'cloudcoop setup' instead.
+
 Example:
   cloudcoop config init`,
 	RunE: runConfigInit,
