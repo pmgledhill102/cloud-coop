@@ -374,15 +374,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 
-	// Phase 2: Project config
-	zone := flagZone
-	if zone == "" && existingProject != "" {
-		// Try to read from existing config
-		if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil && existingCfg.Cloud.GCP.Zone != "" {
-			zone = existingCfg.Cloud.GCP.Zone
-		}
-	}
+	// Phase 2: Project config — resolve zone and VM name from flag → merged config → prompt
+	mergedForPhase2, _ := config.LoadMerged()
 
+	zone := flagZone
+	if zone == "" && mergedForPhase2 != nil && mergedForPhase2.Cloud.GCP.Zone != "" {
+		zone = mergedForPhase2.Cloud.GCP.Zone
+	}
 	if zone == "" {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("GCP zone [us-central1-a]: ")
@@ -394,12 +392,9 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	vmName := ""
-	if existingProject != "" {
-		if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil && existingCfg.VM.Name != "" {
-			vmName = existingCfg.VM.Name
-		}
+	if mergedForPhase2 != nil && mergedForPhase2.VM.Name != "" {
+		vmName = mergedForPhase2.VM.Name
 	}
-
 	if vmName == "" {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("VM instance name [claude-sandbox]: ")
