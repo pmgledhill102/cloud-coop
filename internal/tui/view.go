@@ -64,23 +64,9 @@ func (m Model) renderConfigError() string {
 
 %s
 
-To get started, run the setup wizard:
+To get started, run:
 
-  cloudcoop config init
-
-Or create a config file manually at:
-  ~/.config/cloudcoop/cloudcoop.toml
-
-Example:
-  [cloud]
-  provider = "gcp"
-
-  [cloud.gcp]
-  project = "your-project-id"
-  zone = "us-central1-a"
-
-  [vm]
-  name = "your-vm-name"`, m.cfgErr)
+  cloudcoop setup`, m.cfgErr)
 	return boxStyle.Render(errorStyle.Render(msg))
 }
 
