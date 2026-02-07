@@ -25,6 +25,9 @@ var sshKeyChecker func() setup.PrereqStatus = setup.CheckSSHKey
 // sshKeyGenerator generates an SSH key. Injectable for testing.
 var sshKeyGenerator func() (string, error) = setup.GenerateSSHKey
 
+// saNameDeriver derives a service account name from a directory. Injectable for testing.
+var saNameDeriver func(dir string) string = setup.ServiceAccountNameForDir
+
 func defaultSetupProviderFactory(ctx context.Context) (setup.SetupProvider, error) {
 	return gcpsetup.New(ctx)
 }
@@ -50,6 +53,7 @@ Examples:
 func init() {
 	setupCmd.Flags().String("project", "", "GCP project ID (skip project selection)")
 	setupCmd.Flags().String("zone", "", "GCP zone (skip zone prompt)")
+	setupCmd.Flags().String("network", "", "VPC network name (default: \"default\")")
 	setupCmd.Flags().Bool("dry-run", false, "show what would be done without making changes")
 }
 
@@ -57,6 +61,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	flagProject, _ := cmd.Flags().GetString("project")
 	flagZone, _ := cmd.Flags().GetString("zone")
+	flagNetwork, _ := cmd.Flags().GetString("network")
 
 	fmt.Println("cloudcoop setup")
 	fmt.Println("================")
@@ -106,9 +111,11 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Check if we already have a project config
 	existingProject := ""
+	existingNetwork := ""
 	projectPath := config.ProjectConfigPath(".")
 	if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil {
 		existingProject = existingCfg.Cloud.GCP.Project
+		existingNetwork = existingCfg.VM.Network
 	}
 
 	if flagProject != "" {
@@ -155,27 +162,54 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		projectID = projects[idx-1].ID
 	}
 
+	// Resolve network name: flag → existing config → global config → "default"
+	network := flagNetwork
+	if network == "" {
+		network = existingNetwork
+	}
+	if network == "" {
+		if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.VM.Network != "" {
+			network = merged.VM.Network
+		}
+	}
+	if network == "" {
+		network = "default"
+	}
+
+	// Load merged config for extra APIs/IAM roles
+	mergedCfg, _ := config.LoadMerged()
+	var extraAPIs, extraRoles []string
+	if mergedCfg != nil {
+		extraAPIs = mergedCfg.Setup.ExtraAPIs
+		extraRoles = mergedCfg.Setup.ExtraIAMRoles
+	}
+	apis := setup.MergedAPIs(extraAPIs)
+	iamRoles := setup.MergedIAMRoles(extraRoles)
+
 	fmt.Println()
 	fmt.Printf("Checking project %q...\n", projectID)
 
+	// Derive service account name from repo directory
+	saName := saNameDeriver(".")
+
 	// Phase 1: Check current state
-	apiStatuses, err := provider.CheckAPIs(ctx, projectID)
+	apiStatuses, err := provider.CheckAPIs(ctx, projectID, apis)
 	if err != nil {
 		return fmt.Errorf("check APIs: %w", err)
 	}
 
-	saExists, err := provider.ServiceAccountExists(ctx, projectID, setup.ServiceAccountName)
+	saExists, err := provider.ServiceAccountExists(ctx, projectID, saName)
 	if err != nil {
 		return fmt.Errorf("check service account: %w", err)
 	}
 
-	saEmail := setup.ServiceAccountEmail(projectID, setup.ServiceAccountName)
+	saEmail := setup.ServiceAccountEmail(projectID, saName)
 	saMember := "serviceAccount:" + saEmail
 
 	// Check IAM bindings (only if SA exists)
 	iamBindings := make(map[string]bool)
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			bound, bindErr := provider.CheckIAMBinding(ctx, projectID, saMember, role)
 			if bindErr != nil {
 				return fmt.Errorf("check IAM binding: %w", bindErr)
@@ -200,13 +234,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	if saExists {
-		fmt.Printf("  [ok] Service account %s (exists)\n", setup.ServiceAccountName)
+		fmt.Printf("  [ok] Service account %s (exists)\n", saName)
 	} else {
-		fmt.Printf("  [--] Service account %s (not found)\n", setup.ServiceAccountName)
+		fmt.Printf("  [--] Service account %s (not found)\n", saName)
 	}
 
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			if iamBindings[role] {
 				fmt.Printf("  [ok] IAM %s (bound)\n", role)
 			} else {
@@ -233,13 +267,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	var rolesToGrant []string
 	if saExists {
-		for _, role := range setup.RequiredIAMRoles {
+		for _, role := range iamRoles {
 			if !iamBindings[role] {
 				rolesToGrant = append(rolesToGrant, role)
 			}
 		}
 	} else {
-		rolesToGrant = setup.RequiredIAMRoles
+		rolesToGrant = iamRoles
 	}
 
 	needsSA := !saExists
@@ -268,7 +302,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(rolesToGrant) > 0 {
-			fmt.Printf("  Grant IAM roles to %s:\n", setup.ServiceAccountName)
+			fmt.Printf("  Grant IAM roles to %s:\n", saName)
 			for _, role := range rolesToGrant {
 				fmt.Printf("    - %s\n", role)
 			}
@@ -312,7 +346,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsSA {
 			fmt.Print("Creating service account...")
-			email, createErr := provider.CreateServiceAccount(ctx, projectID, setup.ServiceAccountName, setup.ServiceAccountDisplayName)
+			email, createErr := provider.CreateServiceAccount(ctx, projectID, saName, setup.ServiceAccountDisplayName)
 			if createErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create service account: %w", createErr)
@@ -335,7 +369,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsFW {
 			fmt.Print("Creating firewall rule...")
-			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, "default"); fwErr != nil {
+			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network); fwErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create firewall rule: %w", fwErr)
 			}

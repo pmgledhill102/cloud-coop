@@ -4,7 +4,12 @@
 // IAM bindings, and firewall rules.
 package setup
 
-import "context"
+import (
+	"context"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
 
 // ProjectInfo describes a cloud project.
 type ProjectInfo struct {
@@ -24,8 +29,8 @@ type SetupProvider interface {
 	// ListProjects returns available cloud projects.
 	ListProjects(ctx context.Context) ([]ProjectInfo, error)
 
-	// CheckAPIs checks which required APIs are enabled in the project.
-	CheckAPIs(ctx context.Context, project string) ([]APIStatus, error)
+	// CheckAPIs checks which of the given APIs are enabled in the project.
+	CheckAPIs(ctx context.Context, project string, apis []string) ([]APIStatus, error)
 
 	// EnableAPI enables a single API in the project.
 	EnableAPI(ctx context.Context, project, api string) error
@@ -69,11 +74,74 @@ var RequiredIAMRoles = []string{
 	"roles/monitoring.metricWriter",
 }
 
-// ServiceAccountName is the default name for the cloudcoop VM service account.
-const ServiceAccountName = "cloudcoop-vm"
+// MergedAPIs returns RequiredAPIs plus any extra APIs, deduplicated.
+func MergedAPIs(extraAPIs []string) []string {
+	return mergeUnique(RequiredAPIs, extraAPIs)
+}
+
+// MergedIAMRoles returns RequiredIAMRoles plus any extra roles, deduplicated.
+func MergedIAMRoles(extraRoles []string) []string {
+	return mergeUnique(RequiredIAMRoles, extraRoles)
+}
+
+func mergeUnique(base, extra []string) []string {
+	seen := make(map[string]bool, len(base))
+	result := make([]string, 0, len(base)+len(extra))
+	for _, s := range base {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	for _, s := range extra {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
+}
 
 // ServiceAccountDisplayName is the display name for the service account.
 const ServiceAccountDisplayName = "cloudcoop VM service account"
+
+// saNameRegexp matches characters NOT allowed in GCP service account IDs.
+var saNameRegexp = regexp.MustCompile(`[^a-z0-9-]`)
+
+// ServiceAccountNameForDir derives a service account name from a directory path.
+// The name is based on the directory basename, prefixed with "cc-" and sanitized
+// for GCP constraints (6-30 chars, lowercase alphanumeric and hyphens).
+func ServiceAccountNameForDir(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "cc-cloudcoop"
+	}
+	base := filepath.Base(abs)
+	name := "cc-" + strings.ToLower(base)
+
+	// Replace invalid characters with hyphens
+	name = saNameRegexp.ReplaceAllString(name, "-")
+
+	// Collapse consecutive hyphens
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
+	}
+
+	// Trim trailing hyphens
+	name = strings.TrimRight(name, "-")
+
+	// Truncate to 30 chars (GCP max)
+	if len(name) > 30 {
+		name = strings.TrimRight(name[:30], "-")
+	}
+
+	// Ensure minimum length of 6 (GCP min)
+	if len(name) < 6 {
+		name = name + "-vm"
+	}
+
+	return name
+}
 
 // IAPFirewallRuleName is the name of the IAP SSH firewall rule.
 const IAPFirewallRuleName = "cloudcoop-allow-iap-ssh"

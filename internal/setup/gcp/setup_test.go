@@ -8,6 +8,8 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/cloud-coop/cloudcoop/internal/setup"
 )
@@ -187,7 +189,7 @@ func TestCheckAPIs(t *testing.T) {
 		&mockFirewallsClient{},
 	)
 
-	statuses, err := p.CheckAPIs(context.Background(), "test-proj")
+	statuses, err := p.CheckAPIs(context.Background(), "test-proj", setup.RequiredAPIs)
 	if err != nil {
 		t.Fatalf("CheckAPIs() error = %v", err)
 	}
@@ -242,8 +244,14 @@ func TestServiceAccountExists(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "not found",
+			name:   "not found via REST 404",
 			exists: false,
+			want:   false,
+		},
+		{
+			name:   "not found via gRPC",
+			exists: false,
+			getErr: status.Error(codes.NotFound, "Unknown service account"),
 			want:   false,
 		},
 	}
@@ -476,6 +484,49 @@ func TestCheckADCCredentials(t *testing.T) {
 	err := p.CheckADCCredentials(context.Background())
 	if err != nil {
 		t.Errorf("CheckADCCredentials() error = %v", err)
+	}
+}
+
+func TestIsNotFoundError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "googleapi 404",
+			err:  &googleapi.Error{Code: 404, Message: "not found"},
+			want: true,
+		},
+		{
+			name: "googleapi 403",
+			err:  &googleapi.Error{Code: 403, Message: "forbidden"},
+			want: false,
+		},
+		{
+			name: "gRPC NotFound",
+			err:  status.Error(codes.NotFound, "Unknown service account"),
+			want: true,
+		},
+		{
+			name: "gRPC PermissionDenied",
+			err:  status.Error(codes.PermissionDenied, "denied"),
+			want: false,
+		},
+		{
+			name: "generic error",
+			err:  errors.New("something failed"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isNotFoundError(tt.err)
+			if got != tt.want {
+				t.Errorf("isNotFoundError() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

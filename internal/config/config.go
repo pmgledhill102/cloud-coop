@@ -19,9 +19,16 @@ type Config struct {
 	Cloud        CloudConfig        `toml:"cloud"`
 	VM           VMConfig           `toml:"vm"`
 	SSH          SSHConfig          `toml:"ssh"`
+	Setup        SetupConfig        `toml:"setup"`
 	Agents       AgentsConfig       `toml:"agents"`
 	Provisioning ProvisioningConfig `toml:"provisioning"`
 	TUI          TUIConfig          `toml:"tui"`
+}
+
+// SetupConfig contains settings for `cloudcoop setup` provisioning.
+type SetupConfig struct {
+	ExtraAPIs     []string `toml:"extra_apis"`      // Additional GCP APIs to enable beyond the base set
+	ExtraIAMRoles []string `toml:"extra_iam_roles"` // Additional IAM roles to grant beyond the base set
 }
 
 // TUIConfig contains TUI-specific settings.
@@ -236,6 +243,12 @@ func mergeConfig(dst, src *Config) {
 	}
 	if len(src.VM.MachineSizes) > 0 {
 		dst.VM.MachineSizes = src.VM.MachineSizes
+	}
+	if len(src.Setup.ExtraAPIs) > 0 {
+		dst.Setup.ExtraAPIs = src.Setup.ExtraAPIs
+	}
+	if len(src.Setup.ExtraIAMRoles) > 0 {
+		dst.Setup.ExtraIAMRoles = src.Setup.ExtraIAMRoles
 	}
 	if src.SSH.Port != 0 {
 		dst.SSH.Port = src.SSH.Port

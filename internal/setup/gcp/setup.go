@@ -9,6 +9,8 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/cloud-coop/cloudcoop/internal/setup"
 )
@@ -105,10 +107,10 @@ func (p *Provider) ListProjects(ctx context.Context) ([]setup.ProjectInfo, error
 	return projects, nil
 }
 
-// CheckAPIs checks which required APIs are enabled.
-func (p *Provider) CheckAPIs(ctx context.Context, project string) ([]setup.APIStatus, error) {
-	statuses := make([]setup.APIStatus, len(setup.RequiredAPIs))
-	for i, api := range setup.RequiredAPIs {
+// CheckAPIs checks which of the given APIs are enabled.
+func (p *Provider) CheckAPIs(ctx context.Context, project string, apis []string) ([]setup.APIStatus, error) {
+	statuses := make([]setup.APIStatus, len(apis))
+	for i, api := range apis {
 		name := fmt.Sprintf("projects/%s/services/%s", project, api)
 		state, err := p.serviceUsage.GetService(ctx, name)
 		if err != nil {
@@ -301,11 +303,15 @@ func (p *Provider) Close() error {
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T { return &v }
 
-// isNotFoundError checks if the error is a 404 "not found" error.
+// isNotFoundError checks if the error is a "not found" error.
+// It handles both REST (googleapi.Error 404) and gRPC (codes.NotFound) errors.
 func isNotFoundError(err error) bool {
 	var apiErr *googleapi.Error
 	if errors.As(err, &apiErr) {
 		return apiErr.Code == 404
+	}
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.NotFound
 	}
 	return false
 }
