@@ -109,11 +109,17 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	// Phase 1: Select project
 	var projectID string
 
-	// Check if we already have a project config
+	// Check if we already have a project configured (instance config takes priority)
 	existingProject := ""
-	projectPath := config.ProjectConfigPath(".")
-	if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil {
+	instancePath := config.InstanceConfigPath(".")
+	if existingCfg, loadErr := config.LoadFile(instancePath); loadErr == nil {
 		existingProject = existingCfg.Cloud.GCP.Project
+	}
+	if existingProject == "" {
+		projectPath := config.ProjectConfigPath(".")
+		if existingCfg, loadErr := config.LoadFile(projectPath); loadErr == nil {
+			existingProject = existingCfg.Cloud.GCP.Project
+		}
 	}
 
 	if flagProject != "" {
@@ -169,6 +175,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 	if network == "" {
 		network = "default"
+	}
+
+	// Resolve SSH port from merged config (default: 22)
+	sshPort := 22
+	if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.SSH.Port != 0 {
+		sshPort = merged.SSH.Port
 	}
 
 	// Load merged config for extra APIs/IAM roles
@@ -306,7 +318,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsFW {
 			fmt.Println("  Create firewall rule:")
-			fmt.Printf("    - %s (allow SSH from Google IAP)\n", setup.IAPFirewallRuleName)
+			fmt.Printf("    - %s (allow SSH port %d from Google IAP)\n", setup.IAPFirewallRuleName, sshPort)
 			fmt.Println()
 		}
 
@@ -363,8 +375,8 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 
 		if needsFW {
-			fmt.Print("Creating firewall rule...")
-			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network); fwErr != nil {
+			fmt.Printf("Creating firewall rule (port %d)...", sshPort)
+			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network, sshPort); fwErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create firewall rule: %w", fwErr)
 			}
@@ -407,7 +419,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	if dryRun {
 		fmt.Println()
-		fmt.Println("Dry run - would save config to .cloudcoop/config.toml:")
+		fmt.Println("Dry run - would save config to .cloudcoop/local.toml:")
 		fmt.Printf("  cloud.gcp.project = %q\n", projectID)
 		fmt.Printf("  cloud.gcp.zone = %q\n", zone)
 		fmt.Printf("  cloud.gcp.service_account = %q\n", saEmail)
@@ -415,13 +427,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Save project config
-	if err := config.SaveProject(".", projectID, zone, saEmail, vmName); err != nil {
-		return fmt.Errorf("save project config: %w", err)
+	// Save instance config (per-developer, gitignored)
+	if err := config.SaveInstance(".", projectID, zone, saEmail, vmName); err != nil {
+		return fmt.Errorf("save instance config: %w", err)
 	}
 
 	fmt.Println()
-	fmt.Printf("Configuration saved to %s\n", config.ProjectConfigPath("."))
+	fmt.Printf("Configuration saved to %s\n", config.InstanceConfigPath("."))
 	fmt.Println()
 	fmt.Println("Setup complete! Next steps:")
 	fmt.Println("  cloudcoop create    # Create your VM")

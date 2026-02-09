@@ -101,7 +101,7 @@ func (m *mockSetupProvider) FirewallRuleExists(ctx context.Context, project, nam
 	return m.fwExists, m.fwExistsErr
 }
 
-func (m *mockSetupProvider) CreateIAPFirewallRule(ctx context.Context, project, network string) error {
+func (m *mockSetupProvider) CreateIAPFirewallRule(ctx context.Context, project, network string, sshPort int) error {
 	if m.createFWErr != nil {
 		return m.createFWErr
 	}
@@ -278,6 +278,53 @@ func TestRunSetup_ExistingProjectConfig(t *testing.T) {
 		VM: config.VMConfig{Name: "my-vm"},
 	}
 	if err := existingCfg.Save(filepath.Join(cfgDir, "config.toml")); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().String("zone", "", "")
+	cmd.Flags().String("network", "", "")
+	cmd.Flags().Bool("dry-run", true, "")
+
+	err := runSetup(cmd, []string{})
+	if err != nil {
+		t.Errorf("runSetup() error = %v", err)
+	}
+}
+
+func TestRunSetup_ExistingInstanceConfig(t *testing.T) {
+	mock := &mockSetupProvider{
+		saExists: true,
+		fwExists: true,
+	}
+	cleanup := withMockSetupProvider(mock)
+	defer cleanup()
+
+	// Create temp dir with existing instance config in local.toml
+	dir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	cfgDir := filepath.Join(dir, ".cloudcoop")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	instanceCfg := &config.Config{
+		Cloud: config.CloudConfig{
+			GCP: config.GCPConfig{
+				Project:        "instance-project",
+				Zone:           "us-west1-b",
+				ServiceAccount: "sa@instance-project.iam.gserviceaccount.com",
+			},
+		},
+		VM: config.VMConfig{Name: "instance-vm"},
+	}
+	if err := instanceCfg.Save(config.InstanceConfigPath(".")); err != nil {
 		t.Fatal(err)
 	}
 

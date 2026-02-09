@@ -19,23 +19,24 @@ var configCmd = &cobra.Command{
 Configuration is stored in ~/.config/cloudcoop/cloudcoop.toml.
 
 Examples:
-  cloudcoop config show                       # Show all settings
-  cloudcoop config show cloud.gcp.project     # Show specific setting
+  cloudcoop config get                        # Show all settings
+  cloudcoop config get cloud.gcp.project      # Show specific setting
   cloudcoop config set cloud.gcp.project foo  # Set a value
   cloudcoop config init                       # Run setup wizard`,
 }
 
 var configShowCmd = &cobra.Command{
-	Use:   "show [key]",
-	Short: "Display configuration settings",
+	Use:     "get [key]",
+	Aliases: []string{"show"},
+	Short:   "Display configuration settings",
 	Long: `Display current configuration settings.
 
 Without arguments, shows all configuration.
 With a key argument, shows just that setting.
 
 Examples:
-  cloudcoop config show                   # Show all settings
-  cloudcoop config show cloud.gcp.project # Show specific setting`,
+  cloudcoop config get                   # Show all settings
+  cloudcoop config get cloud.gcp.project # Show specific setting`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runConfigShow,
 }
@@ -232,7 +233,7 @@ func runConfigInit(cmd *cobra.Command, args []string) error {
 	if config.Exists() {
 		fmt.Printf("Configuration already exists at %s\n", path)
 		fmt.Println()
-		fmt.Println("To view current settings:  cloudcoop config show")
+		fmt.Println("To view current settings:  cloudcoop config get")
 		fmt.Println("To modify a setting:       cloudcoop config set <key> <value>")
 		fmt.Println()
 		fmt.Print("Overwrite existing configuration? [y/N]: ")

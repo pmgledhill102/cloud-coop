@@ -51,7 +51,8 @@ type SetupProvider interface {
 	FirewallRuleExists(ctx context.Context, project, name string) (bool, error)
 
 	// CreateIAPFirewallRule creates a firewall rule allowing SSH from Google IAP.
-	CreateIAPFirewallRule(ctx context.Context, project, network string) error
+	// The sshPort parameter specifies which TCP port to allow (typically 22 or 2222).
+	CreateIAPFirewallRule(ctx context.Context, project, network string, sshPort int) error
 
 	// CheckADCCredentials verifies that Application Default Credentials are available.
 	CheckADCCredentials(ctx context.Context) error

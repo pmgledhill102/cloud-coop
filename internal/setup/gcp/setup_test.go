@@ -101,10 +101,11 @@ func (m *mockIAMPolicyClient) SetIAMPolicy(ctx context.Context, project string, 
 func (m *mockIAMPolicyClient) Close() error { return nil }
 
 type mockFirewallsClient struct {
-	exists    bool
-	getErr    error
-	insertErr error
-	waitErr   error
+	exists        bool
+	getErr        error
+	insertErr     error
+	waitErr       error
+	lastInsertReq *computepb.InsertFirewallRequest
 }
 
 func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewallRequest) (*computepb.Firewall, error) {
@@ -118,6 +119,7 @@ func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewal
 }
 
 func (m *mockFirewallsClient) Insert(ctx context.Context, req *computepb.InsertFirewallRequest) (firewallOperation, error) {
+	m.lastInsertReq = req
 	if m.insertErr != nil {
 		return nil, m.insertErr
 	}
@@ -436,9 +438,39 @@ func TestCreateIAPFirewallRule(t *testing.T) {
 		&mockFirewallsClient{},
 	)
 
-	err := p.CreateIAPFirewallRule(context.Background(), "test-proj", "default")
+	err := p.CreateIAPFirewallRule(context.Background(), "test-proj", "default", 22)
 	if err != nil {
 		t.Fatalf("CreateIAPFirewallRule() error = %v", err)
+	}
+}
+
+func TestCreateIAPFirewallRule_CustomPort(t *testing.T) {
+	mock := &mockFirewallsClient{}
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		mock,
+	)
+
+	err := p.CreateIAPFirewallRule(context.Background(), "test-proj", "my-vpc", 2222)
+	if err != nil {
+		t.Fatalf("CreateIAPFirewallRule() error = %v", err)
+	}
+
+	// Verify the firewall rule uses port 2222
+	req := mock.lastInsertReq
+	if req == nil {
+		t.Fatal("Insert() was not called")
+	}
+	rule := req.GetFirewallResource()
+	if len(rule.GetAllowed()) != 1 {
+		t.Fatalf("Allowed count = %d, want 1", len(rule.GetAllowed()))
+	}
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("Allowed ports = %v, want [2222]", ports)
 	}
 }
 
@@ -451,7 +483,7 @@ func TestCreateIAPFirewallRule_InsertError(t *testing.T) {
 		&mockFirewallsClient{insertErr: errors.New("insert failed")},
 	)
 
-	err := p.CreateIAPFirewallRule(context.Background(), "test-proj", "default")
+	err := p.CreateIAPFirewallRule(context.Background(), "test-proj", "default", 22)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
