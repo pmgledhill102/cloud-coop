@@ -12,7 +12,7 @@ set -euo pipefail
 # Configuration
 REQUIRED_GO_MAJOR=1
 REQUIRED_GO_MINOR=21  # Minimum Go version for this project
-PROJECT_GO_VERSION="1.25.7"  # Version specified in go.mod
+PROJECT_GO_VERSION="1.25.6"  # Version specified in go.mod
 
 # Colors for output (disabled if not a terminal)
 if [ -t 1 ]; then
