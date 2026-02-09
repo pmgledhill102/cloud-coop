@@ -235,7 +235,13 @@ func (p *Provider) FirewallRuleExists(ctx context.Context, project, name string)
 }
 
 // CreateIAPFirewallRule creates a firewall rule allowing SSH from Google IAP.
-func (p *Provider) CreateIAPFirewallRule(ctx context.Context, project, network string) error {
+// The sshPort parameter specifies which TCP port to allow (e.g., 22 or 2222).
+func (p *Provider) CreateIAPFirewallRule(ctx context.Context, project, network string, sshPort int) error {
+	if sshPort == 0 {
+		sshPort = 22
+	}
+	port := fmt.Sprintf("%d", sshPort)
+
 	rule := &computepb.Firewall{
 		Name:        ptr(setup.IAPFirewallRuleName),
 		Description: ptr("Allow SSH from Google IAP for cloudcoop"),
@@ -248,7 +254,7 @@ func (p *Provider) CreateIAPFirewallRule(ctx context.Context, project, network s
 		Allowed: []*computepb.Allowed{
 			{
 				IPProtocol: ptr("tcp"),
-				Ports:      []string{"22"},
+				Ports:      []string{port},
 			},
 		},
 	}

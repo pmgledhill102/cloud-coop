@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/crypto/ssh"
@@ -53,9 +54,16 @@ func formatKnownHostsEntry(host string, port int) string {
 	return fmt.Sprintf("[%s]:%d", host, port)
 }
 
+// keyscanMaxRetries is the number of times to retry ssh-keyscan before giving up.
+const keyscanMaxRetries = 3
+
+// keyscanRetryDelay is the delay between ssh-keyscan retries.
+const keyscanRetryDelay = 5 * time.Second
+
 // EnsureHostKey ensures the host key is in cloudcoop's known_hosts file.
 // If the key doesn't exist or has changed, it fetches and stores the new key.
 // This provides a seamless experience for ephemeral VMs.
+// Retries up to keyscanMaxRetries times to handle VMs that are still booting.
 func EnsureHostKey(host string, port int) error {
 	khPath, err := CloudcoopKnownHostsPath()
 	if err != nil {
@@ -70,21 +78,10 @@ func EnsureHostKey(host string, port int) error {
 	// Remove any existing entry for this host (handles IP reuse, VM recreation)
 	_ = removeHostEntry(khPath, host, port)
 
-	// Fetch the current host key using ssh-keyscan
-	args := []string{"-t", "ed25519,rsa,ecdsa"}
-	if port != 22 && port != 0 {
-		args = append(args, "-p", fmt.Sprintf("%d", port))
-	}
-	args = append(args, host)
-
-	cmd := exec.Command("ssh-keyscan", args...)
-	output, err := cmd.Output()
+	// Fetch the current host key using ssh-keyscan, with retries
+	output, err := runKeyscanWithRetry(host, port)
 	if err != nil {
-		return fmt.Errorf("ssh-keyscan failed for %s: %w", formatHostPort(host, port), err)
-	}
-
-	if len(output) == 0 {
-		return fmt.Errorf("ssh-keyscan returned no keys for %s (VM may not be ready)", formatHostPort(host, port))
+		return err
 	}
 
 	// Append to known_hosts
@@ -99,6 +96,48 @@ func EnsureHostKey(host string, port int) error {
 	}
 
 	return nil
+}
+
+// runKeyscanWithRetry runs ssh-keyscan with retries, capturing stderr for diagnostics.
+func runKeyscanWithRetry(host string, port int) ([]byte, error) {
+	args := []string{"-t", "ed25519,rsa,ecdsa"}
+	if port != 22 && port != 0 {
+		args = append(args, "-p", fmt.Sprintf("%d", port))
+	}
+	args = append(args, host)
+
+	hostPort := formatHostPort(host, port)
+	var lastErr error
+
+	for attempt := range keyscanMaxRetries {
+		if attempt > 0 {
+			time.Sleep(keyscanRetryDelay)
+		}
+
+		cmd := exec.Command("ssh-keyscan", args...)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		output, err := cmd.Output()
+
+		if err != nil {
+			errDetail := strings.TrimSpace(stderr.String())
+			if errDetail != "" {
+				lastErr = fmt.Errorf("ssh-keyscan failed for %s: %s", hostPort, errDetail)
+			} else {
+				lastErr = fmt.Errorf("ssh-keyscan failed for %s: %w", hostPort, err)
+			}
+			continue
+		}
+
+		if len(output) == 0 {
+			lastErr = fmt.Errorf("ssh-keyscan returned no keys for %s (VM may not be ready)", hostPort)
+			continue
+		}
+
+		return output, nil
+	}
+
+	return nil, lastErr
 }
 
 // removeHostEntry removes all entries for a host from the known_hosts file.

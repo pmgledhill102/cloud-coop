@@ -101,7 +101,7 @@ func (m *mockSetupProvider) FirewallRuleExists(ctx context.Context, project, nam
 	return m.fwExists, m.fwExistsErr
 }
 
-func (m *mockSetupProvider) CreateIAPFirewallRule(ctx context.Context, project, network string) error {
+func (m *mockSetupProvider) CreateIAPFirewallRule(ctx context.Context, project, network string, sshPort int) error {
 	if m.createFWErr != nil {
 		return m.createFWErr
 	}

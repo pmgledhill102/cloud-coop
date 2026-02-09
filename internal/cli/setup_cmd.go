@@ -177,6 +177,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		network = "default"
 	}
 
+	// Resolve SSH port from merged config (default: 22)
+	sshPort := 22
+	if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.SSH.Port != 0 {
+		sshPort = merged.SSH.Port
+	}
+
 	// Load merged config for extra APIs/IAM roles
 	mergedCfg, _ := config.LoadMerged()
 	var extraAPIs, extraRoles []string
@@ -312,7 +318,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		if needsFW {
 			fmt.Println("  Create firewall rule:")
-			fmt.Printf("    - %s (allow SSH from Google IAP)\n", setup.IAPFirewallRuleName)
+			fmt.Printf("    - %s (allow SSH port %d from Google IAP)\n", setup.IAPFirewallRuleName, sshPort)
 			fmt.Println()
 		}
 
@@ -369,8 +375,8 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 
 		if needsFW {
-			fmt.Print("Creating firewall rule...")
-			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network); fwErr != nil {
+			fmt.Printf("Creating firewall rule (port %d)...", sshPort)
+			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network, sshPort); fwErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create firewall rule: %w", fwErr)
 			}
