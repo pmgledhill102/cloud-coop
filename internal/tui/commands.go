@@ -93,7 +93,7 @@ func newProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(
 }
 
 func loadConfig() tea.Msg {
-	cfg, err := config.Load()
+	cfg, err := config.LoadMerged()
 	ws, _ := workspace.Detect(workspace.NewGitRunner(".")) // nil if not in a git repo
 	return configLoadedMsg{cfg: cfg, err: err, workspace: ws}
 }
