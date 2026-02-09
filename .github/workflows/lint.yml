@@ -26,7 +26,7 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.8.0
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.25.7"
 
 jobs:
   # Detect which files changed to enable path filtering
