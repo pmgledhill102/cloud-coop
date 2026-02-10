@@ -245,8 +245,8 @@ SSH_PORT=%d
 # Wait for system to be ready
 sleep 5
 
-# Ubuntu uses systemd socket activation for SSH
-# We need to override the socket configuration
+# Ubuntu 22.10+ uses systemd socket activation for SSH.
+# Override the socket to listen on the custom port.
 mkdir -p /etc/systemd/system/ssh.socket.d
 cat > /etc/systemd/system/ssh.socket.d/port.conf << EOF
 [Socket]
@@ -255,16 +255,18 @@ ListenStream=0.0.0.0:${SSH_PORT}
 ListenStream=[::]:${SSH_PORT}
 EOF
 
-# Also update sshd_config for completeness
+# Also update sshd_config (covers non-socket-activated systems)
 sed -i '/^#*Port /d' /etc/ssh/sshd_config
 echo "Port ${SSH_PORT}" >> /etc/ssh/sshd_config
 
-# Reload systemd and restart SSH socket
+# Reload systemd and restart SSH.
+# On socket-activated systems (Ubuntu 22.10+), only restart the socket.
+# systemd auto-starts ssh.service when a connection arrives.
+# Starting ssh.service directly would fail because sshd tries to bind
+# the port that ssh.socket already holds.
 systemctl daemon-reload
 systemctl stop ssh.service 2>/dev/null || true
-systemctl stop ssh.socket 2>/dev/null || true
-systemctl start ssh.socket
-systemctl start ssh.service
+systemctl restart ssh.socket
 `, config.SSHPort, config.SSHPort)
 	}
 
