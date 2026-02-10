@@ -100,7 +100,7 @@ func EnsureHostKey(host string, port int) error {
 
 // runKeyscanWithRetry runs ssh-keyscan with retries, capturing stderr for diagnostics.
 func runKeyscanWithRetry(host string, port int) ([]byte, error) {
-	args := []string{"-t", "ed25519,rsa,ecdsa"}
+	args := []string{"-T", "5", "-t", "ed25519,rsa,ecdsa"}
 	if port != 22 && port != 0 {
 		args = append(args, "-p", fmt.Sprintf("%d", port))
 	}
@@ -120,11 +120,17 @@ func runKeyscanWithRetry(host string, port int) ([]byte, error) {
 		output, err := cmd.Output()
 
 		if err != nil {
-			errDetail := strings.TrimSpace(stderr.String())
-			if errDetail != "" {
-				lastErr = fmt.Errorf("ssh-keyscan failed for %s: %s", hostPort, errDetail)
+			// OpenSSH 9.4+ exits non-zero when no keys are found.
+			// Check if we got valid output despite the error exit code.
+			if len(bytes.TrimSpace(output)) > 0 {
+				return output, nil
+			}
+
+			errLines := filterKeyscanErrors(stderr.String())
+			if errLines != "" {
+				lastErr = fmt.Errorf("ssh-keyscan failed for %s: %s", hostPort, errLines)
 			} else {
-				lastErr = fmt.Errorf("ssh-keyscan failed for %s: %w", hostPort, err)
+				lastErr = fmt.Errorf("ssh-keyscan returned no keys for %s (SSH may not be listening on port %d)", hostPort, port)
 			}
 			continue
 		}
@@ -138,6 +144,20 @@ func runKeyscanWithRetry(host string, port int) ([]byte, error) {
 	}
 
 	return nil, lastErr
+}
+
+// filterKeyscanErrors extracts non-comment error lines from ssh-keyscan stderr.
+// ssh-keyscan writes informational "# host SSH-2.0-..." lines to stderr;
+// actual errors (connection refused, etc.) are non-comment lines.
+func filterKeyscanErrors(stderr string) string {
+	var errLines []string
+	for _, line := range strings.Split(stderr, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			errLines = append(errLines, line)
+		}
+	}
+	return strings.Join(errLines, "; ")
 }
 
 // removeHostEntry removes all entries for a host from the known_hosts file.
