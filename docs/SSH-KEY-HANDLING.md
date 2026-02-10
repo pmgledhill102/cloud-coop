@@ -2,9 +2,8 @@
 
 This document covers how cloudcoop handles SSH keys: both host keys (verifying the VM is
 who it claims to be) and identity keys (proving the user is who they claim to be). It
-covers both the Go SSH library path and the native `ssh` shell-out path, explains the
-security trade-offs in the context of this application, and identifies current
-inconsistencies.
+covers both the Go SSH library path and the native `ssh` shell-out path, and explains the
+security trade-offs in the context of this application.
 
 ## Two SSH Channels
 
@@ -92,42 +91,53 @@ cloudcoop maintains its own known_hosts file at `~/.config/cloudcoop/known_hosts
 from `~/.ssh/known_hosts`. This separation is important: it prevents ephemeral VM keys from
 polluting the user's personal known_hosts file.
 
-The host key flow in the **Go library path** (`internal/ssh/client.go:NewClient`):
+The host key flow uses `EnsureHostKeyPinned` (`internal/ssh/hostkey.go`), which wraps
+the base `EnsureHostKey` with per-VM pin tracking:
 
-1. Call `EnsureHostKey(host, port)` which:
-   a. Removes any existing entry for this host from cloudcoop's known_hosts
-   b. Runs `ssh-keyscan -t ed25519,rsa,ecdsa <host>` to fetch the current key
-   c. Appends the fetched key to cloudcoop's known_hosts
+1. If a pin exists for this VM (matching name, created timestamp, host, and port) and the
+   known_hosts entry is present: **skip** (no ssh-keyscan needed).
+2. If the pin is stale (different created timestamp or IP): remove the old known_hosts
+   entry, re-scan, and update the pin.
+3. If no pin exists (first connection): scan, create pin.
+
+The base `EnsureHostKey` does the actual key fetch:
+
+1. Removes any existing entry for this host from cloudcoop's known_hosts
+2. Runs `ssh-keyscan -T 5 -t ed25519,rsa,ecdsa <host>` to fetch the current key
+   (with retries for VMs that are still booting)
+3. Appends the fetched key to cloudcoop's known_hosts
+
+**Go library path** (`internal/ssh/client.go:NewClient`):
+
+1. Call `EnsureHostKeyPinned(host, port, vm)`
 2. Create a `HostKeyCallback` from the just-updated known_hosts file
 3. Connect with that callback
 
-The host key flow in the **shell-out path** (varies by call site):
+**Shell-out path** (all call sites are consistent):
 
-- `ConnectInteractive` (`internal/ssh/connect.go`): Calls `EnsureHostKey`, then passes
-  `-o UserKnownHostsFile=<cloudcoop-known-hosts>` to `ssh`
-- `auth login` (`internal/cli/auth.go`): Same -- `EnsureHostKey` + `UserKnownHostsFile`
-- `provision logs --follow` (`internal/cli/provision_logs.go`): **Does not call
-  `EnsureHostKey`**, does not pass `UserKnownHostsFile` -- uses the user's default SSH
-  known_hosts
-- TUI `connectToAgent` (`internal/tui/commands.go`): **Does not call `EnsureHostKey`**,
-  does not pass `UserKnownHostsFile` -- uses the user's default SSH known_hosts
+- `ConnectInteractive` (`internal/ssh/connect.go`): Calls `EnsureHostKeyPinned`, then
+  passes `-o UserKnownHostsFile=<cloudcoop-known-hosts>` to `ssh`
+- `auth login` (`internal/cli/auth.go`): Same pattern
+- `provision logs --follow` (`internal/cli/provision_logs.go`): Same pattern
+- TUI `connectToAgent` (`internal/tui/commands.go`): Same pattern
 
-### The auto-accept pattern
+### The pinned-key model
 
-The current `EnsureHostKey` implementation always removes the old key and fetches the new
-one. Every connection starts fresh. This is functionally equivalent to auto-accepting
-whatever key the host presents -- there is no persistence across connections and no
-detection of key changes.
+The `EnsureHostKeyPinned` implementation pins the host key for the lifetime of a VM.
+It uses a TOML pin file (`~/.config/cloudcoop/pinned_keys.toml`) that maps VM names to
+their host, port, and creation timestamp. This provides MITM detection during a VM's
+lifetime without false positives on VM recreation:
 
-This means:
-
-- **No MITM detection**: If the host key changes between connections (because of an
-  attacker, not because of VM recreation), cloudcoop will silently accept the new key.
+- **MITM detection within a VM lifetime**: Once a key is pinned, subsequent connections
+  skip `ssh-keyscan` and verify against the stored key. An attacker would need to intercept
+  the very first connection to a newly created VM.
+- **No false positives on VM recreation**: When a VM is deleted and recreated, the creation
+  timestamp changes, triggering a fresh scan and new pin.
 - **No user prompt**: The user is never asked to verify a fingerprint.
-- **Same security as `InsecureIgnoreHostKey`**: In terms of MITM protection, the current
-  approach provides the same guarantees. The only difference is that the key is briefly
-  verified between the `ssh-keyscan` and the `ssh.Dial` call (preventing a key-swap in
-  that small window).
+
+The unpinned `EnsureHostKey` (used as fallback when VM identity is not available) always
+re-scans, which is functionally equivalent to auto-accepting whatever key the host
+presents.
 
 ### Is this actually a problem?
 
@@ -157,81 +167,9 @@ For this application, probably not, for several reasons:
    this means compromising the user's network or the cloud provider's network -- both of
    which imply much larger problems than SSH key verification.
 
-That said, the current approach could be improved for defense-in-depth without adding user
-friction. See [Recommendations](#recommendations) below.
-
-## Current Inconsistencies
-
-There are two shell-out paths that bypass cloudcoop's managed known_hosts entirely:
-
-### 1. TUI `connectToAgent` (`internal/tui/commands.go:238-250`)
-
-```go
-c := exec.Command("ssh", "-t", "-p", fmt.Sprintf("%d", port),
-    fmt.Sprintf("%s@%s", sshUser, ip), tmuxCmd)
-```
-
-This does not call `EnsureHostKey` and does not pass `-o UserKnownHostsFile`. It uses the
-user's default `~/.ssh/known_hosts`. If the VM's key is not in the user's personal
-known_hosts, this will trigger OpenSSH's interactive "Are you sure you want to continue
-connecting?" prompt, or fail with a host key mismatch error.
-
-This is inconsistent with the CLI `connect` path (`internal/cli/connect.go`), which calls
-`ConnectInteractive` and properly uses cloudcoop's managed known_hosts.
-
-### 2. Provision logs follow mode (`internal/cli/provision_logs.go:103-121`)
-
-```go
-sshArgs := []string{
-    "-t",
-    "-p", fmt.Sprintf("%d", port),
-    fmt.Sprintf("%s@%s", sshUser, ip),
-    remoteCmd,
-}
-```
-
-Same problem -- no `EnsureHostKey`, no `UserKnownHostsFile`. The non-follow mode of the
-same command uses the Go SSH library path (which does handle host keys correctly).
-
-### Impact
-
-These inconsistencies mean:
-
-- Users who only use the CLI (`cloudcoop agents connect`) will have a consistent experience
-  -- cloudcoop manages host keys silently.
-- Users who use the TUI connect feature or `provision logs --follow` may see unexpected
-  "The authenticity of host ... can't be established" prompts, or "REMOTE HOST
-  IDENTIFICATION HAS CHANGED" errors after VM recreation.
-- The user's `~/.ssh/known_hosts` gets polluted with ephemeral VM keys, which is exactly
-  what the separate cloudcoop known_hosts was designed to prevent.
+The pinned-key model provides meaningful defense-in-depth without adding user friction.
 
 ## Recommendations
-
-### Fix the inconsistencies (straightforward)
-
-Both `tui/commands.go:connectToAgent` and `cli/provision_logs.go` (follow mode) should call
-`EnsureHostKey` and pass `-o UserKnownHostsFile` to `ssh`, matching what
-`ConnectInteractive` and `auth login` already do.
-
-This is a clear bug fix -- two paths are missing host key handling that the other paths
-already implement correctly.
-
-### Consider pinning host keys per VM (optional improvement)
-
-The current `EnsureHostKey` could be enhanced to pin the host key for the lifetime of a VM:
-
-1. On first connection to a VM, fetch and store the key (keyed by VM name, not just IP).
-2. On subsequent connections, verify the stored key matches -- but only if the VM hasn't
-   been recreated since the key was stored.
-3. On VM deletion, clear the stored key.
-
-This would detect MITM during the life of a single VM without triggering false positives on
-VM recreation. The VM name and creation timestamp (available from the cloud API) provide the
-signal for when a "new" VM justifies accepting a new key.
-
-This is a defense-in-depth measure. It adds meaningful protection against a specific attack
-(MITM during the life of a running VM) without the user friction that strict TOFU causes
-for ephemeral infrastructure. But it's not urgent given the threat model discussed above.
 
 ### Do not add interactive host key prompts
 
@@ -243,15 +181,15 @@ itself, which is the thing being verified -- a circular dependency.
 
 ## Summary
 
-| Aspect | Go Library Path | Shell-Out Path (correct) | Shell-Out Path (inconsistent) |
-|--------|----------------|-------------------------|------------------------------|
-| Identity keys | Explicit discovery: agent, then key files | Inherited from user's SSH config | Same |
-| Host key source | cloudcoop known_hosts | cloudcoop known_hosts via `-o UserKnownHostsFile` | User's `~/.ssh/known_hosts` (bug) |
-| `EnsureHostKey` called | Yes | Yes | No (bug) |
-| MITM protection | Auto-accept (re-scans each time) | Auto-accept (re-scans each time) | Whatever OpenSSH does by default |
-| User experience | Silent, no prompts | Silent, no prompts | May prompt or error on key mismatch |
+| Aspect | Go Library Path | Shell-Out Path |
+|--------|----------------|----------------|
+| Identity keys | Explicit discovery: agent, then key files | Inherited from user's SSH config |
+| Host key source | cloudcoop known_hosts | cloudcoop known_hosts via `-o UserKnownHostsFile` |
+| `EnsureHostKeyPinned` called | Yes | Yes |
+| MITM protection | Pinned per VM lifetime (re-scans on VM recreation) | Same |
+| User experience | Silent, no prompts | Silent, no prompts |
 
-The core design -- auto-accepting host keys for cloudcoop-managed VMs, using a separate
-known_hosts file -- is sound for this application's threat model. The two inconsistent
-shell-out paths should be fixed to match the existing correct paths. Interactive host key
-prompts would add user friction without meaningful security benefit.
+The core design -- pinning host keys per VM lifetime, using a separate known_hosts file --
+provides MITM detection during a VM's life while avoiding false positives from VM
+recreation. Interactive host key prompts would add user friction without meaningful
+security benefit.

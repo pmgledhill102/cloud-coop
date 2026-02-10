@@ -274,6 +274,30 @@ func TestClearPinnedKey(t *testing.T) {
 	}
 }
 
+func TestFilterKeyscanErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		stderr string
+		want   string
+	}{
+		{"empty", "", ""},
+		{"only comments", "# 1.2.3.4:22 SSH-2.0-OpenSSH_9.6\n# 1.2.3.4:22 banner\n", ""},
+		{"error line", "ssh_exchange_identification: Connection refused\n", "ssh_exchange_identification: Connection refused"},
+		{"mixed", "# 1.2.3.4:22 SSH-2.0-OpenSSH_9.6\nread_passphrase: can't open /dev/tty\n", "read_passphrase: can't open /dev/tty"},
+		{"multiple errors", "error one\nerror two\n", "error one; error two"},
+		{"whitespace only", "  \n  \n", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterKeyscanErrors(tt.stderr)
+			if got != tt.want {
+				t.Errorf("filterKeyscanErrors(%q) = %q, want %q", tt.stderr, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestClearPinnedKey_Nonexistent(t *testing.T) {
 	setTestHome(t)
 
