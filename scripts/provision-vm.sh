@@ -452,6 +452,7 @@ echo "  - kubectl    : $(kubectl version --client -o json 2>/dev/null | jq -r '.
 echo "  - AWS CLI    : $(aws --version 2>/dev/null | awk '{print $1}' || echo 'N/A')"
 echo "  - Azure CLI  : $(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
+echo "  - Gemini CLI : $(gemini --version 2>/dev/null || echo 'N/A')"
 echo ""
 echo "Quick start:"
 echo "  1. SSH: gcloud compute ssh $(hostname) --zone=ZONE --tunnel-through-iap"
