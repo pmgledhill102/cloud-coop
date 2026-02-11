@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -56,11 +57,6 @@ type agentAddedMsg struct {
 type agentKilledMsg struct {
 	index int
 	err   error
-}
-
-type provisionStatusMsg struct {
-	status *provisioning.StatusInfo
-	err    error
 }
 
 type connectFinishedMsg struct{ err error }
@@ -432,15 +428,57 @@ func ensureFirewall(cfg *config.Config) tea.Cmd {
 	}
 }
 
-func fetchProvisionStatus(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
-	return func() tea.Msg {
-		client, err := connectSSH(cfg, vmInfo)
-		if err != nil {
-			return provisionStatusMsg{err: fmt.Errorf("SSH: %w", err)}
-		}
-		defer func() { _ = client.Close() }()
+// vmDetailsMsg combines agents and provisioning status into a single message
+// to avoid double-redraw after each refresh tick.
+type vmDetailsMsg struct {
+	agents  *agent.ListResult
+	agentsE error
+	status  *provisioning.StatusInfo
+	statusE error
+}
 
-		status, err := provisioning.CheckStatus(client)
-		return provisionStatusMsg{status: status, err: err}
+// fetchVMDetails runs agent listing and provisioning status check in parallel,
+// returning a single combined message to trigger one redraw instead of two.
+func fetchVMDetails(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.Cmd {
+	return func() tea.Msg {
+		var (
+			wg      sync.WaitGroup
+			agents  *agent.ListResult
+			agentsE error
+			status  *provisioning.StatusInfo
+			statusE error
+		)
+
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			client, err := connectSSH(cfg, vmInfo)
+			if err != nil {
+				agentsE = fmt.Errorf("SSH: %w", err)
+				return
+			}
+			defer func() { _ = client.Close() }()
+			agents, agentsE = agent.ListSessions(client, sessionName)
+		}()
+
+		go func() {
+			defer wg.Done()
+			client, err := connectSSH(cfg, vmInfo)
+			if err != nil {
+				statusE = fmt.Errorf("SSH: %w", err)
+				return
+			}
+			defer func() { _ = client.Close() }()
+			status, statusE = provisioning.CheckStatus(client)
+		}()
+
+		wg.Wait()
+		return vmDetailsMsg{
+			agents:  agents,
+			agentsE: agentsE,
+			status:  status,
+			statusE: statusE,
+		}
 	}
 }

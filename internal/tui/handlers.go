@@ -208,8 +208,7 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 		m.provisionStatus = nil
 		m.provisionErr = nil
 		cmds := []tea.Cmd{
-			fetchAgents(m.cfg, msg.info, m.sessionName()),
-			fetchProvisionStatus(m.cfg, msg.info),
+			fetchVMDetails(m.cfg, msg.info, m.sessionName()),
 		}
 		if !m.firewallChecked {
 			m.firewallChecked = true
@@ -228,17 +227,20 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleVMDetails(msg vmDetailsMsg) (Model, tea.Cmd) {
+	m.agentsLoading = false
+	m.provisionLoading = false
+	m.agents = msg.agents
+	m.agentsErr = msg.agentsE
+	m.provisionStatus = msg.status
+	m.provisionErr = msg.statusE
+	return m, nil
+}
+
 func (m Model) handleAgents(msg agentsMsg) (Model, tea.Cmd) {
 	m.agentsLoading = false
 	m.agents = msg.result
 	m.agentsErr = msg.err
-	return m, nil
-}
-
-func (m Model) handleProvisionStatus(msg provisionStatusMsg) (Model, tea.Cmd) {
-	m.provisionLoading = false
-	m.provisionStatus = msg.status
-	m.provisionErr = msg.err
 	return m, nil
 }
 
