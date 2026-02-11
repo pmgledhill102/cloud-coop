@@ -131,7 +131,7 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 }
 
 func (m Model) formatProvisionStatus() string {
-	if m.provisionLoading {
+	if m.provisionLoading && m.provisionStatus == nil {
 		return "checking..."
 	}
 	if m.provisionErr != nil {
@@ -165,7 +165,7 @@ func (m Model) renderAgents() []string {
 	if m.vmInfo == nil || m.vmInfo.Status != cloud.VMStatusRunning {
 		return []string{labelLine("Agents:", stoppedStyle.Render("(VM not running)"))}
 	}
-	if m.agentsLoading {
+	if m.agentsLoading && m.agents == nil {
 		return []string{labelLine("Agents:", "loading...")}
 	}
 	if m.agentsErr != nil {
