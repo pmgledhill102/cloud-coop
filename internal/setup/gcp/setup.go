@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/cloudresourcemanager/v1"
@@ -269,6 +271,158 @@ func (p *Provider) CreateIAPFirewallRule(ctx context.Context, project, network s
 
 	if err := op.Wait(ctx); err != nil {
 		return fmt.Errorf("wait for firewall rule: %w", err)
+	}
+
+	return nil
+}
+
+// GetFirewallRulePort returns the first allowed TCP port from the named firewall rule.
+func (p *Provider) GetFirewallRulePort(ctx context.Context, project, name string) (int, error) {
+	rule, err := p.firewalls.Get(ctx, &computepb.GetFirewallRequest{
+		Project:  project,
+		Firewall: name,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("get firewall rule: %w", err)
+	}
+
+	allowed := rule.GetAllowed()
+	if len(allowed) == 0 {
+		return 0, fmt.Errorf("firewall rule %s has no allowed entries", name)
+	}
+	ports := allowed[0].GetPorts()
+	if len(ports) == 0 {
+		return 0, fmt.Errorf("firewall rule %s has no ports specified", name)
+	}
+
+	port, err := strconv.Atoi(ports[0])
+	if err != nil {
+		return 0, fmt.Errorf("parse firewall port %q: %w", ports[0], err)
+	}
+	return port, nil
+}
+
+// UpdateIAPFirewallRule updates the allowed port on an existing IAP firewall rule.
+func (p *Provider) UpdateIAPFirewallRule(ctx context.Context, project string, sshPort int) error {
+	port := fmt.Sprintf("%d", sshPort)
+
+	op, err := p.firewalls.Patch(ctx, &computepb.PatchFirewallRequest{
+		Project:  project,
+		Firewall: setup.IAPFirewallRuleName,
+		FirewallResource: &computepb.Firewall{
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{port},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("patch IAP firewall rule: %w", err)
+	}
+
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for firewall patch: %w", err)
+	}
+
+	return nil
+}
+
+// CreateDirectSSHFirewallRule creates a firewall rule allowing SSH from a specific IP.
+func (p *Provider) CreateDirectSSHFirewallRule(ctx context.Context, project, network, sourceIP string, sshPort int) error {
+	if sshPort == 0 {
+		sshPort = 22
+	}
+	port := fmt.Sprintf("%d", sshPort)
+
+	rule := &computepb.Firewall{
+		Name:         ptr(setup.DirectSSHFirewallRuleName),
+		Description:  ptr("Allow direct SSH from workstation IP for cloudcoop"),
+		Network:      ptr(fmt.Sprintf("global/networks/%s", network)),
+		Direction:    ptr("INGRESS"),
+		Priority:     ptr(int32(1000)),
+		SourceRanges: []string{sourceIP + "/32"},
+		Allowed: []*computepb.Allowed{
+			{
+				IPProtocol: ptr("tcp"),
+				Ports:      []string{port},
+			},
+		},
+	}
+
+	op, err := p.firewalls.Insert(ctx, &computepb.InsertFirewallRequest{
+		Project:          project,
+		FirewallResource: rule,
+	})
+	if err != nil {
+		return fmt.Errorf("create direct SSH firewall rule: %w", err)
+	}
+
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for firewall rule: %w", err)
+	}
+
+	return nil
+}
+
+// GetFirewallRuleSourceIP returns the first source range (as IP without /32) and port
+// from the named firewall rule.
+func (p *Provider) GetFirewallRuleSourceIP(ctx context.Context, project, name string) (string, int, error) {
+	rule, err := p.firewalls.Get(ctx, &computepb.GetFirewallRequest{
+		Project:  project,
+		Firewall: name,
+	})
+	if err != nil {
+		return "", 0, fmt.Errorf("get firewall rule: %w", err)
+	}
+
+	// Extract source IP
+	sourceIP := ""
+	ranges := rule.GetSourceRanges()
+	if len(ranges) > 0 {
+		sourceIP = strings.TrimSuffix(ranges[0], "/32")
+	}
+
+	// Extract port
+	port := 0
+	allowed := rule.GetAllowed()
+	if len(allowed) > 0 {
+		ports := allowed[0].GetPorts()
+		if len(ports) > 0 {
+			port, err = strconv.Atoi(ports[0])
+			if err != nil {
+				return "", 0, fmt.Errorf("parse firewall port %q: %w", ports[0], err)
+			}
+		}
+	}
+
+	return sourceIP, port, nil
+}
+
+// UpdateDirectSSHFirewallRule updates the source IP and port on the direct SSH rule.
+func (p *Provider) UpdateDirectSSHFirewallRule(ctx context.Context, project, sourceIP string, sshPort int) error {
+	port := fmt.Sprintf("%d", sshPort)
+
+	op, err := p.firewalls.Patch(ctx, &computepb.PatchFirewallRequest{
+		Project:  project,
+		Firewall: setup.DirectSSHFirewallRuleName,
+		FirewallResource: &computepb.Firewall{
+			SourceRanges: []string{sourceIP + "/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{port},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("patch direct SSH firewall rule: %w", err)
+	}
+
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for firewall patch: %w", err)
 	}
 
 	return nil

@@ -754,6 +754,217 @@ func TestProvider_DeleteVM(t *testing.T) {
 	}
 }
 
+func TestProvider_EnsureFirewallAllowsSSH_Create(t *testing.T) {
+	fw := &mockFirewallsClient{} // default: Get returns 404
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when creating new rule")
+	}
+	if !fw.getCalled {
+		t.Error("Get() was not called")
+	}
+	if !fw.insertCalled {
+		t.Error("Insert() was not called")
+	}
+
+	// Verify the insert request
+	req := fw.lastInsertReq
+	rule := req.GetFirewallResource()
+	if rule.GetName() != "cloudcoop-allow-ssh" {
+		t.Errorf("rule name = %q, want %q", rule.GetName(), "cloudcoop-allow-ssh")
+	}
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("ports = %v, want [2222]", ports)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_NoOp(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"203.0.113.50/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"2222"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if changed {
+		t.Error("expected changed=false when rule already matches")
+	}
+	if fw.insertCalled {
+		t.Error("Insert() should not be called")
+	}
+	if fw.patchCalled {
+		t.Error("Patch() should not be called")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_UpdateIP(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"198.51.100.1/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"2222"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when IP differs")
+	}
+	if !fw.patchCalled {
+		t.Error("Patch() was not called")
+	}
+
+	req := fw.lastPatchReq
+	rule := req.GetFirewallResource()
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("patched source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_UpdatePort(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"203.0.113.50/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"22"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when port differs")
+	}
+	if !fw.patchCalled {
+		t.Error("Patch() was not called")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_GetError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		getError: newForbiddenError(),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for non-404 Get failure")
+	}
+	if !contains(err.Error(), "get firewall rule") {
+		t.Errorf("error = %v, want containing 'get firewall rule'", err)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_InsertError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		insertError: errors.New("insert failed"),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for Insert failure")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_PatchError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"198.51.100.1/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"22"},
+				},
+			},
+		},
+		patchError: errors.New("patch failed"),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for Patch failure")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_NilFirewalls(t *testing.T) {
+	p := newWithClient("test-project", "test-zone", &mockInstancesClient{})
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for nil firewalls client")
+	}
+}
+
 func TestProviderInterface(t *testing.T) {
 	// Ensure Provider implements cloud.Provider
 	var _ cloud.Provider = (*Provider)(nil)

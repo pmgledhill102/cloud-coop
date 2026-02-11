@@ -23,11 +23,15 @@ const (
 	metadataKeyConfigHash = "cloudcoop-config-hash"
 )
 
+// DirectSSHFirewallRuleName is the name of the direct SSH firewall rule.
+const DirectSSHFirewallRuleName = "cloudcoop-allow-ssh"
+
 // Provider implements cloud.Provider for GCP.
 type Provider struct {
-	project string
-	zone    string
-	client  instancesClient
+	project   string
+	zone      string
+	client    instancesClient
+	firewalls firewallsClient
 }
 
 // New creates a new GCP provider.
@@ -38,10 +42,17 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 		return nil, fmt.Errorf("create compute client: %w", err)
 	}
 
+	fwClient, err := compute.NewFirewallsRESTClient(ctx)
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("create firewalls client: %w", err)
+	}
+
 	return &Provider{
-		project: project,
-		zone:    zone,
-		client:  &realInstancesClient{client: client},
+		project:   project,
+		zone:      zone,
+		client:    &realInstancesClient{client: client},
+		firewalls: &realFirewallsClient{client: fwClient},
 	}, nil
 }
 
@@ -51,6 +62,16 @@ func newWithClient(project, zone string, client instancesClient) *Provider {
 		project: project,
 		zone:    zone,
 		client:  client,
+	}
+}
+
+// newWithClients creates a provider with all custom clients (for testing).
+func newWithClients(project, zone string, client instancesClient, fw firewallsClient) *Provider {
+	return &Provider{
+		project:   project,
+		zone:      zone,
+		client:    client,
+		firewalls: fw,
 	}
 }
 
@@ -349,15 +370,104 @@ func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 	return nil
 }
 
+// EnsureFirewallAllowsSSH checks/creates/updates a firewall rule to allow
+// SSH from the given source IP on the given port.
+func (p *Provider) EnsureFirewallAllowsSSH(ctx context.Context, cfg cloud.FirewallConfig) (bool, error) {
+	if p.firewalls == nil {
+		return false, fmt.Errorf("firewalls client not initialized")
+	}
+
+	wantRange := cfg.SourceIP + "/32"
+	wantPort := fmt.Sprintf("%d", cfg.Port)
+
+	// Check if the rule already exists
+	rule, err := p.firewalls.Get(ctx, &computepb.GetFirewallRequest{
+		Project:  p.project,
+		Firewall: DirectSSHFirewallRuleName,
+	})
+	if err != nil {
+		if !isNotFoundError(err) {
+			return false, fmt.Errorf("get firewall rule: %w", err)
+		}
+
+		// Rule doesn't exist — create it
+		newRule := &computepb.Firewall{
+			Name:         ptr(DirectSSHFirewallRuleName),
+			Description:  ptr("Allow direct SSH from workstation IP for cloudcoop"),
+			Network:      ptr(fmt.Sprintf("global/networks/%s", cfg.Network)),
+			Direction:    ptr("INGRESS"),
+			Priority:     ptr(int32(1000)),
+			SourceRanges: []string{wantRange},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{wantPort},
+				},
+			},
+		}
+
+		op, insertErr := p.firewalls.Insert(ctx, &computepb.InsertFirewallRequest{
+			Project:          p.project,
+			FirewallResource: newRule,
+		})
+		if insertErr != nil {
+			return false, fmt.Errorf("create direct SSH firewall rule: %w", insertErr)
+		}
+		if waitErr := op.Wait(ctx); waitErr != nil {
+			return false, fmt.Errorf("wait for firewall rule: %w", waitErr)
+		}
+		return true, nil
+	}
+
+	// Rule exists — check if it matches
+	currentRanges := rule.GetSourceRanges()
+	currentPort := ""
+	if allowed := rule.GetAllowed(); len(allowed) > 0 {
+		if ports := allowed[0].GetPorts(); len(ports) > 0 {
+			currentPort = ports[0]
+		}
+	}
+
+	if len(currentRanges) == 1 && currentRanges[0] == wantRange && currentPort == wantPort {
+		return false, nil // Already correct
+	}
+
+	// Rule exists but needs updating
+	op, err := p.firewalls.Patch(ctx, &computepb.PatchFirewallRequest{
+		Project:  p.project,
+		Firewall: DirectSSHFirewallRuleName,
+		FirewallResource: &computepb.Firewall{
+			SourceRanges: []string{wantRange},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{wantPort},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("patch direct SSH firewall rule: %w", err)
+	}
+	if err := op.Wait(ctx); err != nil {
+		return false, fmt.Errorf("wait for firewall patch: %w", err)
+	}
+	return true, nil
+}
+
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T { return &v }
 
 // Close closes the provider's clients.
 func (p *Provider) Close() error {
+	var errs []error
 	if p.client != nil {
-		return p.client.Close()
+		errs = append(errs, p.client.Close())
 	}
-	return nil
+	if p.firewalls != nil {
+		errs = append(errs, p.firewalls.Close())
+	}
+	return errors.Join(errs...)
 }
 
 // mapStatus converts GCP instance status to cloud.VMStatus.

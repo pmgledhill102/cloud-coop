@@ -18,37 +18,37 @@ import (
 
 // Config represents the cloudcoop configuration.
 type Config struct {
-	Cloud        CloudConfig        `toml:"cloud"`
-	VM           VMConfig           `toml:"vm"`
-	SSH          SSHConfig          `toml:"ssh"`
-	Setup        SetupConfig        `toml:"setup"`
-	Agents       AgentsConfig       `toml:"agents"`
-	Provisioning ProvisioningConfig `toml:"provisioning"`
-	TUI          TUIConfig          `toml:"tui"`
+	Cloud        CloudConfig        `toml:"cloud,omitempty"`
+	VM           VMConfig           `toml:"vm,omitempty"`
+	SSH          SSHConfig          `toml:"ssh,omitempty"`
+	Setup        SetupConfig        `toml:"setup,omitempty"`
+	Agents       AgentsConfig       `toml:"agents,omitempty"`
+	Provisioning ProvisioningConfig `toml:"provisioning,omitempty"`
+	TUI          TUIConfig          `toml:"tui,omitempty"`
 }
 
 // SetupConfig contains settings for `cloudcoop setup` provisioning.
 type SetupConfig struct {
-	ExtraAPIs     []string `toml:"extra_apis"`      // Additional GCP APIs to enable beyond the base set
-	ExtraIAMRoles []string `toml:"extra_iam_roles"` // Additional IAM roles to grant beyond the base set
+	ExtraAPIs     []string `toml:"extra_apis,omitempty"`      // Additional GCP APIs to enable beyond the base set
+	ExtraIAMRoles []string `toml:"extra_iam_roles,omitempty"` // Additional IAM roles to grant beyond the base set
 }
 
 // TUIConfig contains TUI-specific settings.
 type TUIConfig struct {
-	RefreshIntervalSec int `toml:"refresh_interval_sec"` // Auto-refresh interval during operations (default: 5)
+	RefreshIntervalSec int `toml:"refresh_interval_sec,omitzero"` // Auto-refresh interval during operations (default: 5)
 }
 
 // AgentsConfig contains settings for agent sessions.
 type AgentsConfig struct {
-	DefaultCommand string                `toml:"default_command"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
-	PreCommands    []string              `toml:"pre_commands"`    // Commands to run before agent in every session
-	Repos          map[string]RepoConfig `toml:"repos"`           // Per-repo overrides keyed by slug
+	DefaultCommand string                `toml:"default_command,omitempty"` // Default command for new agents (e.g., "claude --dangerously-skip-permissions")
+	PreCommands    []string              `toml:"pre_commands,omitempty"`    // Commands to run before agent in every session
+	Repos          map[string]RepoConfig `toml:"repos,omitempty"`           // Per-repo overrides keyed by slug
 }
 
 // RepoConfig holds per-repo agent overrides.
 type RepoConfig struct {
-	Command     string   `toml:"command"`      // Agent command override for this repo
-	PreCommands []string `toml:"pre_commands"` // Pre-commands specific to this repo
+	Command     string   `toml:"command,omitempty"`      // Agent command override for this repo
+	PreCommands []string `toml:"pre_commands,omitempty"` // Pre-commands specific to this repo
 }
 
 // ResolveCommand returns the agent command for a given repo slug.
@@ -77,38 +77,38 @@ func (a *AgentsConfig) ResolvePreCommands(slug string) []string {
 
 // ProvisioningConfig contains settings for VM provisioning.
 type ProvisioningConfig struct {
-	ScriptURL string `toml:"script_url"` // URL to fetch provisioning script from
+	ScriptURL string `toml:"script_url,omitempty"` // URL to fetch provisioning script from
 }
 
 // SSHConfig contains SSH connection settings.
 type SSHConfig struct {
-	Port int    `toml:"port"` // SSH port (default: 22)
-	User string `toml:"user"` // SSH username (default: current user)
+	Port int    `toml:"port,omitzero"`  // SSH port (default: 22)
+	User string `toml:"user,omitempty"` // SSH username (default: current user)
 }
 
 // CloudConfig contains cloud provider settings.
 type CloudConfig struct {
-	Provider string    `toml:"provider"` // gcp, aws, azure
-	GCP      GCPConfig `toml:"gcp"`
+	Provider string    `toml:"provider,omitempty"` // gcp, aws, azure
+	GCP      GCPConfig `toml:"gcp,omitempty"`
 }
 
 // GCPConfig contains GCP-specific settings.
 type GCPConfig struct {
-	Project        string `toml:"project"`
-	Zone           string `toml:"zone"`
-	ServiceAccount string `toml:"service_account"`
+	Project        string `toml:"project,omitempty"`
+	Zone           string `toml:"zone,omitempty"`
+	ServiceAccount string `toml:"service_account,omitempty"`
 }
 
 // VMConfig contains VM settings.
 type VMConfig struct {
-	Name         string            `toml:"name"`
-	DiskSizeGB   int64             `toml:"disk_size_gb"`  // Boot disk size in GB (default: 50)
-	Image        string            `toml:"image"`         // Boot disk image (default: Ubuntu 24.04 ARM)
-	Spot         bool              `toml:"spot"`          // Use spot/preemptible instances
-	Network      string            `toml:"network"`       // VPC network name (default: "default")
-	Subnet       string            `toml:"subnet"`        // VPC subnet name (required for custom-mode VPCs)
-	Tags         []string          `toml:"tags"`          // Network tags for firewall rules
-	MachineSizes map[string]string `toml:"machine_sizes"` // Size name -> machine type mapping
+	Name         string            `toml:"name,omitempty"`
+	DiskSizeGB   int64             `toml:"disk_size_gb,omitzero"`   // Boot disk size in GB (default: 50)
+	Image        string            `toml:"image,omitempty"`         // Boot disk image (default: Ubuntu 24.04 ARM)
+	Spot         bool              `toml:"spot,omitempty"`          // Use spot/preemptible instances
+	Network      string            `toml:"network,omitempty"`       // VPC network name (default: "default")
+	Subnet       string            `toml:"subnet,omitempty"`        // VPC subnet name (required for custom-mode VPCs)
+	Tags         []string          `toml:"tags,omitempty"`          // Network tags for firewall rules
+	MachineSizes map[string]string `toml:"machine_sizes,omitempty"` // Size name -> machine type mapping
 }
 
 // DefaultConfigPath returns the default user config file path.

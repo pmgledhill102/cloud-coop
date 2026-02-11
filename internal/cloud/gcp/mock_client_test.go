@@ -128,3 +128,54 @@ func newForbiddenError() error {
 		Message: "forbidden",
 	}
 }
+
+// mockFirewallsClient is a mock implementation of firewallsClient for testing.
+type mockFirewallsClient struct {
+	rule          *computepb.Firewall
+	getError      error
+	insertError   error
+	patchError    error
+	waitError     error
+	closeCalled   bool
+	getCalled     bool
+	insertCalled  bool
+	patchCalled   bool
+	lastGetReq    *computepb.GetFirewallRequest
+	lastInsertReq *computepb.InsertFirewallRequest
+	lastPatchReq  *computepb.PatchFirewallRequest
+}
+
+func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewallRequest) (*computepb.Firewall, error) {
+	m.getCalled = true
+	m.lastGetReq = req
+	if m.getError != nil {
+		return nil, m.getError
+	}
+	if m.rule != nil {
+		return m.rule, nil
+	}
+	return nil, newNotFoundError()
+}
+
+func (m *mockFirewallsClient) Insert(ctx context.Context, req *computepb.InsertFirewallRequest) (operation, error) {
+	m.insertCalled = true
+	m.lastInsertReq = req
+	if m.insertError != nil {
+		return nil, m.insertError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockFirewallsClient) Patch(ctx context.Context, req *computepb.PatchFirewallRequest) (operation, error) {
+	m.patchCalled = true
+	m.lastPatchReq = req
+	if m.patchError != nil {
+		return nil, m.patchError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockFirewallsClient) Close() error {
+	m.closeCalled = true
+	return nil
+}

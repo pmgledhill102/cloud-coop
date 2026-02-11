@@ -102,10 +102,13 @@ func (m *mockIAMPolicyClient) Close() error { return nil }
 
 type mockFirewallsClient struct {
 	exists        bool
+	rule          *computepb.Firewall
 	getErr        error
 	insertErr     error
+	patchErr      error
 	waitErr       error
 	lastInsertReq *computepb.InsertFirewallRequest
+	lastPatchReq  *computepb.PatchFirewallRequest
 }
 
 func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewallRequest) (*computepb.Firewall, error) {
@@ -115,6 +118,9 @@ func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewal
 	if !m.exists {
 		return nil, &googleapi.Error{Code: 404, Message: "not found"}
 	}
+	if m.rule != nil {
+		return m.rule, nil
+	}
 	return &computepb.Firewall{}, nil
 }
 
@@ -122,6 +128,14 @@ func (m *mockFirewallsClient) Insert(ctx context.Context, req *computepb.InsertF
 	m.lastInsertReq = req
 	if m.insertErr != nil {
 		return nil, m.insertErr
+	}
+	return &mockFirewallOp{waitErr: m.waitErr}, nil
+}
+
+func (m *mockFirewallsClient) Patch(ctx context.Context, req *computepb.PatchFirewallRequest) (firewallOperation, error) {
+	m.lastPatchReq = req
+	if m.patchErr != nil {
+		return nil, m.patchErr
 	}
 	return &mockFirewallOp{waitErr: m.waitErr}, nil
 }
@@ -572,6 +586,281 @@ func TestCheckADCCredentials_Error(t *testing.T) {
 	)
 
 	err := p.CheckADCCredentials(context.Background())
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestGetFirewallRulePort(t *testing.T) {
+	port22 := "22"
+	port2222 := "2222"
+	tests := []struct {
+		name    string
+		rule    *computepb.Firewall
+		getErr  error
+		want    int
+		wantErr bool
+	}{
+		{
+			name: "port 22",
+			rule: &computepb.Firewall{
+				Allowed: []*computepb.Allowed{
+					{IPProtocol: &port22, Ports: []string{"22"}},
+				},
+			},
+			want: 22,
+		},
+		{
+			name: "port 2222",
+			rule: &computepb.Firewall{
+				Allowed: []*computepb.Allowed{
+					{IPProtocol: &port2222, Ports: []string{"2222"}},
+				},
+			},
+			want: 2222,
+		},
+		{
+			name:    "get error",
+			getErr:  errors.New("permission denied"),
+			wantErr: true,
+		},
+		{
+			name:    "no allowed entries",
+			rule:    &computepb.Firewall{},
+			wantErr: true,
+		},
+		{
+			name: "no ports",
+			rule: &computepb.Firewall{
+				Allowed: []*computepb.Allowed{
+					{IPProtocol: &port22},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newWithClients(
+				&mockProjectsClient{},
+				&mockServiceUsageClient{services: map[string]serviceState{}},
+				&mockIAMClient{},
+				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockFirewallsClient{exists: true, rule: tt.rule, getErr: tt.getErr},
+			)
+
+			got, err := p.GetFirewallRulePort(context.Background(), "test-proj", setup.IAPFirewallRuleName)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetFirewallRulePort() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("GetFirewallRulePort() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateIAPFirewallRule(t *testing.T) {
+	mock := &mockFirewallsClient{}
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		mock,
+	)
+
+	err := p.UpdateIAPFirewallRule(context.Background(), "test-proj", 2222)
+	if err != nil {
+		t.Fatalf("UpdateIAPFirewallRule() error = %v", err)
+	}
+
+	req := mock.lastPatchReq
+	if req == nil {
+		t.Fatal("Patch() was not called")
+	}
+	if req.GetFirewall() != setup.IAPFirewallRuleName {
+		t.Errorf("Firewall name = %q, want %q", req.GetFirewall(), setup.IAPFirewallRuleName)
+	}
+	rule := req.GetFirewallResource()
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("Patched ports = %v, want [2222]", ports)
+	}
+}
+
+func TestUpdateIAPFirewallRule_PatchError(t *testing.T) {
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockFirewallsClient{patchErr: errors.New("patch failed")},
+	)
+
+	err := p.UpdateIAPFirewallRule(context.Background(), "test-proj", 2222)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestCreateDirectSSHFirewallRule(t *testing.T) {
+	mock := &mockFirewallsClient{}
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		mock,
+	)
+
+	err := p.CreateDirectSSHFirewallRule(context.Background(), "test-proj", "default", "203.0.113.50", 2222)
+	if err != nil {
+		t.Fatalf("CreateDirectSSHFirewallRule() error = %v", err)
+	}
+
+	req := mock.lastInsertReq
+	if req == nil {
+		t.Fatal("Insert() was not called")
+	}
+	rule := req.GetFirewallResource()
+	if rule.GetName() != setup.DirectSSHFirewallRuleName {
+		t.Errorf("rule name = %q, want %q", rule.GetName(), setup.DirectSSHFirewallRuleName)
+	}
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("ports = %v, want [2222]", ports)
+	}
+}
+
+func TestCreateDirectSSHFirewallRule_InsertError(t *testing.T) {
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockFirewallsClient{insertErr: errors.New("insert failed")},
+	)
+
+	err := p.CreateDirectSSHFirewallRule(context.Background(), "test-proj", "default", "203.0.113.50", 22)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestGetFirewallRuleSourceIP(t *testing.T) {
+	tcp := "tcp"
+	tests := []struct {
+		name     string
+		rule     *computepb.Firewall
+		getErr   error
+		wantIP   string
+		wantPort int
+		wantErr  bool
+	}{
+		{
+			name: "standard rule",
+			rule: &computepb.Firewall{
+				SourceRanges: []string{"203.0.113.50/32"},
+				Allowed: []*computepb.Allowed{
+					{IPProtocol: &tcp, Ports: []string{"2222"}},
+				},
+			},
+			wantIP:   "203.0.113.50",
+			wantPort: 2222,
+		},
+		{
+			name: "port 22",
+			rule: &computepb.Firewall{
+				SourceRanges: []string{"10.0.0.1/32"},
+				Allowed: []*computepb.Allowed{
+					{IPProtocol: &tcp, Ports: []string{"22"}},
+				},
+			},
+			wantIP:   "10.0.0.1",
+			wantPort: 22,
+		},
+		{
+			name:    "get error",
+			getErr:  errors.New("permission denied"),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newWithClients(
+				&mockProjectsClient{},
+				&mockServiceUsageClient{services: map[string]serviceState{}},
+				&mockIAMClient{},
+				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockFirewallsClient{exists: true, rule: tt.rule, getErr: tt.getErr},
+			)
+
+			ip, port, err := p.GetFirewallRuleSourceIP(context.Background(), "test-proj", setup.DirectSSHFirewallRuleName)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetFirewallRuleSourceIP() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				if ip != tt.wantIP {
+					t.Errorf("IP = %q, want %q", ip, tt.wantIP)
+				}
+				if port != tt.wantPort {
+					t.Errorf("Port = %d, want %d", port, tt.wantPort)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateDirectSSHFirewallRule(t *testing.T) {
+	mock := &mockFirewallsClient{}
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		mock,
+	)
+
+	err := p.UpdateDirectSSHFirewallRule(context.Background(), "test-proj", "203.0.113.50", 2222)
+	if err != nil {
+		t.Fatalf("UpdateDirectSSHFirewallRule() error = %v", err)
+	}
+
+	req := mock.lastPatchReq
+	if req == nil {
+		t.Fatal("Patch() was not called")
+	}
+	if req.GetFirewall() != setup.DirectSSHFirewallRuleName {
+		t.Errorf("Firewall name = %q, want %q", req.GetFirewall(), setup.DirectSSHFirewallRuleName)
+	}
+	rule := req.GetFirewallResource()
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("patched source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("Patched ports = %v, want [2222]", ports)
+	}
+}
+
+func TestUpdateDirectSSHFirewallRule_PatchError(t *testing.T) {
+	p := newWithClients(
+		&mockProjectsClient{},
+		&mockServiceUsageClient{services: map[string]serviceState{}},
+		&mockIAMClient{},
+		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockFirewallsClient{patchErr: errors.New("patch failed")},
+	)
+
+	err := p.UpdateDirectSSHFirewallRule(context.Background(), "test-proj", "203.0.113.50", 2222)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}

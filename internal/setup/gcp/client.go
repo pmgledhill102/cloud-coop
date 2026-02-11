@@ -58,6 +58,7 @@ type iamPolicyClient interface {
 type firewallsClient interface {
 	Get(ctx context.Context, req *computepb.GetFirewallRequest) (*computepb.Firewall, error)
 	Insert(ctx context.Context, req *computepb.InsertFirewallRequest) (firewallOperation, error)
+	Patch(ctx context.Context, req *computepb.PatchFirewallRequest) (firewallOperation, error)
 	Close() error
 }
 
@@ -231,6 +232,14 @@ func (r *realFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewal
 
 func (r *realFirewallsClient) Insert(ctx context.Context, req *computepb.InsertFirewallRequest) (firewallOperation, error) {
 	op, err := r.client.Insert(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &realFirewallOp{op: op}, nil
+}
+
+func (r *realFirewallsClient) Patch(ctx context.Context, req *computepb.PatchFirewallRequest) (firewallOperation, error) {
+	op, err := r.client.Patch(ctx, req)
 	if err != nil {
 		return nil, err
 	}

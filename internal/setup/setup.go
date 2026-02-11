@@ -54,6 +54,21 @@ type SetupProvider interface {
 	// The sshPort parameter specifies which TCP port to allow (typically 22 or 2222).
 	CreateIAPFirewallRule(ctx context.Context, project, network string, sshPort int) error
 
+	// GetFirewallRulePort returns the allowed TCP port from the named firewall rule.
+	GetFirewallRulePort(ctx context.Context, project, name string) (int, error)
+
+	// UpdateIAPFirewallRule updates the allowed port on the IAP firewall rule.
+	UpdateIAPFirewallRule(ctx context.Context, project string, sshPort int) error
+
+	// CreateDirectSSHFirewallRule creates a firewall rule allowing SSH from a specific IP.
+	CreateDirectSSHFirewallRule(ctx context.Context, project, network, sourceIP string, sshPort int) error
+
+	// GetFirewallRuleSourceIP returns the first source range and port from the named rule.
+	GetFirewallRuleSourceIP(ctx context.Context, project, name string) (string, int, error)
+
+	// UpdateDirectSSHFirewallRule updates the source IP and port on the direct SSH rule.
+	UpdateDirectSSHFirewallRule(ctx context.Context, project, sourceIP string, sshPort int) error
+
 	// CheckADCCredentials verifies that Application Default Credentials are available.
 	CheckADCCredentials(ctx context.Context) error
 
@@ -146,6 +161,10 @@ func ServiceAccountNameForDir(dir string) string {
 
 // IAPFirewallRuleName is the name of the IAP SSH firewall rule.
 const IAPFirewallRuleName = "cloudcoop-allow-iap-ssh"
+
+// DirectSSHFirewallRuleName is the name of the direct SSH firewall rule.
+// This rule allows SSH from the user's workstation IP address.
+const DirectSSHFirewallRuleName = "cloudcoop-allow-ssh"
 
 // ServiceAccountEmail returns the full email for a service account.
 func ServiceAccountEmail(project, name string) string {

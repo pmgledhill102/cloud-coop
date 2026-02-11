@@ -95,6 +95,16 @@ type VMCreateConfig struct {
 	ProvisionScriptURL string
 }
 
+// FirewallConfig contains configuration for ensuring SSH firewall access.
+type FirewallConfig struct {
+	// SourceIP is the workstation's public IP (e.g., "203.0.113.50").
+	SourceIP string
+	// Port is the SSH port to allow.
+	Port int
+	// Network is the VPC network name (e.g., "default").
+	Network string
+}
+
 // Provider defines the interface for cloud provider operations.
 type Provider interface {
 	// Name returns the provider name (e.g., "gcp", "aws", "azure").
@@ -115,4 +125,9 @@ type Provider interface {
 
 	// DeleteVM deletes a VM by name.
 	DeleteVM(ctx context.Context, name string) error
+
+	// EnsureFirewallAllowsSSH checks/creates/updates a firewall rule to allow
+	// SSH from the given source IP on the given port.
+	// Returns true if the rule was created or updated, false if already correct.
+	EnsureFirewallAllowsSSH(ctx context.Context, cfg FirewallConfig) (bool, error)
 }
