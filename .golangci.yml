@@ -80,8 +80,9 @@ linters:
         - G115  # Integer overflow conversion — uintptr->int in terminal size
         - G204  # Subprocess with variable args — expected for SSH tool
         - G304  # File path traversal — test utilities use dynamic paths
-        - G703  # Path traversal via taint — known_hosts path from config dir
-        - G704  # SSRF via taint — internal URL construction for cloud APIs
+        # G703 and G704 (taint analysis) are standalone gosec rules not
+        # available in golangci-lint's embedded gosec; excluded in
+        # .github/workflows/security.yml instead.
       severity: medium
       confidence: medium
 
