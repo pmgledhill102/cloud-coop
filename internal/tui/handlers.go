@@ -203,10 +203,6 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 	if msg.err == nil && msg.info != nil && msg.info.Status == cloud.VMStatusRunning {
 		m.agentsLoading = true
 		m.provisionLoading = true
-		m.agents = nil
-		m.agentsErr = nil
-		m.provisionStatus = nil
-		m.provisionErr = nil
 		cmds := []tea.Cmd{
 			fetchVMDetails(m.cfg, msg.info, m.sessionName()),
 		}
