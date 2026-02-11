@@ -172,6 +172,7 @@ terminfo
 testdata
 testuser
 testutil
+uintptr
 tfstate
 tmux
 toml
