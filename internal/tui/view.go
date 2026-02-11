@@ -36,7 +36,7 @@ func (m Model) renderView() string {
 	case m.operation != "":
 		content = m.renderOperation()
 	case m.loading && m.vmInfo == nil:
-		content = boxStyle.Render("Loading VM status...")
+		content = boxStyle.Render(m.spinner.View() + " Loading VM status...")
 	case m.vmErr != nil:
 		content = boxStyle.Render(errorStyle.Render(fmt.Sprintf("Error: %v", m.vmErr)))
 	default:
@@ -48,15 +48,15 @@ func (m Model) renderView() string {
 
 func (m Model) renderOperation() string {
 	msgs := map[string]string{
-		"starting": "Starting VM... ◐",
-		"stopping": "Stopping VM... ◑",
-		"creating": "Creating VM... ◐",
-		"deleting": "Deleting VM... ◑",
-		"adding":   "Adding agent... ◐",
-		"killing":  "Killing agent... ◑",
-		"syncing":  "Syncing workspace... ◐",
+		"starting": "Starting VM...",
+		"stopping": "Stopping VM...",
+		"creating": "Creating VM...",
+		"deleting": "Deleting VM...",
+		"adding":   "Adding agent...",
+		"killing":  "Killing agent...",
+		"syncing":  "Syncing workspace...",
 	}
-	return boxStyle.Render(msgs[m.operation])
+	return boxStyle.Render(m.spinner.View() + " " + msgs[m.operation])
 }
 
 func (m Model) renderConfigError() string {
@@ -122,9 +122,9 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 	case cloud.VMStatusStopped:
 		return stoppedStyle.Render("○ stopped")
 	case cloud.VMStatusStarting:
-		return "◐ starting..."
+		return m.spinner.View() + " starting..."
 	case cloud.VMStatusStopping:
-		return "◑ stopping..."
+		return m.spinner.View() + " stopping..."
 	default:
 		return string(status)
 	}
@@ -132,7 +132,7 @@ func (m Model) formatStatus(status cloud.VMStatus) string {
 
 func (m Model) formatProvisionStatus() string {
 	if m.provisionLoading && m.provisionStatus == nil {
-		return "checking..."
+		return m.spinner.View() + " checking..."
 	}
 	if m.provisionErr != nil {
 		return errorStyle.Render(fmt.Sprintf("error: %v", m.provisionErr))
@@ -146,9 +146,9 @@ func (m Model) formatProvisionStatus() string {
 		return stoppedStyle.Render("○ pending")
 	case provisioning.StatusRunning:
 		if m.provisionStatus.Progress != "" {
-			return fmt.Sprintf("◐ %s", m.provisionStatus.Progress)
+			return m.spinner.View() + " " + m.provisionStatus.Progress
 		}
-		return "◐ running"
+		return m.spinner.View() + " running"
 	case provisioning.StatusCompleted:
 		return runningStyle.Render("● completed")
 	case provisioning.StatusFailed:
@@ -166,7 +166,7 @@ func (m Model) renderAgents() []string {
 		return []string{labelLine("Agents:", stoppedStyle.Render("(VM not running)"))}
 	}
 	if m.agentsLoading && m.agents == nil {
-		return []string{labelLine("Agents:", "loading...")}
+		return []string{labelLine("Agents:", m.spinner.View()+" loading...")}
 	}
 	if m.agentsErr != nil {
 		if errors.Is(m.agentsErr, agent.ErrTmuxNotInstalled) {

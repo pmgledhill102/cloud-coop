@@ -2,7 +2,9 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
@@ -60,6 +62,9 @@ type Model struct {
 
 	// Help overlay
 	showHelp bool // true when help overlay is visible
+
+	// Spinner for animated progress indicators
+	spinner spinner.Model
 }
 
 // sessionName returns the tmux session name to use. It prefers the workspace
@@ -73,14 +78,18 @@ func (m Model) sessionName() string {
 
 // New creates a new TUI application model.
 func New() Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	return Model{
 		loading: true,
+		spinner: s,
 	}
 }
 
 // Init initializes the TUI application.
 func (m Model) Init() tea.Cmd {
-	return loadConfig
+	return tea.Batch(loadConfig, m.spinner.Tick)
 }
 
 // Update handles messages and updates the model.
@@ -148,9 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case syncMsg:
 		return m.handleSync(msg)
-	}
 
-	return m, nil
+	default:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	}
 }
 
 // View renders the TUI.
