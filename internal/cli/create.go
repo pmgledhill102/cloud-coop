@@ -127,6 +127,16 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("VM %s: %s\n", cfg.VM.Name, formatStatus(newInfo.Status))
 	if newInfo.ExternalIP != "" {
 		fmt.Printf("External IP: %s\n", newInfo.ExternalIP)
+
+		// Wait for SSH to become reachable (non-fatal).
+		fmt.Print("Waiting for SSH...")
+		waitCfg := ssh.SetupClientConfig(newInfo.ExternalIP, sshUser, cfg.SSH.Port)
+		waitCfg.VM = ssh.NewVMIdentity(newInfo.Name, newInfo.CloudcoopCreated)
+		if err := ssh.WaitForSSH(waitCfg, 30*time.Second); err != nil {
+			fmt.Printf(" not ready (%v)\n", err)
+		} else {
+			fmt.Println(" ready")
+		}
 	}
 	return nil
 }
