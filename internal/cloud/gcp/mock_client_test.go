@@ -10,25 +10,28 @@ import (
 
 // mockInstancesClient is a mock implementation of instancesClient for testing.
 type mockInstancesClient struct {
-	getInstance   *computepb.Instance
-	getError      error
-	startError    error
-	stopError     error
-	insertError   error
-	deleteError   error
-	closeError    error
-	waitError     error
-	getCalled     bool
-	startCalled   bool
-	stopCalled    bool
-	insertCalled  bool
-	deleteCalled  bool
-	closeCalled   bool
-	lastGetReq    *computepb.GetInstanceRequest
-	lastStartReq  *computepb.StartInstanceRequest
-	lastStopReq   *computepb.StopInstanceRequest
-	lastInsertReq *computepb.InsertInstanceRequest
-	lastDeleteReq *computepb.DeleteInstanceRequest
+	getInstance        *computepb.Instance
+	getError           error
+	startError         error
+	stopError          error
+	insertError        error
+	deleteError        error
+	setMetadataError   error
+	closeError         error
+	waitError          error
+	getCalled          bool
+	startCalled        bool
+	stopCalled         bool
+	insertCalled       bool
+	deleteCalled       bool
+	setMetadataCalled  bool
+	closeCalled        bool
+	lastGetReq         *computepb.GetInstanceRequest
+	lastStartReq       *computepb.StartInstanceRequest
+	lastStopReq        *computepb.StopInstanceRequest
+	lastInsertReq      *computepb.InsertInstanceRequest
+	lastDeleteReq      *computepb.DeleteInstanceRequest
+	lastSetMetadataReq *computepb.SetMetadataInstanceRequest
 }
 
 func (m *mockInstancesClient) Get(ctx context.Context, req *computepb.GetInstanceRequest) (*computepb.Instance, error) {
@@ -69,6 +72,15 @@ func (m *mockInstancesClient) Delete(ctx context.Context, req *computepb.DeleteI
 	m.lastDeleteReq = req
 	if m.deleteError != nil {
 		return nil, m.deleteError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockInstancesClient) SetMetadata(ctx context.Context, req *computepb.SetMetadataInstanceRequest) (operation, error) {
+	m.setMetadataCalled = true
+	m.lastSetMetadataReq = req
+	if m.setMetadataError != nil {
+		return nil, m.setMetadataError
 	}
 	return &mockOperation{waitError: m.waitError}, nil
 }

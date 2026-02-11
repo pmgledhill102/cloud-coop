@@ -310,25 +310,37 @@ systemctl restart ssh.socket
 		config.ServiceAccount, config.ProvisionScriptURL,
 	))
 
-	instance.Metadata = &computepb.Metadata{
-		Items: []*computepb.Items{
-			{
-				Key:   ptr("startup-script"),
-				Value: ptr(startupScript),
-			},
-			{
-				Key:   ptr(metadataKeyVersion),
-				Value: ptr(version.Short()),
-			},
-			{
-				Key:   ptr(metadataKeyCreated),
-				Value: ptr(version.CreatedTimestamp()),
-			},
-			{
-				Key:   ptr(metadataKeyConfigHash),
-				Value: ptr(configHash),
-			},
+	metadataItems := []*computepb.Items{
+		{
+			Key:   ptr("startup-script"),
+			Value: ptr(startupScript),
 		},
+		{
+			Key:   ptr(metadataKeyVersion),
+			Value: ptr(version.Short()),
+		},
+		{
+			Key:   ptr(metadataKeyCreated),
+			Value: ptr(version.CreatedTimestamp()),
+		},
+		{
+			Key:   ptr(metadataKeyConfigHash),
+			Value: ptr(configHash),
+		},
+	}
+
+	// Include SSH public key in metadata so the GCP guest agent provisions
+	// it into ~/.ssh/authorized_keys on the VM.
+	if config.SSHPublicKey != "" && config.SSHUser != "" {
+		sshKeyEntry := fmt.Sprintf("%s:%s", config.SSHUser, config.SSHPublicKey)
+		metadataItems = append(metadataItems, &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(sshKeyEntry),
+		})
+	}
+
+	instance.Metadata = &computepb.Metadata{
+		Items: metadataItems,
 	}
 
 	op, err := p.client.Insert(ctx, &computepb.InsertInstanceRequest{
@@ -365,6 +377,85 @@ func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 	// Wait for instance deletion to complete (disk is auto-deleted)
 	if err := op.Wait(ctx); err != nil {
 		return fmt.Errorf("wait for delete %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// EnsureSSHKeyOnVM ensures the given SSH public key is present in the VM's
+// instance metadata (ssh-keys). The GCP guest agent reads this metadata and
+// provisions the key into ~/.ssh/authorized_keys on the VM.
+// The operation is idempotent: if the key is already present, it is a no-op.
+func (p *Provider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error {
+	instance, err := p.client.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  p.project,
+		Zone:     p.zone,
+		Instance: name,
+	})
+	if err != nil {
+		return fmt.Errorf("get instance %s: %w", name, err)
+	}
+
+	metadata := instance.GetMetadata()
+	fingerprint := metadata.GetFingerprint()
+
+	// Build the key entry in GCP's format: "user:ssh-key-content"
+	newEntry := fmt.Sprintf("%s:%s", user, publicKey)
+
+	// Find existing ssh-keys metadata item
+	var existingValue string
+	existingIdx := -1
+	for i, item := range metadata.GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			existingValue = item.GetValue()
+			existingIdx = i
+			break
+		}
+	}
+
+	// Check if this key is already present (match the public key content)
+	if existingValue != "" && strings.Contains(existingValue, publicKey) {
+		return nil // Already present
+	}
+
+	// Build the new ssh-keys value
+	var newValue string
+	if existingValue == "" {
+		newValue = newEntry
+	} else {
+		newValue = existingValue + "\n" + newEntry
+	}
+
+	// Build the updated metadata items list
+	items := make([]*computepb.Items, len(metadata.GetItems()))
+	copy(items, metadata.GetItems())
+
+	if existingIdx >= 0 {
+		items[existingIdx] = &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(newValue),
+		}
+	} else {
+		items = append(items, &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(newValue),
+		})
+	}
+
+	op, err := p.client.SetMetadata(ctx, &computepb.SetMetadataInstanceRequest{
+		Project:  p.project,
+		Zone:     p.zone,
+		Instance: name,
+		MetadataResource: &computepb.Metadata{
+			Fingerprint: ptr(fingerprint),
+			Items:       items,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("set metadata on %s: %w", name, err)
+	}
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for metadata update on %s: %w", name, err)
 	}
 
 	return nil

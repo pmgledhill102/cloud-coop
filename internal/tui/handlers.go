@@ -215,6 +215,10 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 			m.firewallChecked = true
 			cmds = append(cmds, ensureFirewall(m.cfg))
 		}
+		if !m.sshKeyChecked {
+			m.sshKeyChecked = true
+			cmds = append(cmds, ensureSSHKey(m.cfg, msg.info))
+		}
 		return m, tea.Batch(cmds...)
 	}
 	m.agents = nil

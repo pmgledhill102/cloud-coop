@@ -30,6 +30,9 @@ func (m *mockProvider) EnsureFirewallAllowsSSH(ctx context.Context, cfg cloud.Fi
 	m.lastFWCfg = cfg
 	return m.fwChanged, m.fwErr
 }
+func (m *mockProvider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error {
+	return nil
+}
 
 func TestEnsureFirewallAccess_Success(t *testing.T) {
 	origDetector := publicIPDetector

@@ -87,6 +87,10 @@ type VMCreateConfig struct {
 	Tags []string
 	// SSHPort is the port SSH should listen on (default: 22).
 	SSHPort int
+	// SSHUser is the OS username for SSH key provisioning.
+	SSHUser string
+	// SSHPublicKey is the contents of the user's SSH public key file.
+	SSHPublicKey string
 	// ServiceAccount is the service account email (GCP), instance profile ARN (AWS),
 	// or managed identity ID (Azure) to attach to the VM.
 	ServiceAccount string
@@ -130,4 +134,9 @@ type Provider interface {
 	// SSH from the given source IP on the given port.
 	// Returns true if the rule was created or updated, false if already correct.
 	EnsureFirewallAllowsSSH(ctx context.Context, cfg FirewallConfig) (bool, error)
+
+	// EnsureSSHKeyOnVM ensures the given SSH public key is present in the
+	// VM's metadata so that the OS guest agent provisions it into
+	// ~/.ssh/authorized_keys. The operation is idempotent.
+	EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error
 }

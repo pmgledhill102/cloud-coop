@@ -15,6 +15,7 @@ type instancesClient interface {
 	Stop(ctx context.Context, req *computepb.StopInstanceRequest) (operation, error)
 	Insert(ctx context.Context, req *computepb.InsertInstanceRequest) (operation, error)
 	Delete(ctx context.Context, req *computepb.DeleteInstanceRequest) (operation, error)
+	SetMetadata(ctx context.Context, req *computepb.SetMetadataInstanceRequest) (operation, error)
 	Close() error
 }
 
@@ -58,6 +59,14 @@ func (r *realInstancesClient) Insert(ctx context.Context, req *computepb.InsertI
 
 func (r *realInstancesClient) Delete(ctx context.Context, req *computepb.DeleteInstanceRequest) (operation, error) {
 	op, err := r.client.Delete(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &realOperation{op: op}, nil
+}
+
+func (r *realInstancesClient) SetMetadata(ctx context.Context, req *computepb.SetMetadataInstanceRequest) (operation, error) {
+	op, err := r.client.SetMetadata(ctx, req)
 	if err != nil {
 		return nil, err
 	}

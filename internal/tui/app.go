@@ -55,6 +55,9 @@ type Model struct {
 	// Firewall
 	firewallChecked bool // true after firewall check has been triggered
 
+	// SSH key
+	sshKeyChecked bool // true after SSH key check has been triggered
+
 	// Help overlay
 	showHelp bool // true when help overlay is visible
 }
@@ -133,6 +136,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Firewall check is fire-and-forget; log errors but don't update UI
 		if msg.err != nil {
 			log.Debug("firewall check failed (non-fatal)", "error", msg.err)
+		}
+		return m, nil
+
+	case sshKeyCheckedMsg:
+		// SSH key check is fire-and-forget; log errors but don't update UI
+		if msg.err != nil {
+			log.Debug("SSH key check failed (non-fatal)", "error", msg.err)
 		}
 		return m, nil
 
