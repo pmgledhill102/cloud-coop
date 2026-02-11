@@ -57,9 +57,12 @@ jobs:
         with:
           # Exclude rules that are known/accepted:
           # G106: SSH InsecureIgnoreHostKey (tracked in cc-xzi)
+          # G115: Integer overflow conversion (uintptr->int in terminal size)
           # G204: Subprocess with variable (expected for SSH tool)
           # G304: File path traversal (test utilities use dynamic paths)
-          args: -exclude=G106,G204,G304 -exclude-generated -severity medium -confidence medium -quiet ./...
+          # G703: Path traversal via taint (known_hosts path from config dir)
+          # G704: SSRF via taint (internal URL construction for cloud APIs)
+          args: -exclude=G106,G115,G204,G304,G703,G704 -exclude-generated -severity medium -confidence medium -quiet ./...
 
   # Gatekeeper job for branch protection
   security:

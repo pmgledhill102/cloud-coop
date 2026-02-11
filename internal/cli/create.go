@@ -10,6 +10,7 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
 var createCmd = &cobra.Command{
@@ -78,6 +79,10 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("VM %s is in state: %s, cannot create", cfg.VM.Name, vmInfo.Status)
 	}
 
+	// Read SSH public key (non-fatal if missing — key can be pushed later)
+	pubKey, _ := ssh.ReadPublicKey()
+	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+
 	// Build create config
 	createCfg := cloud.VMCreateConfig{
 		Name:               cfg.VM.Name,
@@ -89,6 +94,8 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		Subnet:             cfg.VM.Subnet,
 		Tags:               cfg.VM.Tags,
 		SSHPort:            cfg.SSH.Port,
+		SSHUser:            sshUser,
+		SSHPublicKey:       pubKey,
 		ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
 		ProvisionScriptURL: cfg.Provisioning.ScriptURL,
 	}

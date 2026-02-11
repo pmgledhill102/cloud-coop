@@ -23,11 +23,15 @@ const (
 	metadataKeyConfigHash = "cloudcoop-config-hash"
 )
 
+// DirectSSHFirewallRuleName is the name of the direct SSH firewall rule.
+const DirectSSHFirewallRuleName = "cloudcoop-allow-ssh"
+
 // Provider implements cloud.Provider for GCP.
 type Provider struct {
-	project string
-	zone    string
-	client  instancesClient
+	project   string
+	zone      string
+	client    instancesClient
+	firewalls firewallsClient
 }
 
 // New creates a new GCP provider.
@@ -38,10 +42,17 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 		return nil, fmt.Errorf("create compute client: %w", err)
 	}
 
+	fwClient, err := compute.NewFirewallsRESTClient(ctx)
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("create firewalls client: %w", err)
+	}
+
 	return &Provider{
-		project: project,
-		zone:    zone,
-		client:  &realInstancesClient{client: client},
+		project:   project,
+		zone:      zone,
+		client:    &realInstancesClient{client: client},
+		firewalls: &realFirewallsClient{client: fwClient},
 	}, nil
 }
 
@@ -51,6 +62,16 @@ func newWithClient(project, zone string, client instancesClient) *Provider {
 		project: project,
 		zone:    zone,
 		client:  client,
+	}
+}
+
+// newWithClients creates a provider with all custom clients (for testing).
+func newWithClients(project, zone string, client instancesClient, fw firewallsClient) *Provider {
+	return &Provider{
+		project:   project,
+		zone:      zone,
+		client:    client,
+		firewalls: fw,
 	}
 }
 
@@ -245,8 +266,8 @@ SSH_PORT=%d
 # Wait for system to be ready
 sleep 5
 
-# Ubuntu uses systemd socket activation for SSH
-# We need to override the socket configuration
+# Ubuntu 22.10+ uses systemd socket activation for SSH.
+# Override the socket to listen on the custom port.
 mkdir -p /etc/systemd/system/ssh.socket.d
 cat > /etc/systemd/system/ssh.socket.d/port.conf << EOF
 [Socket]
@@ -255,16 +276,18 @@ ListenStream=0.0.0.0:${SSH_PORT}
 ListenStream=[::]:${SSH_PORT}
 EOF
 
-# Also update sshd_config for completeness
+# Also update sshd_config (covers non-socket-activated systems)
 sed -i '/^#*Port /d' /etc/ssh/sshd_config
 echo "Port ${SSH_PORT}" >> /etc/ssh/sshd_config
 
-# Reload systemd and restart SSH socket
+# Reload systemd and restart SSH.
+# On socket-activated systems (Ubuntu 22.10+), only restart the socket.
+# systemd auto-starts ssh.service when a connection arrives.
+# Starting ssh.service directly would fail because sshd tries to bind
+# the port that ssh.socket already holds.
 systemctl daemon-reload
 systemctl stop ssh.service 2>/dev/null || true
-systemctl stop ssh.socket 2>/dev/null || true
-systemctl start ssh.socket
-systemctl start ssh.service
+systemctl restart ssh.socket
 `, config.SSHPort, config.SSHPort)
 	}
 
@@ -287,25 +310,37 @@ systemctl start ssh.service
 		config.ServiceAccount, config.ProvisionScriptURL,
 	))
 
-	instance.Metadata = &computepb.Metadata{
-		Items: []*computepb.Items{
-			{
-				Key:   ptr("startup-script"),
-				Value: ptr(startupScript),
-			},
-			{
-				Key:   ptr(metadataKeyVersion),
-				Value: ptr(version.Short()),
-			},
-			{
-				Key:   ptr(metadataKeyCreated),
-				Value: ptr(version.CreatedTimestamp()),
-			},
-			{
-				Key:   ptr(metadataKeyConfigHash),
-				Value: ptr(configHash),
-			},
+	metadataItems := []*computepb.Items{
+		{
+			Key:   ptr("startup-script"),
+			Value: ptr(startupScript),
 		},
+		{
+			Key:   ptr(metadataKeyVersion),
+			Value: ptr(version.Short()),
+		},
+		{
+			Key:   ptr(metadataKeyCreated),
+			Value: ptr(version.CreatedTimestamp()),
+		},
+		{
+			Key:   ptr(metadataKeyConfigHash),
+			Value: ptr(configHash),
+		},
+	}
+
+	// Include SSH public key in metadata so the GCP guest agent provisions
+	// it into ~/.ssh/authorized_keys on the VM.
+	if config.SSHPublicKey != "" && config.SSHUser != "" {
+		sshKeyEntry := fmt.Sprintf("%s:%s", config.SSHUser, config.SSHPublicKey)
+		metadataItems = append(metadataItems, &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(sshKeyEntry),
+		})
+	}
+
+	instance.Metadata = &computepb.Metadata{
+		Items: metadataItems,
 	}
 
 	op, err := p.client.Insert(ctx, &computepb.InsertInstanceRequest{
@@ -347,15 +382,183 @@ func (p *Provider) DeleteVM(ctx context.Context, name string) error {
 	return nil
 }
 
+// EnsureSSHKeyOnVM ensures the given SSH public key is present in the VM's
+// instance metadata (ssh-keys). The GCP guest agent reads this metadata and
+// provisions the key into ~/.ssh/authorized_keys on the VM.
+// The operation is idempotent: if the key is already present, it is a no-op.
+func (p *Provider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error {
+	instance, err := p.client.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  p.project,
+		Zone:     p.zone,
+		Instance: name,
+	})
+	if err != nil {
+		return fmt.Errorf("get instance %s: %w", name, err)
+	}
+
+	metadata := instance.GetMetadata()
+	fingerprint := metadata.GetFingerprint()
+
+	// Build the key entry in GCP's format: "user:ssh-key-content"
+	newEntry := fmt.Sprintf("%s:%s", user, publicKey)
+
+	// Find existing ssh-keys metadata item
+	var existingValue string
+	existingIdx := -1
+	for i, item := range metadata.GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			existingValue = item.GetValue()
+			existingIdx = i
+			break
+		}
+	}
+
+	// Check if this key is already present (match the public key content)
+	if existingValue != "" && strings.Contains(existingValue, publicKey) {
+		return nil // Already present
+	}
+
+	// Build the new ssh-keys value
+	var newValue string
+	if existingValue == "" {
+		newValue = newEntry
+	} else {
+		newValue = existingValue + "\n" + newEntry
+	}
+
+	// Build the updated metadata items list
+	items := make([]*computepb.Items, len(metadata.GetItems()))
+	copy(items, metadata.GetItems())
+
+	if existingIdx >= 0 {
+		items[existingIdx] = &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(newValue),
+		}
+	} else {
+		items = append(items, &computepb.Items{
+			Key:   ptr("ssh-keys"),
+			Value: ptr(newValue),
+		})
+	}
+
+	op, err := p.client.SetMetadata(ctx, &computepb.SetMetadataInstanceRequest{
+		Project:  p.project,
+		Zone:     p.zone,
+		Instance: name,
+		MetadataResource: &computepb.Metadata{
+			Fingerprint: ptr(fingerprint),
+			Items:       items,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("set metadata on %s: %w", name, err)
+	}
+	if err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for metadata update on %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// EnsureFirewallAllowsSSH checks/creates/updates a firewall rule to allow
+// SSH from the given source IP on the given port.
+func (p *Provider) EnsureFirewallAllowsSSH(ctx context.Context, cfg cloud.FirewallConfig) (bool, error) {
+	if p.firewalls == nil {
+		return false, fmt.Errorf("firewalls client not initialized")
+	}
+
+	wantRange := cfg.SourceIP + "/32"
+	wantPort := fmt.Sprintf("%d", cfg.Port)
+
+	// Check if the rule already exists
+	rule, err := p.firewalls.Get(ctx, &computepb.GetFirewallRequest{
+		Project:  p.project,
+		Firewall: DirectSSHFirewallRuleName,
+	})
+	if err != nil {
+		if !isNotFoundError(err) {
+			return false, fmt.Errorf("get firewall rule: %w", err)
+		}
+
+		// Rule doesn't exist — create it
+		newRule := &computepb.Firewall{
+			Name:         ptr(DirectSSHFirewallRuleName),
+			Description:  ptr("Allow direct SSH from workstation IP for cloudcoop"),
+			Network:      ptr(fmt.Sprintf("global/networks/%s", cfg.Network)),
+			Direction:    ptr("INGRESS"),
+			Priority:     ptr(int32(1000)),
+			SourceRanges: []string{wantRange},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{wantPort},
+				},
+			},
+		}
+
+		op, insertErr := p.firewalls.Insert(ctx, &computepb.InsertFirewallRequest{
+			Project:          p.project,
+			FirewallResource: newRule,
+		})
+		if insertErr != nil {
+			return false, fmt.Errorf("create direct SSH firewall rule: %w", insertErr)
+		}
+		if waitErr := op.Wait(ctx); waitErr != nil {
+			return false, fmt.Errorf("wait for firewall rule: %w", waitErr)
+		}
+		return true, nil
+	}
+
+	// Rule exists — check if it matches
+	currentRanges := rule.GetSourceRanges()
+	currentPort := ""
+	if allowed := rule.GetAllowed(); len(allowed) > 0 {
+		if ports := allowed[0].GetPorts(); len(ports) > 0 {
+			currentPort = ports[0]
+		}
+	}
+
+	if len(currentRanges) == 1 && currentRanges[0] == wantRange && currentPort == wantPort {
+		return false, nil // Already correct
+	}
+
+	// Rule exists but needs updating
+	op, err := p.firewalls.Patch(ctx, &computepb.PatchFirewallRequest{
+		Project:  p.project,
+		Firewall: DirectSSHFirewallRuleName,
+		FirewallResource: &computepb.Firewall{
+			SourceRanges: []string{wantRange},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: ptr("tcp"),
+					Ports:      []string{wantPort},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("patch direct SSH firewall rule: %w", err)
+	}
+	if err := op.Wait(ctx); err != nil {
+		return false, fmt.Errorf("wait for firewall patch: %w", err)
+	}
+	return true, nil
+}
+
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T { return &v }
 
 // Close closes the provider's clients.
 func (p *Provider) Close() error {
+	var errs []error
 	if p.client != nil {
-		return p.client.Close()
+		errs = append(errs, p.client.Close())
 	}
-	return nil
+	if p.firewalls != nil {
+		errs = append(errs, p.firewalls.Close())
+	}
+	return errors.Join(errs...)
 }
 
 // mapStatus converts GCP instance status to cloud.VMStatus.

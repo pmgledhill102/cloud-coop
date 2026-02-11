@@ -87,12 +87,26 @@ type VMCreateConfig struct {
 	Tags []string
 	// SSHPort is the port SSH should listen on (default: 22).
 	SSHPort int
+	// SSHUser is the OS username for SSH key provisioning.
+	SSHUser string
+	// SSHPublicKey is the contents of the user's SSH public key file.
+	SSHPublicKey string
 	// ServiceAccount is the service account email (GCP), instance profile ARN (AWS),
 	// or managed identity ID (Azure) to attach to the VM.
 	ServiceAccount string
 	// ProvisionScriptURL is the URL to fetch the provisioning script from.
 	// If empty, no additional provisioning is performed.
 	ProvisionScriptURL string
+}
+
+// FirewallConfig contains configuration for ensuring SSH firewall access.
+type FirewallConfig struct {
+	// SourceIP is the workstation's public IP (e.g., "203.0.113.50").
+	SourceIP string
+	// Port is the SSH port to allow.
+	Port int
+	// Network is the VPC network name (e.g., "default").
+	Network string
 }
 
 // Provider defines the interface for cloud provider operations.
@@ -115,4 +129,14 @@ type Provider interface {
 
 	// DeleteVM deletes a VM by name.
 	DeleteVM(ctx context.Context, name string) error
+
+	// EnsureFirewallAllowsSSH checks/creates/updates a firewall rule to allow
+	// SSH from the given source IP on the given port.
+	// Returns true if the rule was created or updated, false if already correct.
+	EnsureFirewallAllowsSSH(ctx context.Context, cfg FirewallConfig) (bool, error)
+
+	// EnsureSSHKeyOnVM ensures the given SSH public key is present in the
+	// VM's metadata so that the OS guest agent provisions it into
+	// ~/.ssh/authorized_keys. The operation is idempotent.
+	EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error
 }

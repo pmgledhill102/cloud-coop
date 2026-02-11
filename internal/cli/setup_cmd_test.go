@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -30,11 +31,26 @@ type mockSetupProvider struct {
 	fwExists      bool
 	fwExistsErr   error
 	createFWErr   error
+	fwPort        int
+	fwPortErr     error
+	updateFWErr   error
+	updatedFW     bool
 	adcErr        error
 	enabledAPIs   []string
 	grantedRoles  []string
 	createdSA     bool
 	createdFW     bool
+
+	// Direct SSH firewall fields
+	directFWExists      bool
+	directFWExistsErr   error
+	directFWSourceIP    string
+	directFWPort        int
+	directFWSourceIPErr error
+	createDirectFWErr   error
+	createdDirectFW     bool
+	updateDirectFWErr   error
+	updatedDirectFW     bool
 }
 
 func (m *mockSetupProvider) ListProjects(ctx context.Context) ([]setup.ProjectInfo, error) {
@@ -98,6 +114,9 @@ func (m *mockSetupProvider) GrantIAMRole(ctx context.Context, project, member, r
 }
 
 func (m *mockSetupProvider) FirewallRuleExists(ctx context.Context, project, name string) (bool, error) {
+	if name == setup.DirectSSHFirewallRuleName {
+		return m.directFWExists, m.directFWExistsErr
+	}
 	return m.fwExists, m.fwExistsErr
 }
 
@@ -106,6 +125,44 @@ func (m *mockSetupProvider) CreateIAPFirewallRule(ctx context.Context, project, 
 		return m.createFWErr
 	}
 	m.createdFW = true
+	return nil
+}
+
+func (m *mockSetupProvider) GetFirewallRulePort(ctx context.Context, project, name string) (int, error) {
+	if m.fwPortErr != nil {
+		return 0, m.fwPortErr
+	}
+	return m.fwPort, nil
+}
+
+func (m *mockSetupProvider) UpdateIAPFirewallRule(ctx context.Context, project string, sshPort int) error {
+	if m.updateFWErr != nil {
+		return m.updateFWErr
+	}
+	m.updatedFW = true
+	return nil
+}
+
+func (m *mockSetupProvider) CreateDirectSSHFirewallRule(ctx context.Context, project, network, sourceIP string, sshPort int) error {
+	if m.createDirectFWErr != nil {
+		return m.createDirectFWErr
+	}
+	m.createdDirectFW = true
+	return nil
+}
+
+func (m *mockSetupProvider) GetFirewallRuleSourceIP(ctx context.Context, project, name string) (string, int, error) {
+	if m.directFWSourceIPErr != nil {
+		return "", 0, m.directFWSourceIPErr
+	}
+	return m.directFWSourceIP, m.directFWPort, nil
+}
+
+func (m *mockSetupProvider) UpdateDirectSSHFirewallRule(ctx context.Context, project, sourceIP string, sshPort int) error {
+	if m.updateDirectFWErr != nil {
+		return m.updateDirectFWErr
+	}
+	m.updatedDirectFW = true
 	return nil
 }
 
@@ -121,6 +178,7 @@ func withMockSetupProvider(mock *mockSetupProvider) func() {
 	origSSH := sshKeyChecker
 	origGen := sshKeyGenerator
 	origSA := saNameDeriver
+	origIP := publicIPDetector
 
 	setupProviderFactory = func(ctx context.Context) (setup.SetupProvider, error) {
 		return mock, nil
@@ -134,20 +192,28 @@ func withMockSetupProvider(mock *mockSetupProvider) func() {
 	saNameDeriver = func(dir string) string {
 		return "cc-test-repo"
 	}
+	publicIPDetector = func(ctx context.Context) (string, error) {
+		return "203.0.113.50", nil
+	}
 
 	return func() {
 		setupProviderFactory = origProvider
 		sshKeyChecker = origSSH
 		sshKeyGenerator = origGen
 		saNameDeriver = origSA
+		publicIPDetector = origIP
 	}
 }
 
 func TestRunSetup_AllGreen_DryRun(t *testing.T) {
 	// All resources exist, dry run
 	mock := &mockSetupProvider{
-		saExists: true,
-		fwExists: true,
+		saExists:         true,
+		fwExists:         true,
+		fwPort:           22,
+		directFWExists:   true,
+		directFWSourceIP: "203.0.113.50",
+		directFWPort:     22,
 	}
 	cleanup := withMockSetupProvider(mock)
 	defer cleanup()
@@ -213,6 +279,7 @@ func TestRunSetup_ProviderCreationFailure(t *testing.T) {
 	origSSH := sshKeyChecker
 	origGen := sshKeyGenerator
 	origSA := saNameDeriver
+	origIP := publicIPDetector
 	setupProviderFactory = func(ctx context.Context) (setup.SetupProvider, error) {
 		return nil, errors.New("could not find default credentials")
 	}
@@ -225,11 +292,15 @@ func TestRunSetup_ProviderCreationFailure(t *testing.T) {
 	saNameDeriver = func(dir string) string {
 		return "cc-test-repo"
 	}
+	publicIPDetector = func(ctx context.Context) (string, error) {
+		return "203.0.113.50", nil
+	}
 	defer func() {
 		setupProviderFactory = origProvider
 		sshKeyChecker = origSSH
 		sshKeyGenerator = origGen
 		saNameDeriver = origSA
+		publicIPDetector = origIP
 	}()
 
 	cmd := &cobra.Command{}
@@ -248,8 +319,12 @@ func TestRunSetup_ProviderCreationFailure(t *testing.T) {
 
 func TestRunSetup_ExistingProjectConfig(t *testing.T) {
 	mock := &mockSetupProvider{
-		saExists: true,
-		fwExists: true,
+		saExists:         true,
+		fwExists:         true,
+		fwPort:           22,
+		directFWExists:   true,
+		directFWSourceIP: "203.0.113.50",
+		directFWPort:     22,
 	}
 	cleanup := withMockSetupProvider(mock)
 	defer cleanup()
@@ -296,8 +371,12 @@ func TestRunSetup_ExistingProjectConfig(t *testing.T) {
 
 func TestRunSetup_ExistingInstanceConfig(t *testing.T) {
 	mock := &mockSetupProvider{
-		saExists: true,
-		fwExists: true,
+		saExists:         true,
+		fwExists:         true,
+		fwPort:           22,
+		directFWExists:   true,
+		directFWSourceIP: "203.0.113.50",
+		directFWPort:     22,
 	}
 	cleanup := withMockSetupProvider(mock)
 	defer cleanup()
@@ -343,13 +422,18 @@ func TestRunSetup_ExistingInstanceConfig(t *testing.T) {
 
 func TestRunSetup_SSHKeyAutoGenerated(t *testing.T) {
 	mock := &mockSetupProvider{
-		saExists: true,
-		fwExists: true,
+		saExists:         true,
+		fwExists:         true,
+		fwPort:           22,
+		directFWExists:   true,
+		directFWSourceIP: "203.0.113.50",
+		directFWPort:     22,
 	}
 	origProvider := setupProviderFactory
 	origSSH := sshKeyChecker
 	origGen := sshKeyGenerator
 	origSA := saNameDeriver
+	origIP := publicIPDetector
 
 	setupProviderFactory = func(ctx context.Context) (setup.SetupProvider, error) {
 		return mock, nil
@@ -371,11 +455,15 @@ func TestRunSetup_SSHKeyAutoGenerated(t *testing.T) {
 	saNameDeriver = func(dir string) string {
 		return "cc-test-repo"
 	}
+	publicIPDetector = func(ctx context.Context) (string, error) {
+		return "203.0.113.50", nil
+	}
 	defer func() {
 		setupProviderFactory = origProvider
 		sshKeyChecker = origSSH
 		sshKeyGenerator = origGen
 		saNameDeriver = origSA
+		publicIPDetector = origIP
 	}()
 
 	dir := t.TempDir()
@@ -406,6 +494,7 @@ func TestRunSetup_SSHKeyGenerationFailure(t *testing.T) {
 	origSSH := sshKeyChecker
 	origGen := sshKeyGenerator
 	origSA := saNameDeriver
+	origIP := publicIPDetector
 
 	setupProviderFactory = func(ctx context.Context) (setup.SetupProvider, error) {
 		return &mockSetupProvider{}, nil
@@ -424,11 +513,15 @@ func TestRunSetup_SSHKeyGenerationFailure(t *testing.T) {
 	saNameDeriver = func(dir string) string {
 		return "cc-test-repo"
 	}
+	publicIPDetector = func(ctx context.Context) (string, error) {
+		return "203.0.113.50", nil
+	}
 	defer func() {
 		setupProviderFactory = origProvider
 		sshKeyChecker = origSSH
 		sshKeyGenerator = origGen
 		saNameDeriver = origSA
+		publicIPDetector = origIP
 	}()
 
 	cmd := &cobra.Command{}
@@ -441,6 +534,75 @@ func TestRunSetup_SSHKeyGenerationFailure(t *testing.T) {
 	err := runSetup(cmd, []string{})
 	if err == nil {
 		t.Error("expected error when SSH key generation fails")
+	}
+}
+
+func TestRunSetup_FirewallPortMismatch_DryRun(t *testing.T) {
+	// Firewall exists but has wrong port — setup should detect the mismatch
+	mock := &mockSetupProvider{
+		saExists:         true,
+		fwExists:         true,
+		fwPort:           22, // Firewall allows port 22
+		directFWExists:   true,
+		directFWSourceIP: "203.0.113.50",
+		directFWPort:     22, // Also needs updating
+	}
+	cleanup := withMockSetupProvider(mock)
+	defer cleanup()
+
+	dir := t.TempDir()
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	// Write config with SSH port 2222 so there's a mismatch
+	cfgDir := filepath.Join(dir, ".cloudcoop")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfgContent := `
+[ssh]
+port = 2222
+`
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(cfgContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	cmd.Flags().String("project", "test-project", "")
+	cmd.Flags().String("zone", "us-central1-a", "")
+	cmd.Flags().String("network", "", "")
+	cmd.Flags().Bool("dry-run", true, "")
+
+	// Capture stdout to verify the mismatch message
+	origStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runSetup(cmd, []string{})
+
+	w.Close()
+	os.Stdout = origStdout
+
+	if err != nil {
+		t.Fatalf("runSetup() error = %v", err)
+	}
+
+	var buf [4096]byte
+	n, _ := r.Read(buf[:])
+	output := string(buf[:n])
+
+	if !strings.Contains(output, "[!!]") {
+		t.Errorf("expected [!!] port mismatch warning in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "port 22, expected 2222") {
+		t.Errorf("expected 'port 22, expected 2222' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Update firewall rule") {
+		t.Errorf("expected 'Update firewall rule' in output, got:\n%s", output)
 	}
 }
 

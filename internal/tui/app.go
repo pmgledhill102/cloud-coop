@@ -7,6 +7,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/log"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
@@ -50,6 +51,12 @@ type Model struct {
 
 	// Workspace
 	workspaceInfo *workspace.Info // detected from CWD on startup (nil if not in a git repo)
+
+	// Firewall
+	firewallChecked bool // true after firewall check has been triggered
+
+	// SSH key
+	sshKeyChecked bool // true after SSH key check has been triggered
 
 	// Help overlay
 	showHelp bool // true when help overlay is visible
@@ -124,6 +131,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case connectFinishedMsg:
 		return m.handleConnectFinished(msg)
+
+	case firewallCheckedMsg:
+		// Firewall check is fire-and-forget; log errors but don't update UI
+		if msg.err != nil {
+			log.Debug("firewall check failed (non-fatal)", "error", msg.err)
+		}
+		return m, nil
+
+	case sshKeyCheckedMsg:
+		// SSH key check is fire-and-forget; log errors but don't update UI
+		if msg.err != nil {
+			log.Debug("SSH key check failed (non-fatal)", "error", msg.err)
+		}
+		return m, nil
 
 	case syncMsg:
 		return m.handleSync(msg)

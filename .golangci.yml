@@ -77,8 +77,12 @@ linters:
     gosec:
       excludes:
         - G106  # SSH InsecureIgnoreHostKey — tracked in cc-xzi
+        - G115  # Integer overflow conversion — uintptr->int in terminal size
         - G204  # Subprocess with variable args — expected for SSH tool
         - G304  # File path traversal — test utilities use dynamic paths
+        # G703 and G704 (taint analysis) are standalone gosec rules not
+        # available in golangci-lint's embedded gosec; excluded in
+        # .github/workflows/security.yml instead.
       severity: medium
       confidence: medium
 
@@ -111,6 +115,12 @@ linters:
       # Allow dot imports in test files (for testing frameworks)
       - path: _test\.go
         text: "dot-imports"
+        linters:
+          - revive
+
+      # Internal packages that intentionally shadow stdlib names
+      - path: internal/(log|version)/
+        text: "var-naming: avoid package names"
         linters:
           - revive
 

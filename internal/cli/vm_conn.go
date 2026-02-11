@@ -75,6 +75,12 @@ func connectToVM(cmd *cobra.Command) (*vmConn, error) {
 		return nil, nil
 	}
 
+	// Ensure firewall allows SSH from this workstation (non-fatal)
+	ensureFirewallAccess(ctx, cfg, provider)
+
+	// Ensure SSH public key is in VM metadata (non-fatal)
+	ensureSSHKeyAccess(ctx, cfg, provider, vmInfo.Name)
+
 	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "VM has no IP address available for SSH connection")

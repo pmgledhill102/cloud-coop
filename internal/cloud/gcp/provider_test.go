@@ -1,3 +1,4 @@
+// cspell:disable -- test file contains fake SSH key material
 package gcp
 
 import (
@@ -751,6 +752,430 @@ func TestProvider_DeleteVM(t *testing.T) {
 				t.Errorf("Delete() called with instance = %q, want %q", tt.mock.lastDeleteReq.GetInstance(), tt.vmName)
 			}
 		})
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_Create(t *testing.T) {
+	fw := &mockFirewallsClient{} // default: Get returns 404
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when creating new rule")
+	}
+	if !fw.getCalled {
+		t.Error("Get() was not called")
+	}
+	if !fw.insertCalled {
+		t.Error("Insert() was not called")
+	}
+
+	// Verify the insert request
+	req := fw.lastInsertReq
+	rule := req.GetFirewallResource()
+	if rule.GetName() != "cloudcoop-allow-ssh" {
+		t.Errorf("rule name = %q, want %q", rule.GetName(), "cloudcoop-allow-ssh")
+	}
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+	ports := rule.GetAllowed()[0].GetPorts()
+	if len(ports) != 1 || ports[0] != "2222" {
+		t.Errorf("ports = %v, want [2222]", ports)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_NoOp(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"203.0.113.50/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"2222"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if changed {
+		t.Error("expected changed=false when rule already matches")
+	}
+	if fw.insertCalled {
+		t.Error("Insert() should not be called")
+	}
+	if fw.patchCalled {
+		t.Error("Patch() should not be called")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_UpdateIP(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"198.51.100.1/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"2222"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when IP differs")
+	}
+	if !fw.patchCalled {
+		t.Error("Patch() was not called")
+	}
+
+	req := fw.lastPatchReq
+	rule := req.GetFirewallResource()
+	ranges := rule.GetSourceRanges()
+	if len(ranges) != 1 || ranges[0] != "203.0.113.50/32" {
+		t.Errorf("patched source ranges = %v, want [203.0.113.50/32]", ranges)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_UpdatePort(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"203.0.113.50/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"22"},
+				},
+			},
+		},
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	changed, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     2222,
+		Network:  "default",
+	})
+	if err != nil {
+		t.Fatalf("EnsureFirewallAllowsSSH() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when port differs")
+	}
+	if !fw.patchCalled {
+		t.Error("Patch() was not called")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_GetError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		getError: newForbiddenError(),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for non-404 Get failure")
+	}
+	if !contains(err.Error(), "get firewall rule") {
+		t.Errorf("error = %v, want containing 'get firewall rule'", err)
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_InsertError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		insertError: errors.New("insert failed"),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for Insert failure")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_PatchError(t *testing.T) {
+	fw := &mockFirewallsClient{
+		rule: &computepb.Firewall{
+			SourceRanges: []string{"198.51.100.1/32"},
+			Allowed: []*computepb.Allowed{
+				{
+					IPProtocol: strPtr("tcp"),
+					Ports:      []string{"22"},
+				},
+			},
+		},
+		patchError: errors.New("patch failed"),
+	}
+	p := newWithClients("test-project", "test-zone", &mockInstancesClient{}, fw)
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for Patch failure")
+	}
+}
+
+func TestProvider_EnsureFirewallAllowsSSH_NilFirewalls(t *testing.T) {
+	p := newWithClient("test-project", "test-zone", &mockInstancesClient{})
+
+	_, err := p.EnsureFirewallAllowsSSH(context.Background(), cloud.FirewallConfig{
+		SourceIP: "203.0.113.50",
+		Port:     22,
+		Network:  "default",
+	})
+	if err == nil {
+		t.Error("expected error for nil firewalls client")
+	}
+}
+
+func TestProvider_EnsureSSHKeyOnVM_AddNew(t *testing.T) {
+	mock := &mockInstancesClient{
+		getInstance: func() *computepb.Instance {
+			inst := newTestInstance("test-vm", "RUNNING", "us-central1-a", "c4a-highcpu-4")
+			inst.Metadata = &computepb.Metadata{
+				Fingerprint: strPtr("abc123"),
+				Items: []*computepb.Items{
+					{Key: strPtr("startup-script"), Value: strPtr("#!/bin/bash\necho hello")},
+				},
+			}
+			return inst
+		}(),
+	}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	err := p.EnsureSSHKeyOnVM(context.Background(), "test-vm", "paul", "ssh-ed25519 AAAAC3 paul@host")
+	if err != nil {
+		t.Fatalf("EnsureSSHKeyOnVM() error = %v", err)
+	}
+
+	if !mock.setMetadataCalled {
+		t.Fatal("SetMetadata() was not called")
+	}
+
+	req := mock.lastSetMetadataReq
+	if req.GetInstance() != "test-vm" {
+		t.Errorf("Instance = %q, want %q", req.GetInstance(), "test-vm")
+	}
+
+	md := req.GetMetadataResource()
+	if md.GetFingerprint() != "abc123" {
+		t.Errorf("Fingerprint = %q, want %q", md.GetFingerprint(), "abc123")
+	}
+
+	// Should have startup-script + ssh-keys
+	if len(md.GetItems()) != 2 {
+		t.Fatalf("Items count = %d, want 2", len(md.GetItems()))
+	}
+
+	// Find ssh-keys item
+	var sshKeysValue string
+	for _, item := range md.GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			sshKeysValue = item.GetValue()
+		}
+	}
+	if sshKeysValue != "paul:ssh-ed25519 AAAAC3 paul@host" {
+		t.Errorf("ssh-keys = %q, want %q", sshKeysValue, "paul:ssh-ed25519 AAAAC3 paul@host")
+	}
+}
+
+func TestProvider_EnsureSSHKeyOnVM_AlreadyPresent(t *testing.T) {
+	mock := &mockInstancesClient{
+		getInstance: func() *computepb.Instance {
+			inst := newTestInstance("test-vm", "RUNNING", "us-central1-a", "c4a-highcpu-4")
+			inst.Metadata = &computepb.Metadata{
+				Fingerprint: strPtr("abc123"),
+				Items: []*computepb.Items{
+					{Key: strPtr("ssh-keys"), Value: strPtr("paul:ssh-ed25519 AAAAC3 paul@host")},
+				},
+			}
+			return inst
+		}(),
+	}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	err := p.EnsureSSHKeyOnVM(context.Background(), "test-vm", "paul", "ssh-ed25519 AAAAC3 paul@host")
+	if err != nil {
+		t.Fatalf("EnsureSSHKeyOnVM() error = %v", err)
+	}
+
+	if mock.setMetadataCalled {
+		t.Error("SetMetadata() should not be called when key already present")
+	}
+}
+
+func TestProvider_EnsureSSHKeyOnVM_AppendToExisting(t *testing.T) {
+	mock := &mockInstancesClient{
+		getInstance: func() *computepb.Instance {
+			inst := newTestInstance("test-vm", "RUNNING", "us-central1-a", "c4a-highcpu-4")
+			inst.Metadata = &computepb.Metadata{
+				Fingerprint: strPtr("abc123"),
+				Items: []*computepb.Items{
+					{Key: strPtr("ssh-keys"), Value: strPtr("alice:ssh-rsa AAAAB3 alice@host")},
+				},
+			}
+			return inst
+		}(),
+	}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	err := p.EnsureSSHKeyOnVM(context.Background(), "test-vm", "paul", "ssh-ed25519 AAAAC3 paul@host")
+	if err != nil {
+		t.Fatalf("EnsureSSHKeyOnVM() error = %v", err)
+	}
+
+	if !mock.setMetadataCalled {
+		t.Fatal("SetMetadata() was not called")
+	}
+
+	var sshKeysValue string
+	for _, item := range mock.lastSetMetadataReq.GetMetadataResource().GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			sshKeysValue = item.GetValue()
+		}
+	}
+	want := "alice:ssh-rsa AAAAB3 alice@host\npaul:ssh-ed25519 AAAAC3 paul@host"
+	if sshKeysValue != want {
+		t.Errorf("ssh-keys = %q, want %q", sshKeysValue, want)
+	}
+}
+
+func TestProvider_EnsureSSHKeyOnVM_GetError(t *testing.T) {
+	mock := &mockInstancesClient{
+		getError: errors.New("network error"),
+	}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	err := p.EnsureSSHKeyOnVM(context.Background(), "test-vm", "paul", "ssh-ed25519 AAAAC3 paul@host")
+	if err == nil {
+		t.Error("expected error")
+	}
+	if !contains(err.Error(), "get instance test-vm") {
+		t.Errorf("error = %v, want containing 'get instance test-vm'", err)
+	}
+}
+
+func TestProvider_EnsureSSHKeyOnVM_SetMetadataError(t *testing.T) {
+	mock := &mockInstancesClient{
+		getInstance: func() *computepb.Instance {
+			inst := newTestInstance("test-vm", "RUNNING", "us-central1-a", "c4a-highcpu-4")
+			inst.Metadata = &computepb.Metadata{
+				Fingerprint: strPtr("abc123"),
+			}
+			return inst
+		}(),
+		setMetadataError: errors.New("permission denied"),
+	}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	err := p.EnsureSSHKeyOnVM(context.Background(), "test-vm", "paul", "ssh-ed25519 AAAAC3 paul@host")
+	if err == nil {
+		t.Error("expected error")
+	}
+	if !contains(err.Error(), "set metadata on test-vm") {
+		t.Errorf("error = %v, want containing 'set metadata on test-vm'", err)
+	}
+}
+
+func TestProvider_CreateVM_SSHKeyInMetadata(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	cfg := cloud.VMCreateConfig{
+		Name:           "ssh-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "default",
+		SSHUser:        "paul",
+		SSHPublicKey:   "ssh-ed25519 AAAAC3 paul@host",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	md := inst.GetMetadata()
+
+	var sshKeysValue string
+	for _, item := range md.GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			sshKeysValue = item.GetValue()
+		}
+	}
+
+	want := "paul:ssh-ed25519 AAAAC3 paul@host"
+	if sshKeysValue != want {
+		t.Errorf("ssh-keys metadata = %q, want %q", sshKeysValue, want)
+	}
+}
+
+func TestProvider_CreateVM_NoSSHKeyWithoutPublicKey(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	cfg := cloud.VMCreateConfig{
+		Name:           "no-ssh-vm",
+		MachineType:    "c4a-highcpu-4",
+		DiskSizeGB:     50,
+		Image:          "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:        "default",
+		ServiceAccount: "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	md := inst.GetMetadata()
+
+	for _, item := range md.GetItems() {
+		if item.GetKey() == "ssh-keys" {
+			t.Error("ssh-keys should not be present when SSHPublicKey is empty")
+		}
 	}
 }
 

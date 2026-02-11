@@ -766,6 +766,55 @@ func TestMergeConfig_EmptySrc(t *testing.T) {
 	}
 }
 
+func TestSaveInstance_CleanOutput(t *testing.T) {
+	dir := t.TempDir()
+
+	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	if err != nil {
+		t.Fatalf("SaveInstance() error = %v", err)
+	}
+
+	data, err := os.ReadFile(InstanceConfigPath(dir))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	content := string(data)
+
+	// Should contain the fields we set
+	if !strings.Contains(content, `project = "my-project"`) {
+		t.Errorf("expected project in output:\n%s", content)
+	}
+	if !strings.Contains(content, `zone = "us-central1-a"`) {
+		t.Errorf("expected zone in output:\n%s", content)
+	}
+	if !strings.Contains(content, `name = "my-vm"`) {
+		t.Errorf("expected vm name in output:\n%s", content)
+	}
+
+	// Should NOT contain zero-value fields
+	if strings.Contains(content, "port") {
+		t.Errorf("should not contain port (zero value):\n%s", content)
+	}
+	if strings.Contains(content, "disk_size_gb") {
+		t.Errorf("should not contain disk_size_gb (zero value):\n%s", content)
+	}
+	if strings.Contains(content, "[ssh]") {
+		t.Errorf("should not contain [ssh] section (empty):\n%s", content)
+	}
+	if strings.Contains(content, "[setup]") {
+		t.Errorf("should not contain [setup] section (empty):\n%s", content)
+	}
+	if strings.Contains(content, "[agents]") {
+		t.Errorf("should not contain [agents] section (empty):\n%s", content)
+	}
+	if strings.Contains(content, "[provisioning]") {
+		t.Errorf("should not contain [provisioning] section (empty):\n%s", content)
+	}
+	if strings.Contains(content, "[tui]") {
+		t.Errorf("should not contain [tui] section (empty):\n%s", content)
+	}
+}
+
 func TestAgentsConfig_ResolvePreCommands(t *testing.T) {
 	tests := []struct {
 		name string

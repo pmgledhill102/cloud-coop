@@ -13,6 +13,8 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/deploykey"
+	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/network"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
@@ -62,6 +64,10 @@ type provisionStatusMsg struct {
 }
 
 type connectFinishedMsg struct{ err error }
+
+type firewallCheckedMsg struct{ err error }
+
+type sshKeyCheckedMsg struct{ err error }
 
 // refreshTickMsg is sent periodically to trigger always-on auto-refresh.
 type refreshTickMsg struct{}
@@ -165,6 +171,10 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 		}
 		defer cleanup()
 
+		// Read SSH public key (non-fatal if missing)
+		pubKey, _ := ssh.ReadPublicKey()
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+
 		createCfg := cloud.VMCreateConfig{
 			Name:               cfg.VM.Name,
 			MachineType:        machineType,
@@ -175,6 +185,8 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 			Subnet:             cfg.VM.Subnet,
 			Tags:               cfg.VM.Tags,
 			SSHPort:            cfg.SSH.Port,
+			SSHUser:            sshUser,
+			SSHPublicKey:       pubKey,
 			ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
 			ProvisionScriptURL: cfg.Provisioning.ScriptURL,
 		}
@@ -347,6 +359,67 @@ func syncWorkspace(cfg *config.Config, vmInfo *cloud.VMInfo, wsInfo *workspace.I
 			RepoName:     repo.Name,
 		})
 		return syncMsg{workspace: wsInfo, result: result, err: err}
+	}
+}
+
+func ensureSSHKey(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		pubKey, err := ssh.ReadPublicKey()
+		if err != nil {
+			return sshKeyCheckedMsg{err: err}
+		}
+
+		provider, cleanup, err := newProvider(ctx, cfg)
+		if err != nil {
+			return sshKeyCheckedMsg{err: err}
+		}
+		defer cleanup()
+
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+		err = provider.EnsureSSHKeyOnVM(ctx, vmInfo.Name, sshUser, pubKey)
+		return sshKeyCheckedMsg{err: err}
+	}
+}
+
+func ensureFirewall(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		ip, err := network.DetectPublicIP(ctx)
+		if err != nil {
+			return firewallCheckedMsg{err: err}
+		}
+
+		provider, cleanup, err := newProvider(ctx, cfg)
+		if err != nil {
+			return firewallCheckedMsg{err: err}
+		}
+		defer cleanup()
+
+		sshPort := ssh.ResolvePort(cfg.SSH.Port)
+		netName := cfg.VM.Network
+		if netName == "" {
+			netName = "default"
+		}
+
+		changed, err := provider.EnsureFirewallAllowsSSH(ctx, cloud.FirewallConfig{
+			SourceIP: ip,
+			Port:     sshPort,
+			Network:  netName,
+		})
+		if err != nil {
+			return firewallCheckedMsg{err: err}
+		}
+
+		if changed {
+			log.Info("firewall updated", "ip", ip, "port", sshPort)
+		}
+
+		return firewallCheckedMsg{}
 	}
 }
 

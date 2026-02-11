@@ -207,7 +207,19 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 		m.agentsErr = nil
 		m.provisionStatus = nil
 		m.provisionErr = nil
-		return m, tea.Batch(fetchAgents(m.cfg, msg.info, m.sessionName()), fetchProvisionStatus(m.cfg, msg.info))
+		cmds := []tea.Cmd{
+			fetchAgents(m.cfg, msg.info, m.sessionName()),
+			fetchProvisionStatus(m.cfg, msg.info),
+		}
+		if !m.firewallChecked {
+			m.firewallChecked = true
+			cmds = append(cmds, ensureFirewall(m.cfg))
+		}
+		if !m.sshKeyChecked {
+			m.sshKeyChecked = true
+			cmds = append(cmds, ensureSSHKey(m.cfg, msg.info))
+		}
+		return m, tea.Batch(cmds...)
 	}
 	m.agents = nil
 	m.agentsErr = nil

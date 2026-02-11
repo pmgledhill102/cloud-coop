@@ -10,25 +10,28 @@ import (
 
 // mockInstancesClient is a mock implementation of instancesClient for testing.
 type mockInstancesClient struct {
-	getInstance   *computepb.Instance
-	getError      error
-	startError    error
-	stopError     error
-	insertError   error
-	deleteError   error
-	closeError    error
-	waitError     error
-	getCalled     bool
-	startCalled   bool
-	stopCalled    bool
-	insertCalled  bool
-	deleteCalled  bool
-	closeCalled   bool
-	lastGetReq    *computepb.GetInstanceRequest
-	lastStartReq  *computepb.StartInstanceRequest
-	lastStopReq   *computepb.StopInstanceRequest
-	lastInsertReq *computepb.InsertInstanceRequest
-	lastDeleteReq *computepb.DeleteInstanceRequest
+	getInstance        *computepb.Instance
+	getError           error
+	startError         error
+	stopError          error
+	insertError        error
+	deleteError        error
+	setMetadataError   error
+	closeError         error
+	waitError          error
+	getCalled          bool
+	startCalled        bool
+	stopCalled         bool
+	insertCalled       bool
+	deleteCalled       bool
+	setMetadataCalled  bool
+	closeCalled        bool
+	lastGetReq         *computepb.GetInstanceRequest
+	lastStartReq       *computepb.StartInstanceRequest
+	lastStopReq        *computepb.StopInstanceRequest
+	lastInsertReq      *computepb.InsertInstanceRequest
+	lastDeleteReq      *computepb.DeleteInstanceRequest
+	lastSetMetadataReq *computepb.SetMetadataInstanceRequest
 }
 
 func (m *mockInstancesClient) Get(ctx context.Context, req *computepb.GetInstanceRequest) (*computepb.Instance, error) {
@@ -69,6 +72,15 @@ func (m *mockInstancesClient) Delete(ctx context.Context, req *computepb.DeleteI
 	m.lastDeleteReq = req
 	if m.deleteError != nil {
 		return nil, m.deleteError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockInstancesClient) SetMetadata(ctx context.Context, req *computepb.SetMetadataInstanceRequest) (operation, error) {
+	m.setMetadataCalled = true
+	m.lastSetMetadataReq = req
+	if m.setMetadataError != nil {
+		return nil, m.setMetadataError
 	}
 	return &mockOperation{waitError: m.waitError}, nil
 }
@@ -127,4 +139,55 @@ func newForbiddenError() error {
 		Code:    403,
 		Message: "forbidden",
 	}
+}
+
+// mockFirewallsClient is a mock implementation of firewallsClient for testing.
+type mockFirewallsClient struct {
+	rule          *computepb.Firewall
+	getError      error
+	insertError   error
+	patchError    error
+	waitError     error
+	closeCalled   bool
+	getCalled     bool
+	insertCalled  bool
+	patchCalled   bool
+	lastGetReq    *computepb.GetFirewallRequest
+	lastInsertReq *computepb.InsertFirewallRequest
+	lastPatchReq  *computepb.PatchFirewallRequest
+}
+
+func (m *mockFirewallsClient) Get(ctx context.Context, req *computepb.GetFirewallRequest) (*computepb.Firewall, error) {
+	m.getCalled = true
+	m.lastGetReq = req
+	if m.getError != nil {
+		return nil, m.getError
+	}
+	if m.rule != nil {
+		return m.rule, nil
+	}
+	return nil, newNotFoundError()
+}
+
+func (m *mockFirewallsClient) Insert(ctx context.Context, req *computepb.InsertFirewallRequest) (operation, error) {
+	m.insertCalled = true
+	m.lastInsertReq = req
+	if m.insertError != nil {
+		return nil, m.insertError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockFirewallsClient) Patch(ctx context.Context, req *computepb.PatchFirewallRequest) (operation, error) {
+	m.patchCalled = true
+	m.lastPatchReq = req
+	if m.patchError != nil {
+		return nil, m.patchError
+	}
+	return &mockOperation{waitError: m.waitError}, nil
+}
+
+func (m *mockFirewallsClient) Close() error {
+	m.closeCalled = true
+	return nil
 }

@@ -29,6 +29,14 @@ type MockProvider struct {
 	// DeleteVMError is returned by DeleteVM().
 	DeleteVMError error
 
+	// EnsureFirewallChanged is the changed value returned by EnsureFirewallAllowsSSH().
+	EnsureFirewallChanged bool
+	// EnsureFirewallError is returned by EnsureFirewallAllowsSSH().
+	EnsureFirewallError error
+
+	// EnsureSSHKeyError is returned by EnsureSSHKeyOnVM().
+	EnsureSSHKeyError error
+
 	// CallLog records method calls for verification.
 	CallLog []MockCall
 }
@@ -105,6 +113,22 @@ func (m *MockProvider) DeleteVM(ctx context.Context, name string) error {
 	defer m.mu.Unlock()
 	m.CallLog = append(m.CallLog, MockCall{Method: "DeleteVM", Args: []interface{}{name}})
 	return m.DeleteVMError
+}
+
+// EnsureFirewallAllowsSSH returns the configured changed/error.
+func (m *MockProvider) EnsureFirewallAllowsSSH(ctx context.Context, cfg FirewallConfig) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CallLog = append(m.CallLog, MockCall{Method: "EnsureFirewallAllowsSSH", Args: []interface{}{cfg}})
+	return m.EnsureFirewallChanged, m.EnsureFirewallError
+}
+
+// EnsureSSHKeyOnVM returns the configured error (nil for success).
+func (m *MockProvider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CallLog = append(m.CallLog, MockCall{Method: "EnsureSSHKeyOnVM", Args: []interface{}{name, user, publicKey}})
+	return m.EnsureSSHKeyError
 }
 
 // WithVMInfo sets the VMInfo response and returns the mock for chaining.

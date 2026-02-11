@@ -225,10 +225,43 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check firewall rule
+	// Check IAP firewall rule
 	fwExists, err := provider.FirewallRuleExists(ctx, projectID, setup.IAPFirewallRuleName)
 	if err != nil {
 		return fmt.Errorf("check firewall rule: %w", err)
+	}
+
+	// Check IAP firewall port if rule exists
+	var fwPort int
+	var needsFWUpdate bool
+	if fwExists {
+		fwPort, err = provider.GetFirewallRulePort(ctx, projectID, setup.IAPFirewallRuleName)
+		if err != nil {
+			return fmt.Errorf("check firewall port: %w", err)
+		}
+		needsFWUpdate = fwPort != sshPort
+	}
+
+	// Check direct SSH firewall rule
+	directFWExists, err := provider.FirewallRuleExists(ctx, projectID, setup.DirectSSHFirewallRuleName)
+	if err != nil {
+		return fmt.Errorf("check direct SSH firewall rule: %w", err)
+	}
+
+	// Detect public IP for direct SSH rule
+	publicIP, ipErr := publicIPDetector(ctx)
+
+	var directFWSourceIP string
+	var directFWPort int
+	var needsDirectFWUpdate bool
+	if directFWExists {
+		directFWSourceIP, directFWPort, err = provider.GetFirewallRuleSourceIP(ctx, projectID, setup.DirectSSHFirewallRuleName)
+		if err != nil {
+			return fmt.Errorf("check direct SSH firewall: %w", err)
+		}
+		if ipErr == nil {
+			needsDirectFWUpdate = directFWSourceIP != publicIP || directFWPort != sshPort
+		}
 	}
 
 	// Display current state
@@ -257,9 +290,26 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	if fwExists {
-		fmt.Printf("  [ok] Firewall rule %s (exists)\n", setup.IAPFirewallRuleName)
+		if needsFWUpdate {
+			fmt.Printf("  [!!] Firewall rule %s (port %d, expected %d)\n", setup.IAPFirewallRuleName, fwPort, sshPort)
+		} else {
+			fmt.Printf("  [ok] Firewall rule %s (port %d)\n", setup.IAPFirewallRuleName, fwPort)
+		}
 	} else {
 		fmt.Printf("  [--] Firewall rule %s (not found)\n", setup.IAPFirewallRuleName)
+	}
+
+	if ipErr != nil {
+		fmt.Printf("  [--] Firewall rule %s (could not detect public IP)\n", setup.DirectSSHFirewallRuleName)
+	} else if directFWExists {
+		if needsDirectFWUpdate {
+			fmt.Printf("  [!!] Firewall rule %s (IP %s port %d, expected %s port %d)\n",
+				setup.DirectSSHFirewallRuleName, directFWSourceIP, directFWPort, publicIP, sshPort)
+		} else {
+			fmt.Printf("  [ok] Firewall rule %s (IP %s port %d)\n", setup.DirectSSHFirewallRuleName, directFWSourceIP, directFWPort)
+		}
+	} else {
+		fmt.Printf("  [--] Firewall rule %s (not found)\n", setup.DirectSSHFirewallRuleName)
 	}
 
 	fmt.Println()
@@ -285,9 +335,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	needsSA := !saExists
 	needsFW := !fwExists
+	needsDirectFW := !directFWExists && ipErr == nil
 
 	// If everything is in place, skip to config phase
-	if len(apisToEnable) == 0 && !needsSA && len(rolesToGrant) == 0 && !needsFW {
+	if len(apisToEnable) == 0 && !needsSA && len(rolesToGrant) == 0 && !needsFW && !needsFWUpdate && !needsDirectFW && !needsDirectFWUpdate {
 		fmt.Println("All GCP resources are in place.")
 	} else {
 		// Show what will be done
@@ -319,6 +370,24 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		if needsFW {
 			fmt.Println("  Create firewall rule:")
 			fmt.Printf("    - %s (allow SSH port %d from Google IAP)\n", setup.IAPFirewallRuleName, sshPort)
+			fmt.Println()
+		}
+
+		if needsFWUpdate {
+			fmt.Println("  Update firewall rule:")
+			fmt.Printf("    - %s (change port %d → %d)\n", setup.IAPFirewallRuleName, fwPort, sshPort)
+			fmt.Println()
+		}
+
+		if needsDirectFW {
+			fmt.Println("  Create firewall rule:")
+			fmt.Printf("    - %s (allow SSH port %d from %s)\n", setup.DirectSSHFirewallRuleName, sshPort, publicIP)
+			fmt.Println()
+		}
+
+		if needsDirectFWUpdate {
+			fmt.Println("  Update firewall rule:")
+			fmt.Printf("    - %s (IP %s → %s, port %d)\n", setup.DirectSSHFirewallRuleName, directFWSourceIP, publicIP, sshPort)
 			fmt.Println()
 		}
 
@@ -379,6 +448,33 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			if fwErr := provider.CreateIAPFirewallRule(ctx, projectID, network, sshPort); fwErr != nil {
 				fmt.Println(" failed")
 				return fmt.Errorf("create firewall rule: %w", fwErr)
+			}
+			fmt.Println(" done")
+		}
+
+		if needsFWUpdate {
+			fmt.Printf("Updating firewall rule (port %d → %d)...", fwPort, sshPort)
+			if fwErr := provider.UpdateIAPFirewallRule(ctx, projectID, sshPort); fwErr != nil {
+				fmt.Println(" failed")
+				return fmt.Errorf("update firewall rule: %w", fwErr)
+			}
+			fmt.Println(" done")
+		}
+
+		if needsDirectFW {
+			fmt.Printf("Creating direct SSH firewall rule (%s port %d)...", publicIP, sshPort)
+			if fwErr := provider.CreateDirectSSHFirewallRule(ctx, projectID, network, publicIP, sshPort); fwErr != nil {
+				fmt.Println(" failed")
+				return fmt.Errorf("create direct SSH firewall rule: %w", fwErr)
+			}
+			fmt.Println(" done")
+		}
+
+		if needsDirectFWUpdate {
+			fmt.Printf("Updating direct SSH firewall rule (%s port %d)...", publicIP, sshPort)
+			if fwErr := provider.UpdateDirectSSHFirewallRule(ctx, projectID, publicIP, sshPort); fwErr != nil {
+				fmt.Println(" failed")
+				return fmt.Errorf("update direct SSH firewall rule: %w", fwErr)
 			}
 			fmt.Println(" done")
 		}
