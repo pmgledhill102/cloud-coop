@@ -253,19 +253,8 @@ systemctl restart docker
 # Node.js global packages (Claude Code)
 # ============================================
 report_progress "Installing Node.js packages"
-# Run npm as sandbox user (Homebrew node is owned by sandbox)
-# Configure npm to use system CA certificates (Homebrew node needs this)
-sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/npm config set cafile /etc/ssl/certs/ca-certificates.crt
-sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/npm install -g \
-    @anthropic-ai/claude-code \
-    yarn \
-    pnpm \
-    typescript \
-    ts-node \
-    eslint \
-    prettier \
-    cspell \
-    markdownlint-cli2
+# Run npm as sandbox user with brew in PATH (npm's shebang uses /usr/bin/env node)
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && npm config set cafile /etc/ssl/certs/ca-certificates.crt && npm install -g @anthropic-ai/claude-code yarn pnpm typescript ts-node eslint prettier cspell markdownlint-cli2'
 
 # ============================================
 # Python tools via uv
@@ -289,8 +278,8 @@ uv tool install checkov
 # Ruby gems
 # ============================================
 report_progress "Installing Ruby gems"
-# Run gem as sandbox user (Homebrew ruby is owned by sandbox)
-sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/gem install bundler rubocop
+# Run gem as sandbox user with brew in PATH (gem may invoke ruby via env)
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && gem install bundler rubocop'
 
 # ============================================
 # Google Cloud CLI (apt required for Linux)
