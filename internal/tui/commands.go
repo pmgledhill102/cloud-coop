@@ -194,6 +194,15 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 		if err := provider.CreateVM(ctx, createCfg); err != nil {
 			return vmCreateMsg{err: fmt.Errorf("create VM: %w", err)}
 		}
+
+		// Best-effort: wait for SSH to become reachable before reporting success.
+		info, err := provider.GetVMInfo(ctx, cfg.VM.Name)
+		if err == nil && info.ExternalIP != "" {
+			waitCfg := ssh.SetupClientConfig(info.ExternalIP, sshUser, cfg.SSH.Port)
+			waitCfg.VM = ssh.NewVMIdentity(info.Name, info.CloudcoopCreated)
+			_ = ssh.WaitForSSH(waitCfg, 30*time.Second)
+		}
+
 		return vmCreateMsg{}
 	}
 }
