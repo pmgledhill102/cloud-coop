@@ -253,10 +253,10 @@ systemctl restart docker
 # Node.js global packages (Claude Code)
 # ============================================
 report_progress "Installing Node.js packages"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+# Run npm as sandbox user (Homebrew node is owned by sandbox)
 # Configure npm to use system CA certificates (Homebrew node needs this)
-npm config set cafile /etc/ssl/certs/ca-certificates.crt
-npm install -g \
+sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/npm config set cafile /etc/ssl/certs/ca-certificates.crt
+sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/npm install -g \
     @anthropic-ai/claude-code \
     yarn \
     pnpm \
@@ -289,8 +289,8 @@ uv tool install checkov
 # Ruby gems
 # ============================================
 report_progress "Installing Ruby gems"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-gem install bundler rubocop
+# Run gem as sandbox user (Homebrew ruby is owned by sandbox)
+sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/gem install bundler rubocop
 
 # ============================================
 # Google Cloud CLI (apt required for Linux)
