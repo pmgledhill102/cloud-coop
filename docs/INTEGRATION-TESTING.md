@@ -23,13 +23,13 @@ tests catch what mocks cannot:
 Integration tests require an isolated GCP project to avoid interference with production resources.
 The project is provisioned via Terraform in the
 [gcp-org-management](https://github.com/pmgledhill102/gcp-org-management) repo
-(`layers/3-projects/staging/cloud-coop-inttest.tf`).
+(`layers/3-projects/staging/cloud-coop.tf`).
 
-**Project:** `cloud-coop-inttest` (in the `staging` folder)
+**Project:** `cloud-coop` (in the `staging` folder)
 
 **Required APIs:** `compute`, `iam`, `logging`
 
-**Service account:** `cc-integration-test@cloud-coop-inttest.iam.gserviceaccount.com`
+**Service account:** `cc-integration-test@cloud-coop.iam.gserviceaccount.com`
 
 - Roles: `roles/compute.admin`, `roles/iam.serviceAccountUser`
 - Authentication: SA impersonation (no long-lived keys per org policy)
@@ -44,14 +44,14 @@ Authenticate via SA impersonation (no JSON key files needed):
 
 ```bash
 gcloud auth application-default login \
-  --impersonate-service-account=cc-integration-test@cloud-coop-inttest.iam.gserviceaccount.com
+  --impersonate-service-account=cc-integration-test@cloud-coop.iam.gserviceaccount.com
 ```
 
 ### Environment Variables
 
 ```bash
 # Required
-export GOOGLE_CLOUD_PROJECT=cloud-coop-inttest
+export GOOGLE_CLOUD_PROJECT=cloud-coop
 
 # Optional (defaults shown)
 export GOOGLE_CLOUD_ZONE=europe-north2-a
@@ -282,7 +282,7 @@ See `.github/workflows/integration.yml` for the full workflow.
 
 ### Required GitHub Configuration
 
-- **Variable:** `GCP_INTEGRATION_PROJECT` -- GCP project ID (`cloud-coop-inttest`)
+- **Variable:** `GCP_INTEGRATION_PROJECT` -- GCP project ID (`cloud-coop`)
 - **Variable:** `GCP_WIF_PROVIDER` -- Workload Identity Federation provider resource name
 
 WIF must be configured in the `gcp-org-management` layer 0-bootstrap to allow the
@@ -293,17 +293,17 @@ WIF must be configured in the `gcp-org-management` layer 0-bootstrap to allow th
 The GCP project and resources are managed in the
 [gcp-org-management](https://github.com/pmgledhill102/gcp-org-management) repo.
 
-**File:** `layers/3-projects/staging/cloud-coop-inttest.tf`
+**File:** `layers/3-projects/staging/cloud-coop.tf`
 
 **Resources provisioned:**
 
-- GCP project `cloud-coop-inttest` (in dev folder, £25/month budget with kill switch)
+- GCP project `cloud-coop` (in staging folder, £25/month budget with kill switch)
 - Service account `cc-integration-test` with `compute.admin` and `iam.serviceAccountUser`
 - SA impersonation binding for `paul@pmgledhill.com`
 - Custom VPC `inttest` with subnet `inttest-europe-north2` (`10.0.0.0/24`)
 - Firewall rules: SSH from anywhere, internal traffic within subnet
 
-A reference copy of the Terraform config lives in `integration/terraform/cloud-coop-inttest.tf`.
+A reference copy of the Terraform config lives in `integration/terraform/cloud-coop.tf`.
 
 ## TUI Testing Strategy
 
@@ -372,7 +372,7 @@ If a test run is interrupted before cleanup:
 ```bash
 # Find orphaned test VMs
 gcloud compute instances list \
-    --project=cloud-coop-inttest \
+    --project=cloud-coop \
     --filter="name~cc-inttest-"
 
 # Delete them
@@ -388,7 +388,7 @@ limits, check:
 
 ```bash
 gcloud compute regions describe europe-north2 \
-    --project=cloud-coop-inttest \
+    --project=cloud-coop \
     --format="table(quotas.metric,quotas.limit,quotas.usage)"
 ```
 
