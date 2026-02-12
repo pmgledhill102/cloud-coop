@@ -26,11 +26,12 @@ type Runner interface {
 
 // Config contains SSH connection configuration.
 type Config struct {
-	Host    string
-	User    string
-	Port    int
-	Timeout time.Duration
-	VM      *VMIdentity // optional; enables host-key pinning
+	Host       string
+	User       string
+	Port       int
+	Timeout    time.Duration
+	VM         *VMIdentity // optional; enables host-key pinning
+	PrivateKey []byte      // optional; PEM-encoded private key (overrides discovery)
 }
 
 // Client wraps an SSH connection and implements Runner.
@@ -52,7 +53,16 @@ func DefaultConfig(host, user string) Config {
 // It automatically manages host keys in cloudcoop's own known_hosts file,
 // so users don't need to manually handle host key verification for VMs.
 func NewClient(cfg Config) (*Client, error) {
-	authMethods := discoverAuthMethods()
+	var authMethods []ssh.AuthMethod
+	if len(cfg.PrivateKey) > 0 {
+		signer, err := ssh.ParsePrivateKey(cfg.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("parse private key: %w", err)
+		}
+		authMethods = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	} else {
+		authMethods = discoverAuthMethods()
+	}
 	if len(authMethods) == 0 {
 		return nil, fmt.Errorf("no SSH authentication methods available")
 	}

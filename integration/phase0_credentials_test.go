@@ -1,39 +1,13 @@
 //go:build integration
 
-// Package integration contains end-to-end integration tests that interact with
-// a real GCP environment. These tests are skipped by default and only run when
-// explicitly requested using the -tags=integration flag.
-//
-// Run integration tests:
-//
-//	go test -v -tags=integration -timeout 30m ./integration/...
-//
-// Prerequisites:
-//   - GOOGLE_APPLICATION_CREDENTIALS or Application Default Credentials configured
-//   - GOOGLE_CLOUD_PROJECT set to the integration test project ID
-//   - Optionally: GOOGLE_CLOUD_ZONE (defaults to us-central1-a)
-//   - Optionally: GCP_SERVICE_ACCOUNT (defaults to cc-integration-test@<project>.iam...)
-//
-// See docs/INTEGRATION-TESTING.md for full setup instructions.
 package integration
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 )
-
-func TestMain(m *testing.M) {
-	env = setupEnv()
-
-	code := m.Run()
-
-	// Always clean up, even if tests fail
-	env.cleanup()
-	os.Exit(code)
-}
 
 // TestPhase0_CredentialValidation verifies we have valid GCP credentials and
 // can access the configured project. This must pass before any other tests.
