@@ -185,6 +185,7 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 			SSHPublicKey:       pubKey,
 			ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
 			ProvisionScriptURL: cfg.Provisioning.ScriptURL,
+			MaxUptimeMinutes:   cfg.VM.MaxUptimeMinutes,
 		}
 
 		if err := provider.CreateVM(ctx, createCfg); err != nil {

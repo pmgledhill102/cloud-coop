@@ -80,6 +80,96 @@ func TestRunCreate_PassesProvisionScriptURL(t *testing.T) {
 	}
 }
 
+func TestRunCreate_MaxUptimeFromConfig(t *testing.T) {
+	cfg := testConfig()
+	cfg.VM.MachineSizes = map[string]string{
+		"small": "c4a-highcpu-4",
+	}
+	cfg.VM.MaxUptimeMinutes = 60
+	mock := cloud.NewMockProvider().WithVMStatus(cloud.VMStatusNotFound)
+	cleanup := withMocks(cfg, mock)
+	defer cleanup()
+
+	createSize = "small"
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := runCreate(cmd, []string{})
+	if err != nil {
+		t.Fatalf("runCreate() error: %v", err)
+	}
+
+	calls := mock.GetCalls()
+	var createCall *cloud.MockCall
+	for i, call := range calls {
+		if call.Method == "CreateVM" {
+			createCall = &calls[i]
+			break
+		}
+	}
+
+	if createCall == nil {
+		t.Fatal("CreateVM was not called")
+	}
+
+	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
+	if !ok {
+		t.Fatal("CreateVM arg is not VMCreateConfig")
+	}
+
+	if createCfg.MaxUptimeMinutes != 60 {
+		t.Errorf("MaxUptimeMinutes = %d, want 60", createCfg.MaxUptimeMinutes)
+	}
+}
+
+func TestRunCreate_MaxUptimeFlagOverridesConfig(t *testing.T) {
+	cfg := testConfig()
+	cfg.VM.MachineSizes = map[string]string{
+		"small": "c4a-highcpu-4",
+	}
+	cfg.VM.MaxUptimeMinutes = 60
+	mock := cloud.NewMockProvider().WithVMStatus(cloud.VMStatusNotFound)
+	cleanup := withMocks(cfg, mock)
+	defer cleanup()
+
+	createSize = "small"
+
+	// Create a real command with the flag registered so Changed() works
+	cmd := &cobra.Command{RunE: runCreate}
+	cmd.Flags().StringVarP(&createSize, "size", "s", "small", "VM size")
+	cmd.Flags().IntVar(&createMaxUptime, "max-uptime", 0, "Auto-stop VM after N minutes")
+	cmd.SetContext(context.Background())
+	cmd.SetArgs([]string{"--max-uptime", "30"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+
+	calls := mock.GetCalls()
+	var createCall *cloud.MockCall
+	for i, call := range calls {
+		if call.Method == "CreateVM" {
+			createCall = &calls[i]
+			break
+		}
+	}
+
+	if createCall == nil {
+		t.Fatal("CreateVM was not called")
+	}
+
+	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
+	if !ok {
+		t.Fatal("CreateVM arg is not VMCreateConfig")
+	}
+
+	if createCfg.MaxUptimeMinutes != 30 {
+		t.Errorf("MaxUptimeMinutes = %d, want 30 (flag should override config)", createCfg.MaxUptimeMinutes)
+	}
+}
+
 func TestRunCreate_PassesServiceAccount(t *testing.T) {
 	cfg := testConfig()
 	cfg.VM.MachineSizes = map[string]string{

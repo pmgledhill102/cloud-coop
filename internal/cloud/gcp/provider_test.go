@@ -1179,6 +1179,115 @@ func TestProvider_CreateVM_NoSSHKeyWithoutPublicKey(t *testing.T) {
 	}
 }
 
+func TestProvider_CreateVM_MaxUptime(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:             "uptime-vm",
+		MachineType:      "c4a-highcpu-4",
+		DiskSizeGB:       50,
+		Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:          "default",
+		MaxUptimeMinutes: 60,
+		ServiceAccount:   "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	scheduling := inst.GetScheduling()
+	if scheduling == nil {
+		t.Fatal("Scheduling is nil, expected maxRunDuration configuration")
+	}
+
+	dur := scheduling.GetMaxRunDuration()
+	if dur == nil {
+		t.Fatal("MaxRunDuration is nil")
+	}
+	if dur.GetSeconds() != 3600 {
+		t.Errorf("MaxRunDuration seconds = %d, want 3600", dur.GetSeconds())
+	}
+	if scheduling.GetInstanceTerminationAction() != "STOP" {
+		t.Errorf("InstanceTerminationAction = %q, want %q", scheduling.GetInstanceTerminationAction(), "STOP")
+	}
+}
+
+func TestProvider_CreateVM_MaxUptimeWithSpot(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:             "spot-uptime-vm",
+		MachineType:      "c4a-highcpu-4",
+		DiskSizeGB:       50,
+		Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Spot:             true,
+		Network:          "default",
+		MaxUptimeMinutes: 30,
+		ServiceAccount:   "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	scheduling := inst.GetScheduling()
+	if scheduling == nil {
+		t.Fatal("Scheduling is nil")
+	}
+
+	// Both spot and maxRunDuration should be set
+	if scheduling.GetProvisioningModel() != "SPOT" {
+		t.Errorf("ProvisioningModel = %q, want %q", scheduling.GetProvisioningModel(), "SPOT")
+	}
+	if scheduling.GetInstanceTerminationAction() != "STOP" {
+		t.Errorf("InstanceTerminationAction = %q, want %q", scheduling.GetInstanceTerminationAction(), "STOP")
+	}
+
+	dur := scheduling.GetMaxRunDuration()
+	if dur == nil {
+		t.Fatal("MaxRunDuration is nil")
+	}
+	if dur.GetSeconds() != 1800 {
+		t.Errorf("MaxRunDuration seconds = %d, want 1800", dur.GetSeconds())
+	}
+}
+
+func TestProvider_CreateVM_MaxUptimeZero(t *testing.T) {
+	mock := &mockInstancesClient{}
+	p := newWithClient("test-project", "test-zone", mock)
+
+	config := cloud.VMCreateConfig{
+		Name:             "no-uptime-vm",
+		MachineType:      "c4a-highcpu-4",
+		DiskSizeGB:       50,
+		Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
+		Network:          "default",
+		MaxUptimeMinutes: 0,
+		ServiceAccount:   "cloudcoop-vm@test-project.iam.gserviceaccount.com",
+	}
+
+	err := p.CreateVM(context.Background(), config)
+	if err != nil {
+		t.Fatalf("CreateVM() error = %v", err)
+	}
+
+	inst := mock.lastInsertReq.GetInstanceResource()
+	scheduling := inst.GetScheduling()
+	// With Spot=false and MaxUptimeMinutes=0, scheduling should be nil
+	if scheduling != nil {
+		if scheduling.GetMaxRunDuration() != nil {
+			t.Error("MaxRunDuration should not be set when MaxUptimeMinutes is 0")
+		}
+	}
+}
+
 func TestProviderInterface(t *testing.T) {
 	// Ensure Provider implements cloud.Provider
 	var _ cloud.Provider = (*Provider)(nil)

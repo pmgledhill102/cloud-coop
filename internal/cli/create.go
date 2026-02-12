@@ -23,10 +23,14 @@ Available sizes are defined in the config file under vm.machine_sizes.`,
 	RunE: runCreate,
 }
 
-var createSize string
+var (
+	createSize      string
+	createMaxUptime int
+)
 
 func init() {
 	createCmd.Flags().StringVarP(&createSize, "size", "s", "small", "VM size (small, medium, large, xlarge)")
+	createCmd.Flags().IntVar(&createMaxUptime, "max-uptime", 0, "Auto-stop VM after N minutes (0=disabled)")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -84,6 +88,11 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
 
 	// Build create config
+	maxUptime := cfg.VM.MaxUptimeMinutes
+	if cmd.Flags().Changed("max-uptime") {
+		maxUptime = createMaxUptime
+	}
+
 	createCfg := cloud.VMCreateConfig{
 		Name:               cfg.VM.Name,
 		MachineType:        machineType,
@@ -98,6 +107,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		SSHPublicKey:       pubKey,
 		ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
 		ProvisionScriptURL: cfg.Provisioning.ScriptURL,
+		MaxUptimeMinutes:   maxUptime,
 	}
 
 	// Create the VM

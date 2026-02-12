@@ -278,6 +278,30 @@ func TestConfig_SetValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			key:     "vm.max_uptime_minutes",
+			value:   "60",
+			check:   func(c *Config) bool { return c.VM.MaxUptimeMinutes == 60 },
+			wantErr: false,
+		},
+		{
+			key:     "vm.max_uptime_minutes",
+			value:   "0",
+			check:   func(c *Config) bool { return c.VM.MaxUptimeMinutes == 0 },
+			wantErr: false,
+		},
+		{
+			key:     "vm.max_uptime_minutes",
+			value:   "invalid",
+			check:   func(c *Config) bool { return true },
+			wantErr: true,
+		},
+		{
+			key:     "vm.max_uptime_minutes",
+			value:   "-1",
+			check:   func(c *Config) bool { return true },
+			wantErr: true,
+		},
+		{
 			key:     "vm.network",
 			value:   "my-vpc",
 			check:   func(c *Config) bool { return c.VM.Network == "my-vpc" },
@@ -334,9 +358,10 @@ func TestConfig_GetValue(t *testing.T) {
 			},
 		},
 		VM: VMConfig{
-			Name:    "test-vm",
-			Network: "my-vpc",
-			Subnet:  "my-subnet",
+			Name:             "test-vm",
+			MaxUptimeMinutes: 60,
+			Network:          "my-vpc",
+			Subnet:           "my-subnet",
 		},
 		SSH: SSHConfig{
 			Port: 2222,
@@ -357,6 +382,7 @@ func TestConfig_GetValue(t *testing.T) {
 		{"cloud.gcp.zone", "us-central1-a", false},
 		{"cloud.gcp.service_account", "sa@my-project.iam.gserviceaccount.com", false},
 		{"vm.name", "test-vm", false},
+		{"vm.max_uptime_minutes", "60", false},
 		{"vm.network", "my-vpc", false},
 		{"vm.subnet", "my-subnet", false},
 		{"ssh.port", "2222", false},
