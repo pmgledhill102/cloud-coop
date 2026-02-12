@@ -26,12 +26,12 @@ type Runner interface {
 
 // Config contains SSH connection configuration.
 type Config struct {
-	Host       string
-	User       string
-	Port       int
-	Timeout    time.Duration
-	VM         *VMIdentity // optional; enables host-key pinning
-	IdentityPEM []byte // optional; PEM-encoded identity key (overrides discovery)
+	Host        string
+	User        string
+	Port        int
+	Timeout     time.Duration
+	VM          *VMIdentity // optional; enables host-key pinning
+	IdentityPEM []byte      // optional; PEM-encoded identity key (overrides discovery)
 }
 
 // Client wraps an SSH connection and implements Runner.
