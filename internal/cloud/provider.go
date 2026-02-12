@@ -97,6 +97,9 @@ type VMCreateConfig struct {
 	// ProvisionScriptURL is the URL to fetch the provisioning script from.
 	// If empty, no additional provisioning is performed.
 	ProvisionScriptURL string
+	// MaxUptimeMinutes sets GCP's maxRunDuration to auto-stop the VM after N minutes.
+	// 0 means disabled.
+	MaxUptimeMinutes int
 }
 
 // FirewallConfig contains configuration for ensuring SSH firewall access.

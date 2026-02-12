@@ -101,14 +101,15 @@ type GCPConfig struct {
 
 // VMConfig contains VM settings.
 type VMConfig struct {
-	Name         string            `toml:"name,omitempty"`
-	DiskSizeGB   int64             `toml:"disk_size_gb,omitzero"`   // Boot disk size in GB (default: 50)
-	Image        string            `toml:"image,omitempty"`         // Boot disk image (default: Ubuntu 24.04 ARM)
-	Spot         bool              `toml:"spot,omitempty"`          // Use spot/preemptible instances
-	Network      string            `toml:"network,omitempty"`       // VPC network name (default: "default")
-	Subnet       string            `toml:"subnet,omitempty"`        // VPC subnet name (required for custom-mode VPCs)
-	Tags         []string          `toml:"tags,omitempty"`          // Network tags for firewall rules
-	MachineSizes map[string]string `toml:"machine_sizes,omitempty"` // Size name -> machine type mapping
+	Name             string            `toml:"name,omitempty"`
+	DiskSizeGB       int64             `toml:"disk_size_gb,omitzero"`       // Boot disk size in GB (default: 50)
+	Image            string            `toml:"image,omitempty"`             // Boot disk image (default: Ubuntu 24.04 ARM)
+	Spot             bool              `toml:"spot,omitempty"`              // Use spot/preemptible instances
+	MaxUptimeMinutes int               `toml:"max_uptime_minutes,omitzero"` // Auto-stop after N minutes (0=disabled)
+	Network          string            `toml:"network,omitempty"`           // VPC network name (default: "default")
+	Subnet           string            `toml:"subnet,omitempty"`            // VPC subnet name (required for custom-mode VPCs)
+	Tags             []string          `toml:"tags,omitempty"`              // Network tags for firewall rules
+	MachineSizes     map[string]string `toml:"machine_sizes,omitempty"`     // Size name -> machine type mapping
 }
 
 // DefaultConfigPath returns the default user config file path.
@@ -304,6 +305,9 @@ func mergeConfig(dst, src *Config) {
 	if src.VM.Spot {
 		dst.VM.Spot = true
 	}
+	if src.VM.MaxUptimeMinutes != 0 {
+		dst.VM.MaxUptimeMinutes = src.VM.MaxUptimeMinutes
+	}
 	if src.VM.Network != "" {
 		dst.VM.Network = src.VM.Network
 	}
@@ -445,6 +449,15 @@ func (c *Config) SetValue(key, value string) error {
 		c.Cloud.GCP.ServiceAccount = value
 	case "vm.name":
 		c.VM.Name = value
+	case "vm.max_uptime_minutes":
+		minutes, err := strconv.Atoi(value)
+		if err != nil {
+			return errors.New("vm.max_uptime_minutes must be a number")
+		}
+		if minutes < 0 {
+			return errors.New("vm.max_uptime_minutes must be >= 0")
+		}
+		c.VM.MaxUptimeMinutes = minutes
 	case "vm.network":
 		c.VM.Network = value
 	case "vm.subnet":
@@ -492,6 +505,8 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.Cloud.GCP.ServiceAccount, nil
 	case "vm.name":
 		return c.VM.Name, nil
+	case "vm.max_uptime_minutes":
+		return strconv.Itoa(c.VM.MaxUptimeMinutes), nil
 	case "vm.network":
 		return c.VM.Network, nil
 	case "vm.subnet":
@@ -519,6 +534,7 @@ func AllKeys() []string {
 		"cloud.gcp.zone",
 		"cloud.gcp.service_account",
 		"vm.name",
+		"vm.max_uptime_minutes",
 		"vm.network",
 		"vm.subnet",
 		"ssh.port",

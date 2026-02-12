@@ -27,7 +27,7 @@ SRC := $(shell find . -name '*.go' -type f 2>/dev/null)
 .DEFAULT_GOAL := all
 
 # Phony targets
-.PHONY: all build test test-integration test-coverage test-coverage-check lint fmt clean install help
+.PHONY: all build test test-integration test-integration-cloud test-coverage test-coverage-check lint fmt clean install help
 
 ## all: Build and run tests
 all: fmt lint test build
@@ -46,6 +46,10 @@ test:
 ## test-integration: Run integration tests (requires git)
 test-integration:
 	$(GO) test $(GOFLAGS) -tags=integration ./...
+
+## test-integration-cloud: Run cloud integration tests (requires GCP credentials)
+test-integration-cloud:
+	$(GO) test $(GOFLAGS) -v -tags=integration -timeout 30m ./integration/...
 
 ## test-coverage: Run tests with coverage report
 test-coverage:

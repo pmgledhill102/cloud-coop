@@ -156,6 +156,7 @@ shellcheck
 slog
 spf13
 sshd
+sshpkg
 staticcheck
 stderr
 stdin

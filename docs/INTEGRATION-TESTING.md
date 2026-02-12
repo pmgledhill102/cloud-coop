@@ -425,11 +425,11 @@ If provisioning consistently times out (>15 min), check:
 - Provisioning logs via SSH: `cat /var/run/cloudcoop/provision-progress`
 - Network connectivity (apt mirrors, GitHub raw content)
 
-## Implementation Order
+## Implementation Status
 
-| Phase | Scope | Dependencies |
-|-------|-------|-------------|
-| A | `max_uptime_minutes` feature (config, provider, GCP, CLI, TUI) | None |
-| B | Integration test files (helpers, lifecycle, SSH, provisioning, agents) | Phase A |
-| C | CI workflow, Terraform, Makefile target | Phase B |
-| D | TUI golden file tests with `teatest` (lower priority) | None |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| A | `max_uptime_minutes` feature (config, provider, GCP, CLI, TUI) | Done |
+| B | Integration test files (helpers, lifecycle, SSH, provisioning, agents) | Done |
+| C | CI workflow, Terraform, Makefile target | Done |
+| D | TUI golden file tests with `teatest` (lower priority) | Future |

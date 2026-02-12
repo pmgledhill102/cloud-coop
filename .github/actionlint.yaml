@@ -9,7 +9,8 @@ self-hosted-runner:
 
 # Configuration variables defined at organization/repository level
 # These are accessed via vars.* context in workflows
-config-variables: []
+config-variables:
+  - gcp_integration_project
 
 # Paths to ignore for linting
 # paths:

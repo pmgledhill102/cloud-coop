@@ -1,0 +1,44 @@
+name: Integration Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Weekly Monday 6am UTC
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_INTEGRATION_SA_KEY }}'
+
+      - name: Run integration tests
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_INTEGRATION_PROJECT }}
+          GOOGLE_CLOUD_ZONE: us-central1-a
+        run: go test -v -tags=integration -timeout 30m ./integration/...
+
+      - name: Cleanup orphaned VMs
+        if: always()
+        run: |
+          gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" 2>/dev/null || true
+          gcloud compute instances list \
+            --project="${{ vars.GCP_INTEGRATION_PROJECT }}" \
+            --filter="name~cc-inttest-" \
+            --format="value(name,zone)" 2>/dev/null | \
+          while read -r name zone; do
+            echo "Cleaning up orphaned VM: $name in $zone"
+            gcloud compute instances delete "$name" --zone="$zone" --quiet --project="${{ vars.GCP_INTEGRATION_PROJECT }}" || true
+          done

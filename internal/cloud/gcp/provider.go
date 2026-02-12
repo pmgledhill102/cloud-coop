@@ -228,6 +228,18 @@ func (p *Provider) CreateVM(ctx context.Context, config cloud.VMCreateConfig) er
 		}
 	}
 
+	// Set maxRunDuration to auto-stop the VM after N minutes (cost safety net)
+	if config.MaxUptimeMinutes > 0 {
+		if instance.Scheduling == nil {
+			instance.Scheduling = &computepb.Scheduling{}
+		}
+		seconds := int64(config.MaxUptimeMinutes) * 60
+		instance.Scheduling.MaxRunDuration = &computepb.Duration{Seconds: &seconds}
+		if instance.Scheduling.InstanceTerminationAction == nil {
+			instance.Scheduling.InstanceTerminationAction = ptr("STOP")
+		}
+	}
+
 	// Add network tags if specified
 	if len(config.Tags) > 0 {
 		instance.Tags = &computepb.Tags{
