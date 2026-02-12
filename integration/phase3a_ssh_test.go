@@ -25,7 +25,7 @@ func TestPhase3a_SSH(t *testing.T) {
 
 		cfg := sshpkg.SetupClientConfig(ip, env.sshUser, env.cfg.SSH.Port)
 		cfg.VM = sshpkg.NewVMIdentity(env.vmInfo.Name, env.vmInfo.CloudcoopCreated)
-		cfg.PrivateKey = env.sshPrivKey
+		cfg.IdentityPEM = env.sshPrivKey
 
 		t.Logf("Waiting for SSH on %s:%d...", ip, env.cfg.SSH.Port)
 		err = sshpkg.WaitForSSH(cfg, 2*time.Minute)

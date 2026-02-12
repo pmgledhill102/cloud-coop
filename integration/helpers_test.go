@@ -177,7 +177,7 @@ func (e *testEnv) connectSSH(t *testing.T) *sshpkg.Client {
 
 	sshCfg := sshpkg.SetupClientConfig(ip, e.sshUser, e.cfg.SSH.Port)
 	sshCfg.VM = sshpkg.NewVMIdentity(e.vmInfo.Name, e.vmInfo.CloudcoopCreated)
-	sshCfg.PrivateKey = e.sshPrivKey
+	sshCfg.IdentityPEM = e.sshPrivKey
 
 	client, err := sshpkg.NewClient(sshCfg)
 	if err != nil {

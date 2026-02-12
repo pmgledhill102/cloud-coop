@@ -31,7 +31,7 @@ type Config struct {
 	Port       int
 	Timeout    time.Duration
 	VM         *VMIdentity // optional; enables host-key pinning
-	PrivateKey []byte      // optional; PEM-encoded private key (overrides discovery)
+	IdentityPEM []byte // optional; PEM-encoded identity key (overrides discovery)
 }
 
 // Client wraps an SSH connection and implements Runner.
@@ -54,8 +54,8 @@ func DefaultConfig(host, user string) Config {
 // so users don't need to manually handle host key verification for VMs.
 func NewClient(cfg Config) (*Client, error) {
 	var authMethods []ssh.AuthMethod
-	if len(cfg.PrivateKey) > 0 {
-		signer, err := ssh.ParsePrivateKey(cfg.PrivateKey)
+	if len(cfg.IdentityPEM) > 0 {
+		signer, err := ssh.ParsePrivateKey(cfg.IdentityPEM)
 		if err != nil {
 			return nil, fmt.Errorf("parse private key: %w", err)
 		}

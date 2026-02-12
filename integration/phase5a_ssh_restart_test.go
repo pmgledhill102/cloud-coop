@@ -41,7 +41,7 @@ func TestPhase5a_SSHAfterRestart(t *testing.T) {
 
 		cfg := sshpkg.SetupClientConfig(ip, env.sshUser, env.cfg.SSH.Port)
 		cfg.VM = sshpkg.NewVMIdentity(env.vmInfo.Name, env.vmInfo.CloudcoopCreated)
-		cfg.PrivateKey = env.sshPrivKey
+		cfg.IdentityPEM = env.sshPrivKey
 
 		t.Logf("Waiting for SSH after restart on %s...", ip)
 		if err := sshpkg.WaitForSSH(cfg, 2*time.Minute); err != nil {
