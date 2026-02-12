@@ -37,6 +37,16 @@ type testEnv struct {
 // env is the shared test environment. Initialized in TestMain.
 var env *testEnv
 
+func TestMain(m *testing.M) {
+	env = setupEnv()
+
+	code := m.Run()
+
+	// Always clean up, even if tests fail
+	env.cleanup()
+	os.Exit(code)
+}
+
 // setupEnv creates the test environment from environment variables.
 func setupEnv() *testEnv {
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -167,6 +177,7 @@ func (e *testEnv) connectSSH(t *testing.T) *sshpkg.Client {
 
 	sshCfg := sshpkg.SetupClientConfig(ip, e.sshUser, e.cfg.SSH.Port)
 	sshCfg.VM = sshpkg.NewVMIdentity(e.vmInfo.Name, e.vmInfo.CloudcoopCreated)
+	sshCfg.IdentityPEM = e.sshPrivKey
 
 	client, err := sshpkg.NewClient(sshCfg)
 	if err != nil {
