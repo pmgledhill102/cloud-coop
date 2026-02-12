@@ -11,6 +11,7 @@ self-hosted-runner:
 # These are accessed via vars.* context in workflows
 config-variables:
   - gcp_integration_project
+  - gcp_wif_provider
 
 # Paths to ignore for linting
 # paths:

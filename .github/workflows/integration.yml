@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # Required for Workload Identity Federation
 
 jobs:
   integration:
@@ -22,18 +23,20 @@ jobs:
 
       - uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_INTEGRATION_SA_KEY }}'
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: cc-integration-test@${{ vars.GCP_INTEGRATION_PROJECT }}.iam.gserviceaccount.com
 
       - name: Run integration tests
         env:
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_INTEGRATION_PROJECT }}
-          GOOGLE_CLOUD_ZONE: us-central1-a
+          GOOGLE_CLOUD_ZONE: europe-north2-a
+          GOOGLE_CLOUD_NETWORK: inttest
+          GOOGLE_CLOUD_SUBNET: inttest-europe-north2
         run: go test -v -tags=integration -timeout 30m ./integration/...
 
       - name: Cleanup orphaned VMs
         if: always()
         run: |
-          gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" 2>/dev/null || true
           gcloud compute instances list \
             --project="${{ vars.GCP_INTEGRATION_PROJECT }}" \
             --filter="name~cc-inttest-" \

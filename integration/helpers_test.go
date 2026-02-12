@@ -47,7 +47,17 @@ func setupEnv() *testEnv {
 
 	zone := os.Getenv("GOOGLE_CLOUD_ZONE")
 	if zone == "" {
-		zone = "us-central1-a"
+		zone = "europe-north2-a"
+	}
+
+	network := os.Getenv("GOOGLE_CLOUD_NETWORK")
+	if network == "" {
+		network = "inttest"
+	}
+
+	subnet := os.Getenv("GOOGLE_CLOUD_SUBNET")
+	if subnet == "" {
+		subnet = "inttest-europe-north2"
 	}
 
 	// Generate unique VM name from Unix timestamp
@@ -75,7 +85,8 @@ func setupEnv() *testEnv {
 			Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64",
 			Spot:             true,
 			MaxUptimeMinutes: 60,
-			Network:          "default",
+			Network:          network,
+			Subnet:           subnet,
 		},
 		SSH: config.SSHConfig{
 			Port: 22,
