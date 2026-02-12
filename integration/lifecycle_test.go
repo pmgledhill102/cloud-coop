@@ -34,6 +34,7 @@ func TestPhase2_VMCreate(t *testing.T) {
 			Spot:               env.cfg.VM.Spot,
 			MaxUptimeMinutes:   env.cfg.VM.MaxUptimeMinutes,
 			Network:            env.cfg.VM.Network,
+			Subnet:             env.cfg.VM.Subnet,
 			SSHPort:            env.cfg.SSH.Port,
 			SSHUser:            env.sshUser,
 			SSHPublicKey:       strings.TrimSpace(env.sshPubKey),

@@ -21,37 +21,45 @@ tests catch what mocks cannot:
 ### Dedicated GCP Project
 
 Integration tests require an isolated GCP project to avoid interference with production resources.
+The project is provisioned via Terraform in the
+[gcp-org-management](https://github.com/pmgledhill102/gcp-org-management) repo
+(`layers/3-projects/staging/cloud-coop-inttest.tf`).
 
-**Required APIs:**
+**Project:** `cloud-coop-inttest` (in the `staging` folder)
 
-- `compute.googleapis.com`
-- `iam.googleapis.com`
-- `logging.googleapis.com`
+**Required APIs:** `compute`, `iam`, `logging`
 
-**Service account:**
+**Service account:** `cc-integration-test@cloud-coop-inttest.iam.gserviceaccount.com`
 
-- Name: `cc-integration-test`
 - Roles: `roles/compute.admin`, `roles/iam.serviceAccountUser`
-- Key: JSON key file (stored as GitHub Actions secret for CI)
+- Authentication: SA impersonation (no long-lived keys per org policy)
 
-**Budget alert:** $50/month with alerts at 50%, 90%, 100%
+**Network:** Custom VPC `inttest` with subnet `inttest-europe-north2` (`10.0.0.0/24`)
 
-See [Terraform Configuration](#terraform-configuration) below for automated provisioning
-of the project resources.
+**Budget alert:** £25/month with kill switch at 100%
+
+### Local Authentication
+
+Authenticate via SA impersonation (no JSON key files needed):
+
+```bash
+gcloud auth application-default login \
+  --impersonate-service-account=cc-integration-test@cloud-coop-inttest.iam.gserviceaccount.com
+```
 
 ### Environment Variables
 
 ```bash
 # Required
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
-export GOOGLE_CLOUD_PROJECT=cloudcoop-integration-test
+export GOOGLE_CLOUD_PROJECT=cloud-coop-inttest
 
 # Optional (defaults shown)
 export GOOGLE_CLOUD_ZONE=europe-north2-a
+export GOOGLE_CLOUD_NETWORK=inttest
+export GOOGLE_CLOUD_SUBNET=inttest-europe-north2
 ```
 
-Tests skip automatically when `GOOGLE_APPLICATION_CREDENTIALS` or `GOOGLE_CLOUD_PROJECT`
-are not set.
+Tests skip automatically when `GOOGLE_CLOUD_PROJECT` is not set.
 
 ## Running Tests
 
@@ -165,7 +173,8 @@ func TestVM_Create(t *testing.T) {
         Image:              "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64",
         Spot:               true,
         MaxUptimeMinutes:   60,                // Safety net: GCP auto-stops after 1 hour
-        Network:            "default",
+        Network:            "inttest",
+        Subnet:             "inttest-europe-north2",
         SSHPort:            22,
         SSHUser:            "integration",
         SSHPublicKey:       env.sshPublicKey,
@@ -266,69 +275,35 @@ Integration tests use five layers of cost protection:
 
 ### GitHub Actions Workflow
 
-The integration test workflow runs weekly and on manual trigger:
+The integration test workflow runs weekly and on manual trigger. Authentication uses
+Workload Identity Federation (no long-lived SA keys).
 
-```yaml
-name: Integration Tests
-on:
-  schedule:
-    - cron: '0 6 * * 1'    # Weekly Monday 6am UTC
-  workflow_dispatch:         # Manual trigger
-
-jobs:
-  integration:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: google-github-actions/auth@v2
-        with:
-          credentials_json: '${{ secrets.GCP_INTEGRATION_SA_KEY }}'
-      - name: Run integration tests
-        env:
-          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_INTEGRATION_PROJECT }}
-          GOOGLE_CLOUD_ZONE: us-central1-a
-        run: go test -v -tags=integration -timeout 30m ./integration/...
-      - name: Cleanup orphaned VMs
-        if: always()
-        run: |
-          gcloud compute instances list \
-            --project=${{ vars.GCP_INTEGRATION_PROJECT }} \
-            --filter="name~cc-inttest-" \
-            --format="value(name,zone)" | \
-          while read name zone; do
-            gcloud compute instances delete "$name" --zone="$zone" --quiet || true
-          done
-```
+See `.github/workflows/integration.yml` for the full workflow.
 
 ### Required GitHub Configuration
 
-- **Secret:** `GCP_INTEGRATION_SA_KEY` -- Service account JSON key
-- **Variable:** `GCP_INTEGRATION_PROJECT` -- GCP project ID
+- **Variable:** `GCP_INTEGRATION_PROJECT` -- GCP project ID (`cloud-coop-inttest`)
+- **Variable:** `GCP_WIF_PROVIDER` -- Workload Identity Federation provider resource name
+
+WIF must be configured in the `gcp-org-management` layer 0-bootstrap to allow the
+`pmgledhill102/cloud-coop` repo to impersonate the `cc-integration-test` service account.
 
 ## Terraform Configuration
 
-Terraform files for provisioning the dedicated GCP project live in `integration/terraform/`.
-These are reference configurations intended to be integrated into your own Terraform ecosystem.
+The GCP project and resources are managed in the
+[gcp-org-management](https://github.com/pmgledhill102/gcp-org-management) repo.
+
+**File:** `layers/3-projects/staging/cloud-coop-inttest.tf`
 
 **Resources provisioned:**
 
-- Required API enablement (`compute`, `iam`, `logging`)
-- Service account (`cc-integration-test`) with `compute.admin` and `iam.serviceAccountUser`
-- Billing budget ($50/month with percentage alerts)
+- GCP project `cloud-coop-inttest` (in dev folder, £25/month budget with kill switch)
+- Service account `cc-integration-test` with `compute.admin` and `iam.serviceAccountUser`
+- SA impersonation binding for `paul@pmgledhill.com`
+- Custom VPC `inttest` with subnet `inttest-europe-north2` (`10.0.0.0/24`)
+- Firewall rules: SSH from anywhere, internal traffic within subnet
 
-**Usage:**
-
-```bash
-cd integration/terraform
-terraform init
-terraform plan -var="project_id=cloudcoop-integration-test" \
-               -var="billing_account=XXXXXX-XXXXXX-XXXXXX"
-terraform apply
-```
+A reference copy of the Terraform config lives in `integration/terraform/cloud-coop-inttest.tf`.
 
 ## TUI Testing Strategy
 
@@ -397,7 +372,7 @@ If a test run is interrupted before cleanup:
 ```bash
 # Find orphaned test VMs
 gcloud compute instances list \
-    --project=cloudcoop-integration-test \
+    --project=cloud-coop-inttest \
     --filter="name~cc-inttest-"
 
 # Delete them
@@ -412,8 +387,8 @@ Integration tests use the smallest available machine type (c4a-highcpu-4). If yo
 limits, check:
 
 ```bash
-gcloud compute regions describe us-central1 \
-    --project=cloudcoop-integration-test \
+gcloud compute regions describe europe-north2 \
+    --project=cloud-coop-inttest \
     --format="table(quotas.metric,quotas.limit,quotas.usage)"
 ```
 
