@@ -97,6 +97,7 @@ keygen
 imgs
 incpatch
 ineffassign
+inttest
 iterm
 keybind
 keybindings
@@ -166,6 +167,7 @@ subnetwork
 subnetworks
 subtests
 taplo
+teatest
 tcsh
 temurin
 terminfo
