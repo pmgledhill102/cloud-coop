@@ -24,6 +24,7 @@
 # SSH/Networking
 # Technical terms
 # Testing
+Analyzed
 actionlint
 adminpb
 amd64
@@ -33,6 +34,7 @@ apperrors
 arm64
 axion
 axxxx
+behavior
 bubbletea
 carryforward
 cgo
@@ -49,6 +51,7 @@ covermode
 coverprofile
 darwin
 Deriver
+defense
 dependabot
 deploykey
 direnv
@@ -127,8 +130,10 @@ pipx
 pmgledhill
 pre-commit
 precommit
+preempted
 preemptible
 preemption
+preemptions
 prettierignore
 prereq
 priv
