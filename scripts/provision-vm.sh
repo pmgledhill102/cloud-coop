@@ -364,6 +364,7 @@ set -g allow-passthrough on
 # Proper terminal settings for modern features
 set -g default-terminal "tmux-256color"
 set -as terminal-features ",xterm-256color:RGB"
+set -as terminal-features ",*:hyperlinks"
 
 # Enable focus events (helps with some terminal features)
 set -g focus-events on

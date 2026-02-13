@@ -265,7 +265,7 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println("  To authenticate, start an agent session and follow the login prompt:")
 		fmt.Println("    cloudcoop agents add")
-		fmt.Println("    cloudcoop agents attach 0")
+		fmt.Println("    cloudcoop agents attach --window 0")
 	default:
 		fmt.Printf("  Status unknown. Output:\n%s\n", detail)
 	}

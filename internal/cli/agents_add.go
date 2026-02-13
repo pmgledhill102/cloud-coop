@@ -84,7 +84,7 @@ func runAgentsAdd(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Command: %s\n", displayCmd)
 	fmt.Println()
 	fmt.Println("Connect with:")
-	fmt.Printf("  cloudcoop agents connect %d\n", session.Index)
+	fmt.Printf("  cloudcoop connect %d\n", session.Index)
 
 	return nil
 }
