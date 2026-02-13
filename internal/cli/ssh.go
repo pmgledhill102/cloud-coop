@@ -37,7 +37,7 @@ func init() {
 }
 
 func runSSH(cmd *cobra.Command, args []string) error {
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}

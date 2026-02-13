@@ -43,7 +43,7 @@ func (c *vmConn) Close() {
 // get VM info, check VM is running, resolve IP, and create SSH client.
 // The caller must call conn.Close() when done with the connection.
 func connectToVM(cmd *cobra.Command) (*vmConn, error) {
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return nil, handleConfigError(err)
 	}

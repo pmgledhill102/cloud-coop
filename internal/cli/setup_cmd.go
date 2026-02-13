@@ -34,8 +34,9 @@ func defaultSetupProviderFactory(ctx context.Context) (setup.SetupProvider, erro
 }
 
 var setupCmd = &cobra.Command{
-	Use:   "setup",
-	Short: "Set up a cloud project for cloudcoop",
+	Use:         "setup",
+	Short:       "Set up a cloud project for cloudcoop",
+	Annotations: map[string]string{"skip-config": "true"},
 	Long: `Automate GCP project provisioning for cloudcoop.
 
 This command checks prerequisites, enables required APIs, creates a service

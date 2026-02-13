@@ -59,6 +59,10 @@ type agentKilledMsg struct {
 
 type connectFinishedMsg struct{ err error }
 
+// connectReadyMsg is returned when pre-connect checks pass and the SSH
+// exec.Cmd is ready to run. Update handles it by calling tea.ExecProcess.
+type connectReadyMsg struct{ cmd *exec.Cmd }
+
 type firewallCheckedMsg struct{ err error }
 
 type sshKeyCheckedMsg struct{ err error }
@@ -237,36 +241,36 @@ func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.
 	}
 }
 
+// connectToAgent returns a tea.Cmd that performs SSH host-key verification
+// asynchronously and, on success, returns a connectReadyMsg carrying the
+// prepared exec.Cmd. The Update loop handles connectReadyMsg by calling
+// tea.ExecProcess, which suspends the TUI for the interactive SSH session.
 func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int, sessionName string) tea.Cmd {
-	ip, _ := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	port := ssh.ResolvePort(cfg.SSH.Port)
-	vm := ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
+	return func() tea.Msg {
+		ip, _ := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
+		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
+		port := ssh.ResolvePort(cfg.SSH.Port)
+		vm := ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
 
-	// Ensure host key is in cloudcoop's managed known_hosts before connecting
-	if err := ssh.EnsureHostKeyPinned(ip, port, vm); err != nil {
-		return func() tea.Msg {
+		// Ensure host key is in cloudcoop's managed known_hosts before connecting
+		if err := ssh.EnsureHostKeyPinned(ip, port, vm); err != nil {
 			return connectFinishedMsg{err: fmt.Errorf("fetch host key: %w", err)}
 		}
-	}
 
-	knownHostsPath, err := ssh.CloudcoopKnownHostsPath()
-	if err != nil {
-		return func() tea.Msg {
+		knownHostsPath, err := ssh.CloudcoopKnownHostsPath()
+		if err != nil {
 			return connectFinishedMsg{err: fmt.Errorf("get known_hosts path: %w", err)}
 		}
+
+		tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", sessionName, windowIndex, sessionName)
+		c := exec.Command("ssh",
+			"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
+			"-t",
+			"-p", fmt.Sprintf("%d", port),
+			fmt.Sprintf("%s@%s", sshUser, ip), tmuxCmd)
+
+		return connectReadyMsg{cmd: c}
 	}
-
-	tmuxCmd := fmt.Sprintf("tmux select-window -t %s:%d && tmux attach -t %s", sessionName, windowIndex, sessionName)
-	c := exec.Command("ssh",
-		"-o", fmt.Sprintf("UserKnownHostsFile=%s", knownHostsPath),
-		"-t",
-		"-p", fmt.Sprintf("%d", port),
-		fmt.Sprintf("%s@%s", sshUser, ip), tmuxCmd)
-
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return connectFinishedMsg{err: err}
-	})
 }
 
 func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int, sessionName string) tea.Cmd {

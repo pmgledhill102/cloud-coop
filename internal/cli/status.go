@@ -38,8 +38,7 @@ var providerFactory func(ctx context.Context, cfg *config.Config) (cloud.Provide
 var configLoader func() (*config.Config, error) = config.LoadMerged
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}

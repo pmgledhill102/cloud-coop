@@ -395,12 +395,12 @@ func TestRenderHelp_ShowsAgentActions(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include agent actions with new labels
-	if !containsString(help, "+: add agent") {
-		t.Error("help should show '+: add agent'")
+	// Should include agent actions (rendered by help bubble without colons)
+	if !containsString(help, "+ add agent") {
+		t.Errorf("help should show '+ add agent', got: %s", help)
 	}
-	if !containsString(help, "-: kill agent") {
-		t.Error("help should show '-: kill agent'")
+	if !containsString(help, "- kill agent") {
+		t.Errorf("help should show '- kill agent', got: %s", help)
 	}
 }
 
@@ -411,12 +411,12 @@ func TestRenderHelp_ConfirmationMode(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should show confirmation options only (lowercase)
+	// Should show confirmation options only (rendered by dialogueHelp)
 	if !containsString(help, "y: confirm") {
-		t.Error("help in confirmation mode should show 'y: confirm'")
+		t.Errorf("help in confirmation mode should show 'y: confirm', got: %s", help)
 	}
 	if !containsString(help, "n: cancel") {
-		t.Error("help in confirmation mode should show 'n: cancel'")
+		t.Errorf("help in confirmation mode should show 'n: cancel', got: %s", help)
 	}
 }
 
@@ -558,9 +558,9 @@ func TestRenderHelp_ShowsConnectAction(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include connect action with Enter and number keys
-	if !containsString(help, "Enter/c/1-9: connect") {
-		t.Error("help should show 'Enter/c/1-9: connect'")
+	// Should include connect action with Enter and number keys (no colon in help bubble format)
+	if !containsString(help, "Enter/c/1-9 connect") {
+		t.Errorf("help should show 'Enter/c/1-9 connect', got: %s", help)
 	}
 }
 
@@ -1007,8 +1007,8 @@ func TestRenderHelp_ShowsHelpShortcut(t *testing.T) {
 
 	help := m.renderHelp()
 
-	if !containsString(help, "?: help") {
-		t.Error("help bar should show '?: help'")
+	if !containsString(help, "? help") {
+		t.Errorf("help bar should show '? help', got: %s", help)
 	}
 }
 
@@ -1039,14 +1039,14 @@ func TestRenderHelp_ShowsPauseAutoRefresh(t *testing.T) {
 	m := Model{}
 
 	help := m.renderHelp()
-	if !containsString(help, "a: pause auto") {
-		t.Error("help should show 'a: pause auto' when not paused")
+	if !containsString(help, "a pause auto") {
+		t.Errorf("help should show 'a pause auto' when not paused, got: %s", help)
 	}
 
 	m.autoRefreshPaused = true
 	help = m.renderHelp()
-	if !containsString(help, "a: resume auto") {
-		t.Error("help should show 'a: resume auto' when paused")
+	if !containsString(help, "a resume auto") {
+		t.Errorf("help should show 'a resume auto' when paused, got: %s", help)
 	}
 }
 
@@ -1166,8 +1166,8 @@ func TestRenderHelp_ShowsSyncWhenWorkspaceDetected(t *testing.T) {
 
 	help := m.renderHelp()
 
-	if !containsString(help, "w: sync") {
-		t.Error("help should show 'w: sync' when workspace is detected")
+	if !containsString(help, "w sync") {
+		t.Errorf("help should show 'w sync' when workspace is detected, got: %s", help)
 	}
 }
 

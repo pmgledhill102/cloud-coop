@@ -26,8 +26,7 @@ This shows:
 }
 
 func runProvisionStatus(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}

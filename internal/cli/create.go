@@ -36,8 +36,7 @@ func init() {
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}

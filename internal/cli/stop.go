@@ -22,8 +22,7 @@ If the VM is in a transitional state (starting/stopping), an error is returned.`
 }
 
 func runStop(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}
