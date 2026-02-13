@@ -87,7 +87,7 @@ func New() Model {
 	}
 }
 
-// Init initializes the TUI application.
+// Init initialises the TUI application.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(loadConfig, m.spinner.Tick)
 }

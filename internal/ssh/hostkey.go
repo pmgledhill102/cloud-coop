@@ -246,7 +246,7 @@ func CreateHostKeyCallback(host string, port int) (ssh.HostKeyCallback, error) {
 //   - Pin stale (different created or IP): remove old entry, re-scan, update pin
 //   - No pin (first connection): scan, create pin
 //
-// When vm is nil it falls back to the unpinned EnsureHostKey behavior.
+// When vm is nil it falls back to the unpinned EnsureHostKey behaviour.
 func EnsureHostKeyPinned(host string, port int, vm *VMIdentity) error {
 	if vm == nil {
 		return EnsureHostKey(host, port)

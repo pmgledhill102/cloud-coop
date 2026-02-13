@@ -477,7 +477,7 @@ func (p *Provider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey s
 // SSH from the given source IP on the given port.
 func (p *Provider) EnsureFirewallAllowsSSH(ctx context.Context, cfg cloud.FirewallConfig) (bool, error) {
 	if p.firewalls == nil {
-		return false, fmt.Errorf("firewalls client not initialized")
+		return false, fmt.Errorf("firewalls client not initialised")
 	}
 
 	wantRange := cfg.SourceIP + "/32"

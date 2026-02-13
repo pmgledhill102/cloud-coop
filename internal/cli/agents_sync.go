@@ -61,7 +61,18 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 	}
 	defer conn.Close()
 
-	// 3. Deploy key setup.
+	// 3. Git identity: copy local user.name/user.email to VM.
+	gitID, ok := workspace.LocalGitIdentity(workspace.NewGitRunner("."))
+	if ok {
+		if err := workspace.SetupVMGitIdentity(conn.Client, gitID); err != nil {
+			return fmt.Errorf("git identity setup: %w", err)
+		}
+		log.Debug("set VM git identity", "name", gitID.Name, "email", gitID.Email)
+	} else {
+		fmt.Fprintln(os.Stderr, "Warning: local git user.name/user.email not configured, skipping VM git identity setup")
+	}
+
+	// 4. Deploy key setup.
 	repo, err := deploykey.ParseRepoRef(info.RemoteURL)
 	if err != nil {
 		return fmt.Errorf("parse remote URL: %w", err)
@@ -94,16 +105,16 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("deploy key VM setup: %w", err)
 	}
 
-	// 4. Resolve agent command: flag > repo-specific > default > "" (sync defaults to "bash").
+	// 5. Resolve agent command: flag > repo-specific > default > "" (sync defaults to "bash").
 	agentCommand := syncCommand
 	if agentCommand == "" {
 		agentCommand = conn.Config.Agents.ResolveCommand(info.Slug)
 	}
 
-	// 5. Resolve pre-commands: global + repo-specific.
+	// 6. Resolve pre-commands: global + repo-specific.
 	preCommands := conn.Config.Agents.ResolvePreCommands(info.Slug)
 
-	// 6. Sync.
+	// 7. Sync.
 	syncResult, err := workspace.Sync(conn.Client, info, workspace.SyncOptions{
 		AgentCommand: agentCommand,
 		PreCommands:  preCommands,
@@ -114,7 +125,7 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	// 7. Print results.
+	// 8. Print results.
 	printSyncResult(syncResult)
 	return nil
 }

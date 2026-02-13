@@ -17,7 +17,7 @@ var (
 )
 
 func main() {
-	// Initialize logging
+	// Initialise logging
 	log.Init()
 
 	// Set version info for CLI

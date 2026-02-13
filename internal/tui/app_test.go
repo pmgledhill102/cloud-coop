@@ -751,7 +751,7 @@ func TestUppercaseR_Refreshes(t *testing.T) {
 }
 
 func TestUppercaseC_Connects(t *testing.T) {
-	// Uppercase C should now connect (not create), via normalization
+	// Uppercase C should now connect (not create), via normalisation
 	m := Model{
 		cfg:    &config.Config{SSH: config.SSHConfig{Port: 22}},
 		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
@@ -929,7 +929,7 @@ func TestKeyN_CreateVM(t *testing.T) {
 }
 
 func TestKeyN_UppercaseCreateVM(t *testing.T) {
-	// 'N' should also create VM via normalization
+	// 'N' should also create VM via normalisation
 	m := Model{
 		cfg:    &config.Config{},
 		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusNotFound},

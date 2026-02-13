@@ -24,6 +24,7 @@
 # SSH/Networking
 # Technical terms
 # Testing
+Analyzed
 actionlint
 adminpb
 amd64
@@ -33,6 +34,7 @@ apperrors
 arm64
 axion
 axxxx
+behavior
 bubbletea
 carryforward
 cgo
@@ -42,12 +44,15 @@ clippy
 cloudcoop
 cloudresourcemanager
 cobra
+color
 codecov
 codeowners
 computepb
 covermode
 coverprofile
 darwin
+Deriver
+defense
 dependabot
 deploykey
 direnv
@@ -106,6 +111,7 @@ knownhosts
 ksh
 ktlint
 laravel
+linters
 ldflags
 linux
 lipgloss
@@ -117,6 +123,7 @@ mutex
 mypy
 myrepo
 noreply
+nonexistent
 openssh
 osascript
 oslogin
@@ -124,9 +131,13 @@ pipx
 pmgledhill
 pre-commit
 precommit
+preempted
 preemptible
+preemption
+preemptions
 prettierignore
 prereq
+priv
 prettierrc
 pubkey
 publickey
@@ -134,6 +145,7 @@ pulumi
 readonly
 refactor
 refspec
+resp
 reviewdog
 resourcemanager
 resourcemanagerpb
@@ -190,5 +202,6 @@ worktree
 worktrees
 wrapf
 xlarge
+xterm
 yamllint
 zerolog

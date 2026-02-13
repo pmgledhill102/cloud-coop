@@ -254,9 +254,9 @@ func TestConfigError_Error(t *testing.T) {
 		{
 			name: "with neither",
 			err: &ConfigError{
-				Err: errors.New("configuration not initialized"),
+				Err: errors.New("configuration not initialised"),
 			},
-			expected: "config error: configuration not initialized",
+			expected: "config error: configuration not initialised",
 		},
 	}
 
