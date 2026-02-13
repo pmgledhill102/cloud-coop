@@ -3,15 +3,16 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -42,8 +43,8 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Create provider with 180s timeout
-	ctx, cancel := context.WithTimeout(cmd.Context(), 180*time.Second)
+	// Create provider with lifecycle timeout
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMLifecycle)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
@@ -59,17 +60,16 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get VM status: %w", err)
 	}
 
-	// Handle states
-	switch vmInfo.Status {
-	case cloud.VMStatusNotFound:
-		fmt.Printf("VM %s does not exist.\n", cfg.VM.Name)
-		return nil
-	case cloud.VMStatusStopped:
-		// Proceed with delete
-	case cloud.VMStatusRunning:
-		return fmt.Errorf("VM %s is running, stop it first with 'cloudcoop stop'", cfg.VM.Name)
-	default:
-		return fmt.Errorf("VM %s is in state: %s, cannot delete", cfg.VM.Name, vmInfo.Status)
+	// Validate state
+	if err := ops.ValidateForDelete(vmInfo); err != nil {
+		if errors.Is(err, ops.ErrVMNotFound) {
+			fmt.Printf("VM %s does not exist.\n", cfg.VM.Name)
+			return nil
+		}
+		if errors.Is(err, ops.ErrVMRunning) {
+			return fmt.Errorf("VM %s is running, stop it first with 'cloudcoop stop'", cfg.VM.Name)
+		}
+		return fmt.Errorf("VM %s: %w", cfg.VM.Name, err)
 	}
 
 	// Confirm deletion unless --force is used

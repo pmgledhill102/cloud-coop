@@ -11,11 +11,9 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
-	"github.com/cloud-coop/cloudcoop/internal/deploykey"
 	"github.com/cloud-coop/cloudcoop/internal/log"
-	"github.com/cloud-coop/cloudcoop/internal/network"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
@@ -80,20 +78,6 @@ func scheduleRefresh(cfg *config.Config) tea.Cmd {
 	})
 }
 
-// newProvider creates a cloud provider based on config.
-func newProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
-	switch cfg.Cloud.Provider {
-	case "gcp":
-		p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create GCP provider: %w", err)
-		}
-		return p, func() { _ = p.Close() }, nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)
-	}
-}
-
 func loadConfig() tea.Msg {
 	cfg, err := config.LoadMerged()
 	ws, _ := workspace.Detect(workspace.NewGitRunner(".")) // nil if not in a git repo
@@ -102,10 +86,10 @@ func loadConfig() tea.Msg {
 
 func fetchVMInfo(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutVMStatus)
 		defer cancel()
 
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return vmInfoMsg{err: err}
 		}
@@ -122,10 +106,10 @@ func fetchVMInfo(cfg *config.Config) tea.Cmd {
 
 func startVM(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutVMLifecycle)
 		defer cancel()
 
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return vmStartMsg{err: err}
 		}
@@ -140,10 +124,10 @@ func startVM(cfg *config.Config) tea.Cmd {
 
 func stopVM(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutVMLifecycle)
 		defer cancel()
 
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return vmStopMsg{err: err}
 		}
@@ -158,10 +142,10 @@ func stopVM(cfg *config.Config) tea.Cmd {
 
 func createVM(cfg *config.Config, machineType string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutVMCreate)
 		defer cancel()
 
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return vmCreateMsg{err: err}
 		}
@@ -206,10 +190,10 @@ func createVM(cfg *config.Config, machineType string) tea.Cmd {
 
 func deleteVM(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutVMLifecycle)
 		defer cancel()
 
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return vmDeleteMsg{err: err}
 		}
@@ -226,21 +210,9 @@ func deleteVM(cfg *config.Config) tea.Cmd {
 	}
 }
 
-// connectSSH creates an SSH client for agent operations.
-func connectSSH(cfg *config.Config, vmInfo *cloud.VMInfo) (*ssh.Client, error) {
-	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
-	if err != nil {
-		return nil, fmt.Errorf("no IP address available")
-	}
-	sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-	sshCfg := ssh.SetupClientConfig(ip, sshUser, cfg.SSH.Port)
-	sshCfg.VM = ssh.NewVMIdentity(vmInfo.Name, vmInfo.CloudcoopCreated)
-	return ssh.NewClient(sshCfg)
-}
-
 func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.Cmd {
 	return func() tea.Msg {
-		client, err := connectSSH(cfg, vmInfo)
+		client, err := ops.ConnectSSH(cfg, vmInfo)
 		if err != nil {
 			return agentsMsg{err: fmt.Errorf("SSH: %w", err)}
 		}
@@ -253,7 +225,7 @@ func fetchAgents(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) t
 
 func addAgent(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string) tea.Cmd {
 	return func() tea.Msg {
-		client, err := connectSSH(cfg, vmInfo)
+		client, err := ops.ConnectSSH(cfg, vmInfo)
 		if err != nil {
 			return agentAddedMsg{err: fmt.Errorf("SSH: %w", err)}
 		}
@@ -299,7 +271,7 @@ func connectToAgent(cfg *config.Config, vmInfo *cloud.VMInfo, windowIndex int, s
 
 func killAgent(cfg *config.Config, vmInfo *cloud.VMInfo, index int, sessionName string) tea.Cmd {
 	return func() tea.Msg {
-		client, err := connectSSH(cfg, vmInfo)
+		client, err := ops.ConnectSSH(cfg, vmInfo)
 		if err != nil {
 			return agentKilledMsg{index: index, err: fmt.Errorf("SSH: %w", err)}
 		}
@@ -319,119 +291,51 @@ type syncMsg struct {
 
 func syncWorkspace(cfg *config.Config, vmInfo *cloud.VMInfo, wsInfo *workspace.Info) tea.Cmd {
 	return func() tea.Msg {
-		// 1. Connect SSH
-		client, err := connectSSH(cfg, vmInfo)
+		client, err := ops.ConnectSSH(cfg, vmInfo)
 		if err != nil {
 			return syncMsg{err: fmt.Errorf("SSH: %w", err)}
 		}
 		defer func() { _ = client.Close() }()
 
-		// 2. Deploy key setup
-		repo, err := deploykey.ParseRepoRef(wsInfo.RemoteURL)
-		if err != nil {
-			return syncMsg{err: fmt.Errorf("parse repo: %w", err)}
-		}
-
-		fs := deploykey.NewFileSystem()
-		cmd := deploykey.NewCommandRunner()
-		dkOpts := deploykey.Options{
-			Slug:      wsInfo.Slug,
-			RemoteURL: wsInfo.RemoteURL,
-			Repo:      repo,
-		}
-
-		setupResult, err := deploykey.EnsureKey(fs, cmd, dkOpts)
-		if err != nil {
-			return syncMsg{err: fmt.Errorf("deploy key: %w", err)}
-		}
-		if setupResult.ManualNeeded {
-			return syncMsg{err: fmt.Errorf("deploy key requires manual setup: %s", setupResult.ManualMessage)}
-		}
-
-		_, err = deploykey.SetupVM(client, fs, setupResult.KeyPair, dkOpts)
-		if err != nil {
-			return syncMsg{err: fmt.Errorf("VM key setup: %w", err)}
-		}
-
-		// 3. Git identity: copy local user.name/user.email to VM.
-		gitID, ok := workspace.LocalGitIdentity(workspace.NewGitRunner("."))
-		if ok {
-			if err := workspace.SetupVMGitIdentity(client, gitID); err != nil {
-				return syncMsg{err: fmt.Errorf("git identity setup: %w", err)}
-			}
-			log.Debug("set VM git identity", "name", gitID.Name, "email", gitID.Email)
-		}
-
-		// 4. Resolve agent command + pre-commands from config
-		agentCommand := cfg.Agents.ResolveCommand(wsInfo.Slug)
-		preCommands := cfg.Agents.ResolvePreCommands(wsInfo.Slug)
-
-		// 5. Sync
-		result, err := workspace.Sync(client, wsInfo, workspace.SyncOptions{
-			AgentCommand: agentCommand,
-			PreCommands:  preCommands,
-			RepoOwner:    repo.Owner,
-			RepoName:     repo.Name,
-		})
+		result, err := ops.SyncWorkspace(client, cfg, wsInfo, "")
 		return syncMsg{workspace: wsInfo, result: result, err: err}
 	}
 }
 
 func ensureSSHKey(cfg *config.Config, vmInfo *cloud.VMInfo) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutAccess)
 		defer cancel()
 
-		pubKey, err := ssh.ReadPublicKey()
-		if err != nil {
-			return sshKeyCheckedMsg{err: err}
-		}
-
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return sshKeyCheckedMsg{err: err}
 		}
 		defer cleanup()
 
-		sshUser := ssh.ResolveSSHUser(cfg.SSH.User)
-		err = provider.EnsureSSHKeyOnVM(ctx, vmInfo.Name, sshUser, pubKey)
+		err = ops.EnsureSSHKey(ctx, cfg, provider, vmInfo.Name)
 		return sshKeyCheckedMsg{err: err}
 	}
 }
 
 func ensureFirewall(cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ops.TimeoutAccess)
 		defer cancel()
 
-		ip, err := network.DetectPublicIP(ctx)
-		if err != nil {
-			return firewallCheckedMsg{err: err}
-		}
-
-		provider, cleanup, err := newProvider(ctx, cfg)
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
 		if err != nil {
 			return firewallCheckedMsg{err: err}
 		}
 		defer cleanup()
 
-		sshPort := ssh.ResolvePort(cfg.SSH.Port)
-		netName := cfg.VM.Network
-		if netName == "" {
-			netName = "default"
-		}
-
-		changed, err := provider.EnsureFirewallAllowsSSH(ctx, cloud.FirewallConfig{
-			SourceIP: ip,
-			Port:     sshPort,
-			Network:  netName,
-		})
+		changed, err := ops.EnsureFirewall(ctx, cfg, provider)
 		if err != nil {
 			return firewallCheckedMsg{err: err}
 		}
 
 		if changed {
-			log.Info("firewall updated", "ip", ip, "port", sshPort)
+			log.Info("firewall updated")
 		}
 
 		return firewallCheckedMsg{}
@@ -463,7 +367,7 @@ func fetchVMDetails(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string
 
 		go func() {
 			defer wg.Done()
-			client, err := connectSSH(cfg, vmInfo)
+			client, err := ops.ConnectSSH(cfg, vmInfo)
 			if err != nil {
 				agentsE = fmt.Errorf("SSH: %w", err)
 				return
@@ -474,7 +378,7 @@ func fetchVMDetails(cfg *config.Config, vmInfo *cloud.VMInfo, sessionName string
 
 		go func() {
 			defer wg.Done()
-			client, err := connectSSH(cfg, vmInfo)
+			client, err := ops.ConnectSSH(cfg, vmInfo)
 			if err != nil {
 				statusE = fmt.Errorf("SSH: %w", err)
 				return

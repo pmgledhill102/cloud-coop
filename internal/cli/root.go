@@ -35,6 +35,26 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 
+	// Define command groups for organised help output
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "vm", Title: "VM Lifecycle:"},
+		&cobra.Group{ID: "agents", Title: "Agent Management:"},
+		&cobra.Group{ID: "config", Title: "Configuration & Setup:"},
+	)
+
+	// Assign groups
+	statusCmd.GroupID = "vm"
+	startCmd.GroupID = "vm"
+	stopCmd.GroupID = "vm"
+	createCmd.GroupID = "vm"
+	deleteCmd.GroupID = "vm"
+
+	agentsCmd.GroupID = "agents"
+	connectCmd.GroupID = "agents"
+
+	configCmd.GroupID = "config"
+	setupCmd.GroupID = "config"
+
 	// Add subcommands
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(statusCmd)
@@ -44,6 +64,7 @@ func init() {
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(sshCmd)
 	rootCmd.AddCommand(agentsCmd)
+	rootCmd.AddCommand(connectCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(setupCmd)

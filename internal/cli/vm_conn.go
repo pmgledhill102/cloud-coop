@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -51,7 +51,7 @@ func connectToVM(cmd *cobra.Command) (*vmConn, error) {
 		return nil, handleConfigError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMStatus)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
@@ -75,11 +75,8 @@ func connectToVM(cmd *cobra.Command) (*vmConn, error) {
 		return nil, nil
 	}
 
-	// Ensure firewall allows SSH from this workstation (non-fatal)
-	ensureFirewallAccess(ctx, cfg, provider)
-
-	// Ensure SSH public key is in VM metadata (non-fatal)
-	ensureSSHKeyAccess(ctx, cfg, provider, vmInfo.Name)
+	// Ensure firewall + SSH key access (non-fatal)
+	ops.EnsureVMAccess(ctx, cfg, provider, vmInfo.Name)
 
 	ip, err := ssh.ResolveVMIP(vmInfo.ExternalIP, vmInfo.InternalIP)
 	if err != nil {

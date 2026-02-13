@@ -2,13 +2,13 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 )
 
 var startCmd = &cobra.Command{
@@ -32,8 +32,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return handleConfigError(fmt.Errorf("invalid configuration: %w", err))
 	}
 
-	// Create provider with 180s timeout (start operations can take 60-90s)
-	ctx, cancel := context.WithTimeout(cmd.Context(), 180*time.Second)
+	// Create provider with lifecycle timeout (start operations can take 60-90s)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMLifecycle)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
@@ -49,22 +49,17 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get VM status: %w", err)
 	}
 
-	// Handle states
-	switch vmInfo.Status {
-	case cloud.VMStatusRunning:
-		fmt.Printf("VM %s is already running.\n", cfg.VM.Name)
-		return nil
-	case cloud.VMStatusStarting:
-		fmt.Printf("VM %s is already starting...\n", cfg.VM.Name)
-		return nil
-	case cloud.VMStatusStopping:
-		return fmt.Errorf("VM %s is currently stopping, please wait and try again", cfg.VM.Name)
-	case cloud.VMStatusNotFound:
-		return fmt.Errorf("VM %s not found", cfg.VM.Name)
-	case cloud.VMStatusStopped:
-		// Proceed with start
-	default:
-		return fmt.Errorf("VM %s is in unexpected state: %s", cfg.VM.Name, vmInfo.Status)
+	// Validate state
+	if err := ops.ValidateForStart(vmInfo); err != nil {
+		if errors.Is(err, ops.ErrVMAlreadyRunning) {
+			fmt.Printf("VM %s is already running.\n", cfg.VM.Name)
+			return nil
+		}
+		if errors.Is(err, ops.ErrVMStarting) {
+			fmt.Printf("VM %s is already starting...\n", cfg.VM.Name)
+			return nil
+		}
+		return fmt.Errorf("VM %s: %w", cfg.VM.Name, err)
 	}
 
 	// Start the VM

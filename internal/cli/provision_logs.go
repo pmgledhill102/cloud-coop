@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -48,7 +48,7 @@ func runProvisionLogs(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create provider
-	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutProvision)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)

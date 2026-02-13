@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -55,8 +57,8 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid size %q, available sizes: %v", createSize, sizes)
 	}
 
-	// Create provider with 300s timeout (create operations can take a while)
-	ctx, cancel := context.WithTimeout(cmd.Context(), 300*time.Second)
+	// Create provider with create timeout (can take several minutes)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMCreate)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
@@ -72,15 +74,13 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get VM status: %w", err)
 	}
 
-	// Handle states
-	switch vmInfo.Status {
-	case cloud.VMStatusNotFound:
-		// Proceed with create
-	case cloud.VMStatusRunning, cloud.VMStatusStopped:
-		fmt.Printf("VM %s already exists (status: %s).\n", cfg.VM.Name, vmInfo.Status)
-		return nil
-	default:
-		return fmt.Errorf("VM %s is in state: %s, cannot create", cfg.VM.Name, vmInfo.Status)
+	// Validate state
+	if err := ops.ValidateForCreate(vmInfo); err != nil {
+		if errors.Is(err, ops.ErrVMExists) {
+			fmt.Printf("VM %s already exists (status: %s).\n", cfg.VM.Name, vmInfo.Status)
+			return nil
+		}
+		return fmt.Errorf("VM %s: %w", cfg.VM.Name, err)
 	}
 
 	// Read SSH public key (non-fatal if missing — key can be pushed later)

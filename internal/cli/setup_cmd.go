@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/setup"
 	gcpsetup "github.com/cloud-coop/cloudcoop/internal/setup/gcp"
 )
@@ -249,7 +250,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Detect public IP for direct SSH rule
-	publicIP, ipErr := publicIPDetector(ctx)
+	publicIP, ipErr := ops.PublicIPDetector(ctx)
 
 	var directFWSourceIP string
 	var directFWPort int
