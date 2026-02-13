@@ -230,7 +230,7 @@ func (m Model) renderHelp() string {
 		return helpStyle.Render("y: confirm • n: cancel")
 	}
 
-	actions := []string{"q: quit", "r: refresh"}
+	actions := []string{"?: help", "q: quit", "r: refresh"}
 	if m.autoRefreshPaused {
 		actions = append(actions, "a: resume auto")
 	} else {
@@ -250,12 +250,11 @@ func (m Model) renderHelp() string {
 			if m.canModifyAgents() {
 				actions = append(actions, "+: add agent")
 				if m.agents != nil && len(m.agents.Sessions) > 0 {
-					actions = append(actions, "c/1-9: connect", "-: kill agent", "↑/↓: select")
+					actions = append(actions, "Enter/c/1-9: connect", "-: kill agent", "↑/↓: select")
 				}
 			}
 		}
 	}
-	actions = append(actions, "?: help")
 	return helpStyle.Render(strings.Join(actions, " • "))
 }
 
@@ -275,7 +274,7 @@ func (m Model) renderHelpOverlay() string {
   Agent Management
     +           Add agent
     -           Kill agent (with confirmation)
-    c           Connect to selected agent
+    c/Enter     Connect to selected agent
     1-9         Connect to agent by index
     w           Sync workspace worktrees
 
