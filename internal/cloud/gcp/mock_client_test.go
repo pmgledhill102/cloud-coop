@@ -191,3 +191,39 @@ func (m *mockFirewallsClient) Close() error {
 	m.closeCalled = true
 	return nil
 }
+
+// mockNetworksClient is a mock implementation of networksClient for testing.
+type mockNetworksClient struct {
+	network  *computepb.Network
+	getError error
+}
+
+func (m *mockNetworksClient) Get(_ context.Context, _ *computepb.GetNetworkRequest) (*computepb.Network, error) {
+	if m.getError != nil {
+		return nil, m.getError
+	}
+	if m.network != nil {
+		return m.network, nil
+	}
+	return &computepb.Network{}, nil
+}
+
+func (m *mockNetworksClient) Close() error { return nil }
+
+// mockSubnetworksClient is a mock implementation of subnetworksClient for testing.
+type mockSubnetworksClient struct {
+	subnetwork *computepb.Subnetwork
+	getError   error
+}
+
+func (m *mockSubnetworksClient) Get(_ context.Context, _ *computepb.GetSubnetworkRequest) (*computepb.Subnetwork, error) {
+	if m.getError != nil {
+		return nil, m.getError
+	}
+	if m.subnetwork != nil {
+		return m.subnetwork, nil
+	}
+	return &computepb.Subnetwork{}, nil
+}
+
+func (m *mockSubnetworksClient) Close() error { return nil }

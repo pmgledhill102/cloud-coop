@@ -1288,6 +1288,142 @@ func TestProvider_CreateVM_MaxUptimeZero(t *testing.T) {
 	}
 }
 
+func TestProvider_Preflight(t *testing.T) {
+	tests := []struct {
+		name         string
+		cfg          cloud.PreflightConfig
+		networks     *mockNetworksClient
+		subnets      *mockSubnetworksClient
+		firewalls    *mockFirewallsClient
+		wantIssues   int
+		wantErrors   bool
+		wantWarnings bool
+		wantErr      bool
+	}{
+		{
+			name: "all resources exist",
+			cfg: cloud.PreflightConfig{
+				Network:      "my-vpc",
+				Subnet:       "my-subnet",
+				Zone:         "us-central1-a",
+				FirewallRule: "cloudcoop-allow-iap-ssh",
+			},
+			networks: &mockNetworksClient{},
+			subnets:  &mockSubnetworksClient{},
+			firewalls: &mockFirewallsClient{
+				rule: &computepb.Firewall{},
+			},
+			wantIssues: 0,
+		},
+		{
+			name: "network not found",
+			cfg: cloud.PreflightConfig{
+				Network: "nonexistent-vpc",
+				Zone:    "us-central1-a",
+			},
+			networks:   &mockNetworksClient{getError: newNotFoundError()},
+			subnets:    &mockSubnetworksClient{},
+			firewalls:  &mockFirewallsClient{},
+			wantIssues: 1,
+			wantErrors: true,
+		},
+		{
+			name: "subnet not found",
+			cfg: cloud.PreflightConfig{
+				Network: "my-vpc",
+				Subnet:  "nonexistent-subnet",
+				Zone:    "us-central1-a",
+			},
+			networks:   &mockNetworksClient{},
+			subnets:    &mockSubnetworksClient{getError: newNotFoundError()},
+			firewalls:  &mockFirewallsClient{},
+			wantIssues: 1,
+			wantErrors: true,
+		},
+		{
+			name: "subnet empty skips check",
+			cfg: cloud.PreflightConfig{
+				Network: "my-vpc",
+				Zone:    "us-central1-a",
+			},
+			networks:   &mockNetworksClient{},
+			subnets:    &mockSubnetworksClient{getError: newNotFoundError()}, // should not be called
+			firewalls:  &mockFirewallsClient{},
+			wantIssues: 0,
+		},
+		{
+			name: "firewall not found",
+			cfg: cloud.PreflightConfig{
+				Network:      "my-vpc",
+				Zone:         "us-central1-a",
+				FirewallRule: "cloudcoop-allow-iap-ssh",
+			},
+			networks:     &mockNetworksClient{},
+			subnets:      &mockSubnetworksClient{},
+			firewalls:    &mockFirewallsClient{}, // default Get returns 404
+			wantIssues:   1,
+			wantWarnings: true,
+		},
+		{
+			name: "multiple missing resources",
+			cfg: cloud.PreflightConfig{
+				Network:      "bad-vpc",
+				Subnet:       "bad-subnet",
+				Zone:         "us-central1-a",
+				FirewallRule: "cloudcoop-allow-iap-ssh",
+			},
+			networks:     &mockNetworksClient{getError: newNotFoundError()},
+			subnets:      &mockSubnetworksClient{getError: newNotFoundError()},
+			firewalls:    &mockFirewallsClient{}, // default Get returns 404
+			wantIssues:   3,
+			wantErrors:   true,
+			wantWarnings: true,
+		},
+		{
+			name: "non-404 API error returns error",
+			cfg: cloud.PreflightConfig{
+				Network: "my-vpc",
+				Zone:    "us-central1-a",
+			},
+			networks:  &mockNetworksClient{getError: newForbiddenError()},
+			subnets:   &mockSubnetworksClient{},
+			firewalls: &mockFirewallsClient{},
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newWithClients("test-project", "us-central1-a",
+				&mockInstancesClient{}, tt.firewalls,
+				withNetworks(tt.networks), withSubnets(tt.subnets),
+			)
+
+			result, err := p.Preflight(context.Background(), tt.cfg)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Preflight() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if len(result.Issues) != tt.wantIssues {
+				t.Errorf("Preflight() issues = %d, want %d", len(result.Issues), tt.wantIssues)
+				for _, issue := range result.Issues {
+					t.Logf("  %v: %s: %s", issue.Severity, issue.Resource, issue.Message)
+				}
+			}
+			if result.HasErrors() != tt.wantErrors {
+				t.Errorf("HasErrors() = %v, want %v", result.HasErrors(), tt.wantErrors)
+			}
+			if result.HasWarnings() != tt.wantWarnings {
+				t.Errorf("HasWarnings() = %v, want %v", result.HasWarnings(), tt.wantWarnings)
+			}
+		})
+	}
+}
+
 func TestProviderInterface(t *testing.T) {
 	// Ensure Provider implements cloud.Provider
 	var _ cloud.Provider = (*Provider)(nil)

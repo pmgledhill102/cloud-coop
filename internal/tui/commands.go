@@ -15,6 +15,7 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/log"
 	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
+	"github.com/cloud-coop/cloudcoop/internal/setup"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
@@ -62,6 +63,11 @@ type connectFinishedMsg struct{ err error }
 // connectReadyMsg is returned when pre-connect checks pass and the SSH
 // exec.Cmd is ready to run. Update handles it by calling tea.ExecProcess.
 type connectReadyMsg struct{ cmd *exec.Cmd }
+
+type preflightMsg struct {
+	result *cloud.PreflightResult
+	err    error
+}
 
 type firewallCheckedMsg struct{ err error }
 
@@ -343,6 +349,27 @@ func ensureFirewall(cfg *config.Config) tea.Cmd {
 		}
 
 		return firewallCheckedMsg{}
+	}
+}
+
+func runPreflight(cfg *config.Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		provider, cleanup, err := ops.NewProvider(ctx, cfg)
+		if err != nil {
+			return preflightMsg{err: err}
+		}
+		defer cleanup()
+
+		result, err := provider.Preflight(ctx, cloud.PreflightConfig{
+			Network:      cfg.VM.Network,
+			Subnet:       cfg.VM.Subnet,
+			Zone:         cfg.Cloud.GCP.Zone,
+			FirewallRule: setup.IAPFirewallRuleName,
+		})
+		return preflightMsg{result: result, err: err}
 	}
 }
 

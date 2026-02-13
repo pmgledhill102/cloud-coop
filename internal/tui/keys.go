@@ -136,7 +136,7 @@ func (m *Model) updateKeyStates() {
 	// VM operations: contextual based on VM status
 	m.keys.Start.SetEnabled(canVM && m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusStopped)
 	m.keys.Stop.SetEnabled(canVM && m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusRunning)
-	m.keys.Create.SetEnabled(canVM && m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusNotFound)
+	m.keys.Create.SetEnabled(canVM && m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusNotFound && !m.hasPreflightErrors())
 	m.keys.Delete.SetEnabled(canVM && m.vmInfo != nil && m.vmInfo.Status == cloud.VMStatusStopped)
 
 	// Agent operations

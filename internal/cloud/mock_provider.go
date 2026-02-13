@@ -37,6 +37,11 @@ type MockProvider struct {
 	// EnsureSSHKeyError is returned by EnsureSSHKeyOnVM().
 	EnsureSSHKeyError error
 
+	// PreflightResponse is returned by Preflight().
+	PreflightResponse *PreflightResult
+	// PreflightError is returned by Preflight().
+	PreflightError error
+
 	// CallLog records method calls for verification.
 	CallLog []MockCall
 }
@@ -129,6 +134,20 @@ func (m *MockProvider) EnsureSSHKeyOnVM(ctx context.Context, name, user, publicK
 	defer m.mu.Unlock()
 	m.CallLog = append(m.CallLog, MockCall{Method: "EnsureSSHKeyOnVM", Args: []interface{}{name, user, publicKey}})
 	return m.EnsureSSHKeyError
+}
+
+// Preflight returns the configured PreflightResult or error.
+func (m *MockProvider) Preflight(ctx context.Context, cfg PreflightConfig) (*PreflightResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.CallLog = append(m.CallLog, MockCall{Method: "Preflight", Args: []interface{}{cfg}})
+	if m.PreflightError != nil {
+		return nil, m.PreflightError
+	}
+	if m.PreflightResponse != nil {
+		return m.PreflightResponse, nil
+	}
+	return &PreflightResult{}, nil
 }
 
 // WithVMInfo sets the VMInfo response and returns the mock for chaining.

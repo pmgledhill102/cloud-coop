@@ -32,6 +32,8 @@ type Provider struct {
 	zone      string
 	client    instancesClient
 	firewalls firewallsClient
+	networks  networksClient
+	subnets   subnetworksClient
 }
 
 // New creates a new GCP provider.
@@ -48,11 +50,28 @@ func New(ctx context.Context, project, zone string) (*Provider, error) {
 		return nil, fmt.Errorf("create firewalls client: %w", err)
 	}
 
+	netClient, err := compute.NewNetworksRESTClient(ctx)
+	if err != nil {
+		_ = client.Close()
+		_ = fwClient.Close()
+		return nil, fmt.Errorf("create networks client: %w", err)
+	}
+
+	subClient, err := compute.NewSubnetworksRESTClient(ctx)
+	if err != nil {
+		_ = client.Close()
+		_ = fwClient.Close()
+		_ = netClient.Close()
+		return nil, fmt.Errorf("create subnetworks client: %w", err)
+	}
+
 	return &Provider{
 		project:   project,
 		zone:      zone,
 		client:    &realInstancesClient{client: client},
 		firewalls: &realFirewallsClient{client: fwClient},
+		networks:  &realNetworksClient{client: netClient},
+		subnets:   &realSubnetworksClient{client: subClient},
 	}, nil
 }
 
@@ -66,13 +85,28 @@ func newWithClient(project, zone string, client instancesClient) *Provider {
 }
 
 // newWithClients creates a provider with all custom clients (for testing).
-func newWithClients(project, zone string, client instancesClient, fw firewallsClient) *Provider {
-	return &Provider{
+func newWithClients(project, zone string, client instancesClient, fw firewallsClient, opts ...clientOption) *Provider {
+	p := &Provider{
 		project:   project,
 		zone:      zone,
 		client:    client,
 		firewalls: fw,
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// clientOption configures optional clients on a Provider.
+type clientOption func(*Provider)
+
+func withNetworks(c networksClient) clientOption {
+	return func(p *Provider) { p.networks = c }
+}
+
+func withSubnets(c subnetworksClient) clientOption {
+	return func(p *Provider) { p.subnets = c }
 }
 
 // Name returns the provider name.
@@ -558,6 +592,70 @@ func (p *Provider) EnsureFirewallAllowsSSH(ctx context.Context, cfg cloud.Firewa
 	return true, nil
 }
 
+// Preflight validates that configured cloud resources exist.
+func (p *Provider) Preflight(ctx context.Context, cfg cloud.PreflightConfig) (*cloud.PreflightResult, error) {
+	result := &cloud.PreflightResult{}
+
+	// Check network exists
+	_, err := p.networks.Get(ctx, &computepb.GetNetworkRequest{
+		Project: p.project,
+		Network: cfg.Network,
+	})
+	if err != nil {
+		if isNotFoundError(err) {
+			result.Issues = append(result.Issues, cloud.PreflightIssue{
+				Severity: cloud.PreflightError,
+				Resource: "network",
+				Message:  fmt.Sprintf("network %q not found in project %s", cfg.Network, p.project),
+			})
+		} else {
+			return nil, fmt.Errorf("check network %q: %w", cfg.Network, err)
+		}
+	}
+
+	// Check subnet exists (if configured)
+	if cfg.Subnet != "" {
+		region := regionFromZone(cfg.Zone)
+		_, err := p.subnets.Get(ctx, &computepb.GetSubnetworkRequest{
+			Project:    p.project,
+			Region:     region,
+			Subnetwork: cfg.Subnet,
+		})
+		if err != nil {
+			if isNotFoundError(err) {
+				result.Issues = append(result.Issues, cloud.PreflightIssue{
+					Severity: cloud.PreflightError,
+					Resource: "subnet",
+					Message:  fmt.Sprintf("subnet %q not found in region %s", cfg.Subnet, region),
+				})
+			} else {
+				return nil, fmt.Errorf("check subnet %q: %w", cfg.Subnet, err)
+			}
+		}
+	}
+
+	// Check IAP firewall rule exists (warning only)
+	if cfg.FirewallRule != "" {
+		_, err := p.firewalls.Get(ctx, &computepb.GetFirewallRequest{
+			Project:  p.project,
+			Firewall: cfg.FirewallRule,
+		})
+		if err != nil {
+			if isNotFoundError(err) {
+				result.Issues = append(result.Issues, cloud.PreflightIssue{
+					Severity: cloud.PreflightWarning,
+					Resource: "firewall",
+					Message:  fmt.Sprintf("IAP firewall rule %q not found; run 'cloudcoop setup' to create it", cfg.FirewallRule),
+				})
+			} else {
+				return nil, fmt.Errorf("check firewall rule %q: %w", cfg.FirewallRule, err)
+			}
+		}
+	}
+
+	return result, nil
+}
+
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T { return &v }
 
@@ -569,6 +667,12 @@ func (p *Provider) Close() error {
 	}
 	if p.firewalls != nil {
 		errs = append(errs, p.firewalls.Close())
+	}
+	if p.networks != nil {
+		errs = append(errs, p.networks.Close())
+	}
+	if p.subnets != nil {
+		errs = append(errs, p.subnets.Close())
 	}
 	return errors.Join(errs...)
 }

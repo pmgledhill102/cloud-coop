@@ -112,6 +112,56 @@ type FirewallConfig struct {
 	Network string
 }
 
+// PreflightSeverity indicates how serious a preflight issue is.
+type PreflightSeverity int
+
+const (
+	// PreflightError indicates a blocking issue that prevents VM creation.
+	PreflightError PreflightSeverity = iota
+	// PreflightWarning indicates a non-blocking issue the user should be aware of.
+	PreflightWarning
+)
+
+// PreflightIssue describes a single validation problem found during preflight checks.
+type PreflightIssue struct {
+	Severity PreflightSeverity
+	Resource string
+	Message  string
+}
+
+// PreflightResult contains the results of preflight validation.
+type PreflightResult struct {
+	Issues []PreflightIssue
+}
+
+// HasErrors returns true if any issues are blocking errors.
+func (r *PreflightResult) HasErrors() bool {
+	for _, issue := range r.Issues {
+		if issue.Severity == PreflightError {
+			return true
+		}
+	}
+	return false
+}
+
+// HasWarnings returns true if any issues are warnings.
+func (r *PreflightResult) HasWarnings() bool {
+	for _, issue := range r.Issues {
+		if issue.Severity == PreflightWarning {
+			return true
+		}
+	}
+	return false
+}
+
+// PreflightConfig contains the resource names to validate.
+type PreflightConfig struct {
+	Network      string
+	Subnet       string
+	Zone         string
+	FirewallRule string
+}
+
 // Provider defines the interface for cloud provider operations.
 type Provider interface {
 	// Name returns the provider name (e.g., "gcp", "aws", "azure").
@@ -142,4 +192,8 @@ type Provider interface {
 	// VM's metadata so that the OS guest agent provisions it into
 	// ~/.ssh/authorized_keys. The operation is idempotent.
 	EnsureSSHKeyOnVM(ctx context.Context, name, user, publicKey string) error
+
+	// Preflight validates that configured cloud resources exist before
+	// attempting VM creation. Returns issues found (errors and warnings).
+	Preflight(ctx context.Context, cfg PreflightConfig) (*PreflightResult, error)
 }

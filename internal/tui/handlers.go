@@ -124,7 +124,7 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 	case key.Matches(msg, m.keys.Create):
-		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound {
+		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound && !m.hasPreflightErrors() {
 			m.sizeOptions = []string{"small", "medium", "large", "xlarge"}
 			m.selectedSizeIdx = 0
 			m.selectingSize = true
@@ -211,7 +211,20 @@ func (m Model) handleConfigLoaded(msg configLoadedMsg) (Model, tea.Cmd) {
 		m.loading = false
 		return m, nil
 	}
-	return m, tea.Batch(fetchVMInfo(m.cfg), scheduleRefresh(m.cfg))
+	m.preflightLoading = true
+	return m, tea.Batch(fetchVMInfo(m.cfg), scheduleRefresh(m.cfg), runPreflight(m.cfg))
+}
+
+func (m Model) handlePreflight(msg preflightMsg) (Model, tea.Cmd) {
+	m.preflightLoading = false
+	m.preflight = msg.result
+	m.preflightErr = msg.err
+	return m, nil
+}
+
+// hasPreflightErrors returns true if preflight validation found blocking errors.
+func (m Model) hasPreflightErrors() bool {
+	return m.preflight != nil && m.preflight.HasErrors()
 }
 
 func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
