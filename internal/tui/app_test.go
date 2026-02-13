@@ -445,6 +445,48 @@ func TestKey_LowercaseC_Connect(t *testing.T) {
 	}
 }
 
+func TestKey_Enter_Connect(t *testing.T) {
+	// Setup model with agents to connect to
+	m := Model{
+		cfg:    &config.Config{SSH: config.SSHConfig{Port: 22}},
+		vmInfo: &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents: &agent.ListResult{
+			Sessions: []agent.Session{
+				{Index: 0, Name: "agent-0", Command: "bash"},
+				{Index: 1, Name: "agent-1", Command: "claude"},
+			},
+		},
+		selectedAgentIdx: 1, // Select agent-1
+		provisionStatus:  &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	// Simulate pressing Enter
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	_, cmd := m.Update(msg)
+
+	// Should return a command (the ExecProcess command)
+	if cmd == nil {
+		t.Error("pressing Enter should return a command to connect")
+	}
+}
+
+func TestKey_Enter_NotAllowedWhenNoAgents(t *testing.T) {
+	m := Model{
+		cfg:             &config.Config{},
+		vmInfo:          &cloud.VMInfo{Status: cloud.VMStatusRunning, ExternalIP: "1.2.3.4"},
+		agents:          &agent.ListResult{Sessions: []agent.Session{}}, // No agents
+		provisionStatus: &provisioning.StatusInfo{Status: provisioning.StatusCompleted},
+	}
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	_, cmd := m.Update(msg)
+
+	// Should NOT return a command
+	if cmd != nil {
+		t.Error("pressing Enter with no agents should not return a command")
+	}
+}
+
 func TestKey_LowercaseC_NotAllowedWhenNoAgents(t *testing.T) {
 	m := Model{
 		cfg:             &config.Config{},
@@ -516,9 +558,9 @@ func TestRenderHelp_ShowsConnectAction(t *testing.T) {
 
 	help := m.renderHelp()
 
-	// Should include connect action with number keys
-	if !containsString(help, "c/1-9: connect") {
-		t.Error("help should show 'c/1-9: connect'")
+	// Should include connect action with Enter and number keys
+	if !containsString(help, "Enter/c/1-9: connect") {
+		t.Error("help should show 'Enter/c/1-9: connect'")
 	}
 }
 

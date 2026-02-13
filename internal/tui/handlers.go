@@ -128,7 +128,7 @@ func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.killTargetName = selected.Name
 			m.confirmingKill = true
 		}
-	case "c":
+	case "c", "enter":
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
 			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[m.selectedAgentIdx].Index, m.sessionName())
 		}
