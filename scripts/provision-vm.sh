@@ -166,9 +166,14 @@ fi
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
 
-# Persist brew environment to .bashrc for non-interactive SSH sessions
-# Must be BEFORE the interactive guard (case $- in ...) so it's available
-# for non-interactive SSH commands like: ssh user@host "which node"
+# Make Homebrew tools available to ALL users and ALL session types
+# (interactive, non-interactive SSH, login, non-login) by adding to /etc/environment.
+# PAM reads this for every session regardless of shell initialization.
+if ! grep -q "linuxbrew" /etc/environment 2>/dev/null; then
+    sed -i 's|^PATH="\(.*\)"|PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:\1"|' /etc/environment
+fi
+
+# Full brew shellenv for interactive sessions (sets HOMEBREW_PREFIX, MANPATH, etc.)
 if ! grep -q "linuxbrew" /home/sandbox/.bashrc 2>/dev/null; then
     sed -i '/^# for examples$/a\
 \
