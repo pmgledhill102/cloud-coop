@@ -42,6 +42,9 @@ linters:
     misspell:
       # Correct common misspellings
       locale: UK
+      # Ignore words that are third-party API identifiers
+      ignore-rules:
+        - color
 
     revive:
       # Enable all available rules with sensible defaults

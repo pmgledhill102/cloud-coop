@@ -436,7 +436,7 @@ func (c *Config) Save(path string) error {
 }
 
 // SetValue sets a configuration value by dot-notation key (e.g., "cloud.gcp.project").
-// Returns an error if the key is not recognized.
+// Returns an error if the key is not recognised.
 func (c *Config) SetValue(key, value string) error {
 	switch key {
 	case "cloud.provider":

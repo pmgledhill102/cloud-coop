@@ -66,7 +66,7 @@ Examples:
 
 var configInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize configuration with setup wizard",
+	Short: "Initialise configuration with setup wizard",
 	Long: `Run the interactive setup wizard to create a new configuration file.
 
 This will prompt you for:

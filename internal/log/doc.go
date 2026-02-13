@@ -23,7 +23,7 @@
 //	import "github.com/cloud-coop/cloudcoop/internal/log"
 //
 //	func main() {
-//	    // Initialize with default settings (reads from environment)
+//	    // Initialise with default settings (reads from environment)
 //	    log.Init()
 //
 //	    // Basic logging

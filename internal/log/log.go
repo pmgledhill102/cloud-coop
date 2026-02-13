@@ -20,7 +20,7 @@ var (
 )
 
 func init() {
-	// Initialize with a basic logger; call Init() for full configuration.
+	// Initialise with a basic logger; call Init() for full configuration.
 	defaultLogger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 }
 
@@ -65,7 +65,7 @@ func DefaultConfig() Config {
 
 // ParseLevel converts a string level name to slog.Level.
 // Supported values: debug, info, warn, warning, error.
-// Returns LevelInfo for unrecognized values.
+// Returns LevelInfo for unrecognised values.
 func ParseLevel(s string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":
@@ -81,13 +81,13 @@ func ParseLevel(s string) slog.Level {
 	}
 }
 
-// Init initializes the default logger with settings from environment variables.
+// Init initialises the default logger with settings from environment variables.
 // This should be called early in main() before any logging occurs.
 func Init() {
 	InitWithConfig(DefaultConfig())
 }
 
-// InitWithConfig initializes the default logger with the given configuration.
+// InitWithConfig initialises the default logger with the given configuration.
 func InitWithConfig(cfg Config) {
 	mu.Lock()
 	defer mu.Unlock()

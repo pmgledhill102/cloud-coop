@@ -125,7 +125,7 @@ const ServiceAccountDisplayName = "cloudcoop VM service account"
 var saNameRegexp = regexp.MustCompile(`[^a-z0-9-]`)
 
 // ServiceAccountNameForDir derives a service account name from a directory path.
-// The name is based on the directory basename, prefixed with "cc-" and sanitized
+// The name is based on the directory basename, prefixed with "cc-" and sanitised
 // for GCP constraints (6-30 chars, lowercase alphanumeric and hyphens).
 func ServiceAccountNameForDir(dir string) string {
 	abs, err := filepath.Abs(dir)

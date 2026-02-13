@@ -69,7 +69,7 @@ func ParseRemoteWorktrees(output, slug string) map[string]string {
 	return result
 }
 
-// Sync synchronizes local worktrees to the remote VM. It clones the bare repo
+// Sync synchronises local worktrees to the remote VM. It clones the bare repo
 // if missing, fetches latest, creates worktrees, and starts tmux windows.
 func Sync(runner ssh.Runner, info *Info, opts SyncOptions) (*SyncResult, error) {
 	slug := info.Slug
