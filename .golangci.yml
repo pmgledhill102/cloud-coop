@@ -41,7 +41,7 @@ linters:
 
     misspell:
       # Correct common misspellings
-      locale: US
+      locale: GB
 
     revive:
       # Enable all available rules with sensible defaults

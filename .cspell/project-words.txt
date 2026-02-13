@@ -48,6 +48,7 @@ computepb
 covermode
 coverprofile
 darwin
+Deriver
 dependabot
 deploykey
 direnv
@@ -106,6 +107,7 @@ knownhosts
 ksh
 ktlint
 laravel
+linters
 ldflags
 linux
 lipgloss
@@ -117,6 +119,7 @@ mutex
 mypy
 myrepo
 noreply
+nonexistent
 openssh
 osascript
 oslogin
@@ -125,6 +128,7 @@ pmgledhill
 pre-commit
 precommit
 preemptible
+preemption
 prettierignore
 prereq
 priv
@@ -135,6 +139,7 @@ pulumi
 readonly
 refactor
 refspec
+resp
 reviewdog
 resourcemanager
 resourcemanagerpb
@@ -191,5 +196,6 @@ worktree
 worktrees
 wrapf
 xlarge
+xterm
 yamllint
 zerolog
