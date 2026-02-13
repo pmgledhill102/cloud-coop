@@ -341,6 +341,7 @@ func TestSetupVM_FullFlow(t *testing.T) {
 			{output: "", err: nil},                     // write key
 			{output: "", err: errors.New("not found")}, // grep config (not found)
 			{output: "", err: nil},                     // append config
+			{output: "", err: nil},                     // ssh-keyscan
 			{output: "HEAD ref", err: nil},             // git ls-remote
 		},
 	}
@@ -386,6 +387,7 @@ func TestSetupVM_PreflightFails(t *testing.T) {
 			{output: "", err: nil},                         // write key
 			{output: "", err: errors.New("not found")},     // grep config (not found)
 			{output: "", err: nil},                         // append config
+			{output: "", err: nil},                         // ssh-keyscan
 			{output: "", err: errors.New("access denied")}, // git ls-remote fails
 		},
 	}
@@ -419,6 +421,7 @@ func TestSetupVM_IdempotentConfig(t *testing.T) {
 		calls: []mockSSHCall{
 			{output: "", err: nil},         // write key
 			{output: "", err: nil},         // grep config (FOUND - already exists)
+			{output: "", err: nil},         // ssh-keyscan
 			{output: "HEAD ref", err: nil}, // git ls-remote
 		},
 	}
@@ -436,8 +439,8 @@ func TestSetupVM_IdempotentConfig(t *testing.T) {
 	if !result.ConfigWritten {
 		t.Error("Expected ConfigWritten = true (idempotent)")
 	}
-	// Should only have 3 commands (write key, grep config, verify) - no append
-	if len(runner.commands) != 3 {
-		t.Errorf("Expected 3 commands for idempotent case, got %d: %v", len(runner.commands), runner.commands)
+	// Should only have 4 commands (write key, grep config, ssh-keyscan, verify) - no append
+	if len(runner.commands) != 4 {
+		t.Errorf("Expected 4 commands for idempotent case, got %d: %v", len(runner.commands), runner.commands)
 	}
 }
