@@ -67,6 +67,7 @@ func TestPhase3b_Provisioning(t *testing.T) {
 			{"tmux", "tmux -V"},
 			{"git", "git --version"},
 			{"node", "node --version"},
+			{"claude", "claude --version"},
 		}
 
 		for _, tool := range tools {
