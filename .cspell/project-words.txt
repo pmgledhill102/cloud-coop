@@ -45,6 +45,7 @@ cloudcoop
 cloudresourcemanager
 cobra
 color
+conn
 codecov
 codeowners
 computepb
