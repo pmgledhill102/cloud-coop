@@ -167,6 +167,10 @@ func (m Model) renderVMStatus() string {
 		}
 	}
 
+	if pf := m.renderPreflightIssues(); pf != "" {
+		lines = append(lines, "", pf)
+	}
+
 	lines = append(lines, "")
 	lines = append(lines, m.renderAgents()...)
 	return boxStyle.Render(strings.Join(lines, "\n"))
@@ -220,6 +224,30 @@ func (m Model) formatProvisionStatus() string {
 	default:
 		return stoppedStyle.Render("? unknown")
 	}
+}
+
+func (m Model) renderPreflightIssues() string {
+	if m.preflightLoading {
+		return labelLine("Preflight:", m.spinner.View()+" checking...")
+	}
+	if m.preflightErr != nil {
+		return labelLine("Preflight:", errorStyle.Render(fmt.Sprintf("error: %v", m.preflightErr)))
+	}
+	if m.preflight == nil || len(m.preflight.Issues) == 0 {
+		return ""
+	}
+
+	var lines []string
+	for _, issue := range m.preflight.Issues {
+		prefix := "warning"
+		style := stoppedStyle
+		if issue.Severity == cloud.PreflightError {
+			prefix = "error"
+			style = errorStyle
+		}
+		lines = append(lines, labelLine("Preflight:", style.Render(fmt.Sprintf("[%s] %s", prefix, issue.Message))))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) renderAgents() []string {

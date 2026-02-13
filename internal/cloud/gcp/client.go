@@ -115,6 +115,44 @@ func (r *realFirewallsClient) Close() error {
 	return r.client.Close()
 }
 
+// networksClient defines the interface for GCP Compute networks operations.
+type networksClient interface {
+	Get(ctx context.Context, req *computepb.GetNetworkRequest) (*computepb.Network, error)
+	Close() error
+}
+
+// realNetworksClient wraps the actual GCP NetworksClient.
+type realNetworksClient struct {
+	client *compute.NetworksClient
+}
+
+func (r *realNetworksClient) Get(ctx context.Context, req *computepb.GetNetworkRequest) (*computepb.Network, error) {
+	return r.client.Get(ctx, req)
+}
+
+func (r *realNetworksClient) Close() error {
+	return r.client.Close()
+}
+
+// subnetworksClient defines the interface for GCP Compute subnetworks operations.
+type subnetworksClient interface {
+	Get(ctx context.Context, req *computepb.GetSubnetworkRequest) (*computepb.Subnetwork, error)
+	Close() error
+}
+
+// realSubnetworksClient wraps the actual GCP SubnetworksClient.
+type realSubnetworksClient struct {
+	client *compute.SubnetworksClient
+}
+
+func (r *realSubnetworksClient) Get(ctx context.Context, req *computepb.GetSubnetworkRequest) (*computepb.Subnetwork, error) {
+	return r.client.Get(ctx, req)
+}
+
+func (r *realSubnetworksClient) Close() error {
+	return r.client.Close()
+}
+
 // realOperation wraps the actual GCP Operation to implement our interface.
 type realOperation struct {
 	op *compute.Operation

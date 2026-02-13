@@ -56,6 +56,11 @@ type Model struct {
 	// Workspace
 	workspaceInfo *workspace.Info // detected from CWD on startup (nil if not in a git repo)
 
+	// Preflight validation
+	preflight        *cloud.PreflightResult
+	preflightErr     error
+	preflightLoading bool
+
 	// Firewall
 	firewallChecked bool // true after firewall check has been triggered
 
@@ -200,6 +205,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case connectFinishedMsg:
 		newM, cmd := m.handleConnectFinished(msg)
+		newM.syncViewport()
+		return newM, cmd
+
+	case preflightMsg:
+		newM, cmd := m.handlePreflight(msg)
 		newM.syncViewport()
 		return newM, cmd
 
