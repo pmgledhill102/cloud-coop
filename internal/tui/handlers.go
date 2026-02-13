@@ -226,8 +226,15 @@ func (m Model) handleVMInfo(msg vmInfoMsg) (Model, tea.Cmd) {
 func (m Model) handleVMDetails(msg vmDetailsMsg) (Model, tea.Cmd) {
 	m.agentsLoading = false
 	m.provisionLoading = false
-	m.agents = msg.agents
-	m.agentsErr = msg.agentsE
+	// When SSH fails during provisioning (e.g. openssh-server upgrade restarts sshd),
+	// keep the previous state instead of showing transient SSH errors.
+	if msg.agentsE == nil || m.agents == nil {
+		m.agents = msg.agents
+		m.agentsErr = msg.agentsE
+	}
+	if msg.statusE != nil && m.provisionStatus != nil {
+		return m, nil
+	}
 	m.provisionStatus = msg.status
 	m.provisionErr = msg.statusE
 	return m, nil
