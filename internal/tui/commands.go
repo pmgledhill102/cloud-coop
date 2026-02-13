@@ -353,11 +353,20 @@ func syncWorkspace(cfg *config.Config, vmInfo *cloud.VMInfo, wsInfo *workspace.I
 			return syncMsg{err: fmt.Errorf("VM key setup: %w", err)}
 		}
 
-		// 3. Resolve agent command + pre-commands from config
+		// 3. Git identity: copy local user.name/user.email to VM.
+		gitID, ok := workspace.LocalGitIdentity(workspace.NewGitRunner("."))
+		if ok {
+			if err := workspace.SetupVMGitIdentity(client, gitID); err != nil {
+				return syncMsg{err: fmt.Errorf("git identity setup: %w", err)}
+			}
+			log.Debug("set VM git identity", "name", gitID.Name, "email", gitID.Email)
+		}
+
+		// 4. Resolve agent command + pre-commands from config
 		agentCommand := cfg.Agents.ResolveCommand(wsInfo.Slug)
 		preCommands := cfg.Agents.ResolvePreCommands(wsInfo.Slug)
 
-		// 4. Sync
+		// 5. Sync
 		result, err := workspace.Sync(client, wsInfo, workspace.SyncOptions{
 			AgentCommand: agentCommand,
 			PreCommands:  preCommands,
