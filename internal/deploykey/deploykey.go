@@ -257,11 +257,50 @@ func registerKey(fs FileSystem, cmd CommandRunner, kp KeyPair, opts Options) err
 		"-F", "read_only=false")
 	if err != nil {
 		// "key is already in use" means the deploy key was registered in a
-		// previous run — treat as success for idempotent re-sync.
+		// previous run. Delete it and re-register to ensure current settings
+		// (e.g. read_only) are applied.
 		if strings.Contains(err.Error(), "key is already in use") {
+			delErr := deleteKeyByTitle(cmd, opts, title)
+			if delErr != nil {
+				return fmt.Errorf("%w: re-register after delete: %s", ErrGHRegisterFailed, delErr)
+			}
+			_, retryErr := cmd.Run("gh", "api", endpoint, "--method", "POST",
+				"-f", "title="+title,
+				"-f", "key="+key,
+				"-F", "read_only=false")
+			if retryErr != nil {
+				return fmt.Errorf("%w: %s", ErrGHRegisterFailed, retryErr)
+			}
 			return nil
 		}
 		return fmt.Errorf("%w: %s", ErrGHRegisterFailed, err)
+	}
+
+	return nil
+}
+
+// deleteKeyByTitle finds and deletes a deploy key by its title.
+// It lists all deploy keys for the repo, finds the one matching the title,
+// and deletes it by ID.
+func deleteKeyByTitle(cmd CommandRunner, opts Options, title string) error {
+	endpoint := fmt.Sprintf("repos/%s/%s/keys", opts.Repo.Owner, opts.Repo.Name)
+
+	// List deploy keys and find the matching one using jq to extract the ID.
+	id, err := cmd.Run("gh", "api", endpoint, "--jq",
+		fmt.Sprintf(`.[] | select(.title == "%s") | .id`, title))
+	if err != nil {
+		return fmt.Errorf("list deploy keys: %w", err)
+	}
+
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("deploy key %q not found", title)
+	}
+
+	// Delete the key by ID.
+	_, err = cmd.Run("gh", "api", endpoint+"/"+id, "--method", "DELETE")
+	if err != nil {
+		return fmt.Errorf("delete deploy key %s: %w", id, err)
 	}
 
 	return nil

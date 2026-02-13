@@ -296,6 +296,39 @@ func TestEnsureKey_GHRegisterFails(t *testing.T) {
 	}
 }
 
+func TestEnsureKey_ReRegistersOnConflict(t *testing.T) {
+	fs := &mockFileSystem{
+		homeDir: "/home/user",
+		files: map[string][]byte{
+			"/home/user/.ssh/cloudcoop-deploy-myrepo":     []byte("PRIVATE KEY"),
+			"/home/user/.ssh/cloudcoop-deploy-myrepo.pub": []byte("ssh-ed25519 AAAA... comment"),
+		},
+	}
+	cmd := &mockCommandRunner{
+		calls: []mockCmdCall{
+			{output: "", err: nil},                                 // gh auth status
+			{output: "", err: errors.New("key is already in use")}, // gh api POST (conflict)
+			{output: "12345", err: nil},                            // gh api GET (list keys, jq extracts ID)
+			{output: "", err: nil},                                 // gh api DELETE
+			{output: "", err: nil},                                 // gh api POST (re-register)
+		},
+	}
+
+	result, err := EnsureKey(fs, cmd, Options{
+		Slug: "myrepo",
+		Repo: RepoRef{Owner: "owner", Name: "myrepo"},
+	})
+	if err != nil {
+		t.Fatalf("EnsureKey() error = %v", err)
+	}
+	if !result.Registered {
+		t.Error("Expected Registered = true after re-register")
+	}
+	if cmd.idx != 5 {
+		t.Errorf("Expected 5 command calls, got %d", cmd.idx)
+	}
+}
+
 func TestSetupVM_FullFlow(t *testing.T) {
 	fs := &mockFileSystem{
 		homeDir: "/home/user",
