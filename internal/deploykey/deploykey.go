@@ -254,7 +254,7 @@ func registerKey(fs FileSystem, cmd CommandRunner, kp KeyPair, opts Options) err
 	_, err = cmd.Run("gh", "api", endpoint, "--method", "POST",
 		"-f", "title="+title,
 		"-f", "key="+key,
-		"-F", "read_only=true")
+		"-F", "read_only=false")
 	if err != nil {
 		// "key is already in use" means the deploy key was registered in a
 		// previous run — treat as success for idempotent re-sync.

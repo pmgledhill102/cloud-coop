@@ -127,6 +127,7 @@ precommit
 preemptible
 prettierignore
 prereq
+priv
 prettierrc
 pubkey
 publickey
