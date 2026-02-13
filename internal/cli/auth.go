@@ -6,12 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -122,8 +122,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}
@@ -133,7 +132,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get VM info
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMStatus)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)

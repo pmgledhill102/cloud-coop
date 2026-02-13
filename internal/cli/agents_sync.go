@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cloud-coop/cloudcoop/internal/deploykey"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/workspace"
 )
 
@@ -61,71 +61,23 @@ func runAgentsSync(cmd *cobra.Command, args []string) error {
 	}
 	defer conn.Close()
 
-	// 3. Git identity: copy local user.name/user.email to VM.
-	gitID, ok := workspace.LocalGitIdentity(workspace.NewGitRunner("."))
-	if ok {
-		if err := workspace.SetupVMGitIdentity(conn.Client, gitID); err != nil {
-			return fmt.Errorf("git identity setup: %w", err)
-		}
-		log.Debug("set VM git identity", "name", gitID.Name, "email", gitID.Email)
-	} else {
-		fmt.Fprintln(os.Stderr, "Warning: local git user.name/user.email not configured, skipping VM git identity setup")
-	}
-
-	// 4. Deploy key setup.
-	repo, err := deploykey.ParseRepoRef(info.RemoteURL)
+	// 3. Sync workspace (deploy key, git identity, worktrees, agent sessions).
+	syncResult, err := ops.SyncWorkspace(conn.Client, conn.Config, info, syncCommand)
 	if err != nil {
-		return fmt.Errorf("parse remote URL: %w", err)
-	}
-
-	fs := deploykey.NewFileSystem()
-	cmdRunner := deploykey.NewCommandRunner()
-	dkOpts := deploykey.Options{
-		Slug:      info.Slug,
-		RemoteURL: info.RemoteURL,
-		Repo:      repo,
-	}
-
-	setupResult, err := deploykey.EnsureKey(fs, cmdRunner, dkOpts)
-	if err != nil {
-		return fmt.Errorf("deploy key setup: %w", err)
-	}
-
-	if setupResult.ManualNeeded {
-		fmt.Fprintln(os.Stderr, setupResult.ManualMessage)
-		return nil
-	}
-
-	vmSetup, err := deploykey.SetupVM(conn.Client, fs, setupResult.KeyPair, dkOpts)
-	if err != nil {
-		if errors.Is(err, deploykey.ErrPreflightFailed) {
-			fmt.Fprintf(os.Stderr, "Deploy key verification failed: %s\n", vmSetup.VerifyError)
+		var manualErr *ops.DeployKeyManualError
+		if errors.As(err, &manualErr) {
+			fmt.Fprintln(os.Stderr, manualErr.Message)
 			return nil
 		}
-		return fmt.Errorf("deploy key VM setup: %w", err)
-	}
-
-	// 5. Resolve agent command: flag > repo-specific > default > "" (sync defaults to "bash").
-	agentCommand := syncCommand
-	if agentCommand == "" {
-		agentCommand = conn.Config.Agents.ResolveCommand(info.Slug)
-	}
-
-	// 6. Resolve pre-commands: global + repo-specific.
-	preCommands := conn.Config.Agents.ResolvePreCommands(info.Slug)
-
-	// 7. Sync.
-	syncResult, err := workspace.Sync(conn.Client, info, workspace.SyncOptions{
-		AgentCommand: agentCommand,
-		PreCommands:  preCommands,
-		RepoOwner:    repo.Owner,
-		RepoName:     repo.Name,
-	})
-	if err != nil {
+		var preflightErr *ops.DeployKeyPreflightError
+		if errors.As(err, &preflightErr) {
+			fmt.Fprintf(os.Stderr, "Deploy key verification failed: %s\n", preflightErr.VerifyError)
+			return nil
+		}
 		return fmt.Errorf("sync: %w", err)
 	}
 
-	// 8. Print results.
+	// 4. Print results.
 	printSyncResult(syncResult)
 	return nil
 }

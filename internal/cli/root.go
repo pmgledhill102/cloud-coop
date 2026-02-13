@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,17 @@ import (
 	"github.com/cloud-coop/cloudcoop/internal/tui"
 )
 
+// configResult holds config loaded by PersistentPreRunE.
+type configResult struct {
+	cfg *config.Config
+	err error
+}
+
+// contextKey is used for storing values in command context.
+type contextKey string
+
+const configCtxKey contextKey = "config"
+
 var rootCmd = &cobra.Command{
 	Use:   "cloudcoop",
 	Short: "Manage sandboxed AI coding agents on cloud VMs",
@@ -27,13 +39,63 @@ Use subcommands for scriptable automation.`,
 	SilenceUsage:               true,
 	SilenceErrors:              false, // Let Cobra print errors with suggestions
 	SuggestionsMinimumDistance: 4,     // Suggest commands within 4 edit distance
+	PersistentPreRunE:          persistentPreRunE,
 	RunE:                       runTUI,
+}
+
+// persistentPreRunE runs before every command to handle shared setup.
+func persistentPreRunE(cmd *cobra.Command, _ []string) error {
+	// Wire up --verbose flag to enable debug logging.
+	if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
+		log.SetVerbose()
+	}
+
+	// Skip config loading for commands that don't need it.
+	if cmd.Annotations != nil && cmd.Annotations["skip-config"] == "true" {
+		return nil
+	}
+
+	// Load config and store in context (commands handle errors themselves).
+	cfg, err := configLoader()
+	ctx := context.WithValue(cmd.Context(), configCtxKey, &configResult{cfg: cfg, err: err})
+	cmd.SetContext(ctx)
+	return nil
+}
+
+// configFromCmd retrieves config loaded by PersistentPreRunE.
+// Falls back to configLoader for test compatibility when PersistentPreRunE
+// hasn't run (e.g., tests calling RunE directly).
+func configFromCmd(cmd *cobra.Command) (*config.Config, error) {
+	if result, ok := cmd.Context().Value(configCtxKey).(*configResult); ok {
+		return result.cfg, result.err
+	}
+	return configLoader()
 }
 
 func init() {
 	// Add persistent flags that apply to all commands
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file path")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
+
+	// Define command groups for organised help output
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "vm", Title: "VM Lifecycle:"},
+		&cobra.Group{ID: "agents", Title: "Agent Management:"},
+		&cobra.Group{ID: "config", Title: "Configuration & Setup:"},
+	)
+
+	// Assign groups
+	statusCmd.GroupID = "vm"
+	startCmd.GroupID = "vm"
+	stopCmd.GroupID = "vm"
+	createCmd.GroupID = "vm"
+	deleteCmd.GroupID = "vm"
+
+	agentsCmd.GroupID = "agents"
+	connectCmd.GroupID = "agents"
+
+	configCmd.GroupID = "config"
+	setupCmd.GroupID = "config"
 
 	// Add subcommands
 	rootCmd.AddCommand(versionCmd)
@@ -44,11 +106,13 @@ func init() {
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(sshCmd)
 	rootCmd.AddCommand(agentsCmd)
+	rootCmd.AddCommand(connectCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(provisionCmd)
 	rootCmd.AddCommand(terminalCmd)
+	rootCmd.AddCommand(completionCmd)
 }
 
 // Execute runs the root command.
@@ -103,7 +167,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check that setup has been completed before launching the TUI
-	cfg, cfgErr := configLoader()
+	cfg, cfgErr := configFromCmd(cmd)
 	if cfgErr != nil {
 		return printSetupRequired("Configuration not found", cfgErr)
 	}

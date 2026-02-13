@@ -32,10 +32,6 @@ Examples:
 	RunE: runConnect,
 }
 
-func init() {
-	rootCmd.AddCommand(connectCmd)
-}
-
 func runConnect(cmd *cobra.Command, args []string) error {
 	// Check SSH is available
 	if err := ssh.CheckSSHAvailable(); err != nil {

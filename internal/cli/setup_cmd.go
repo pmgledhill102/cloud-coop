@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/config"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/setup"
 	gcpsetup "github.com/cloud-coop/cloudcoop/internal/setup/gcp"
 )
@@ -33,8 +34,9 @@ func defaultSetupProviderFactory(ctx context.Context) (setup.SetupProvider, erro
 }
 
 var setupCmd = &cobra.Command{
-	Use:   "setup",
-	Short: "Set up a cloud project for cloudcoop",
+	Use:         "setup",
+	Short:       "Set up a cloud project for cloudcoop",
+	Annotations: map[string]string{"skip-config": "true"},
 	Long: `Automate GCP project provisioning for cloudcoop.
 
 This command checks prerequisites, enables required APIs, creates a service
@@ -249,7 +251,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Detect public IP for direct SSH rule
-	publicIP, ipErr := publicIPDetector(ctx)
+	publicIP, ipErr := ops.PublicIPDetector(ctx)
 
 	var directFWSourceIP string
 	var directFWPort int

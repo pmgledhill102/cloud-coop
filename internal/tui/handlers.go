@@ -4,6 +4,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
@@ -89,75 +90,99 @@ func (m Model) handleHelpOverlayKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) handleNormalKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	key := strings.ToLower(msg.String())
-	switch key {
-	case "q", "ctrl+c":
+	switch {
+	case key.Matches(msg, m.keys.Quit):
 		if m.cleanup != nil {
 			m.cleanup()
 		}
 		return m, tea.Quit
-	case "r":
+
+	case key.Matches(msg, m.keys.Help):
+		m.showHelp = true
+		return m, nil
+
+	case key.Matches(msg, m.keys.Refresh):
 		if m.cfg != nil && m.cfgErr == nil && m.operation == "" {
 			m.loading = true
 			return m, fetchVMInfo(m.cfg)
 		}
-	case "s":
+
+	case key.Matches(msg, m.keys.AutoRefresh):
+		m.autoRefreshPaused = !m.autoRefreshPaused
+		return m, nil
+
+	case key.Matches(msg, m.keys.Start):
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
 			m.operation = "starting"
 			return m, tea.Batch(startVM(m.cfg), scheduleRefresh(m.cfg))
 		}
-	case "t":
+
+	case key.Matches(msg, m.keys.Stop):
 		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusRunning {
 			m.operation = "stopping"
 			return m, tea.Batch(stopVM(m.cfg), scheduleRefresh(m.cfg))
 		}
-	case "+":
+
+	case key.Matches(msg, m.keys.Create):
+		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound {
+			m.sizeOptions = []string{"small", "medium", "large", "xlarge"}
+			m.selectedSizeIdx = 0
+			m.selectingSize = true
+			return m, nil
+		}
+
+	case key.Matches(msg, m.keys.Delete):
+		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
+			m.confirmingDelete = true
+			return m, nil
+		}
+
+	case key.Matches(msg, m.keys.AddAgent):
 		if m.canModifyAgents() {
 			m.operation = "adding"
 			return m, tea.Batch(addAgent(m.cfg, m.vmInfo, m.sessionName()), scheduleRefresh(m.cfg))
 		}
-	case "w":
-		if m.canModifyAgents() && m.workspaceInfo != nil {
-			m.operation = "syncing"
-			return m, tea.Batch(syncWorkspace(m.cfg, m.vmInfo, m.workspaceInfo), scheduleRefresh(m.cfg))
-		}
-	case "-":
+
+	case key.Matches(msg, m.keys.KillAgent):
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
 			selected := m.agents.Sessions[m.selectedAgentIdx]
 			m.killTargetIndex = selected.Index
 			m.killTargetName = selected.Name
 			m.confirmingKill = true
+			return m, nil
 		}
-	case "c", "enter":
+
+	case key.Matches(msg, m.keys.Connect):
 		if m.canModifyAgents() && m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions) {
 			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[m.selectedAgentIdx].Index, m.sessionName())
 		}
-	case "n":
-		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusNotFound {
-			m.sizeOptions = []string{"small", "medium", "large", "xlarge"}
-			m.selectedSizeIdx = 0
-			m.selectingSize = true
+
+	case key.Matches(msg, m.keys.Sync):
+		if m.canModifyAgents() && m.workspaceInfo != nil {
+			m.operation = "syncing"
+			return m, tea.Batch(syncWorkspace(m.cfg, m.vmInfo, m.workspaceInfo), scheduleRefresh(m.cfg))
 		}
-	case "d":
-		if m.canVMOp() && m.vmInfo.Status == cloud.VMStatusStopped {
-			m.confirmingDelete = true
-		}
-	case "a":
-		m.autoRefreshPaused = !m.autoRefreshPaused
-	case "?":
-		m.showHelp = true
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		idx := int(key[0]-'0') - 1 // convert "1"-"9" to 0-based index
-		if m.canModifyAgents() && m.hasAgents() && idx < len(m.agents.Sessions) {
-			return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[idx].Index, m.sessionName())
-		}
-	case "up", "k":
+
+	case key.Matches(msg, m.keys.Up):
 		if m.hasAgents() && m.selectedAgentIdx > 0 {
 			m.selectedAgentIdx--
+			return m, nil
 		}
-	case "down", "j":
+
+	case key.Matches(msg, m.keys.Down):
 		if m.hasAgents() && m.selectedAgentIdx < len(m.agents.Sessions)-1 {
 			m.selectedAgentIdx++
+			return m, nil
+		}
+
+	default:
+		// Number keys 1-9 for quick agent connection
+		k := strings.ToLower(msg.String())
+		if len(k) == 1 && k[0] >= '1' && k[0] <= '9' {
+			idx := int(k[0]-'0') - 1
+			if m.canModifyAgents() && m.hasAgents() && idx < len(m.agents.Sessions) {
+				return m, connectToAgent(m.cfg, m.vmInfo, m.agents.Sessions[idx].Index, m.sessionName())
+			}
 		}
 	}
 	return m, nil

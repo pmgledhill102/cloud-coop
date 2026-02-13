@@ -2,7 +2,9 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -63,8 +65,11 @@ type Model struct {
 	// Help overlay
 	showHelp bool // true when help overlay is visible
 
-	// Spinner for animated progress indicators
-	spinner spinner.Model
+	// Bubbles sub-models
+	spinner  spinner.Model
+	keys     keyMap
+	help     help.Model
+	viewport viewport.Model
 }
 
 // sessionName returns the tmux session name to use. It prefers the workspace
@@ -80,10 +85,16 @@ func (m Model) sessionName() string {
 func New() Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#D7005F", Dark: "#FF87AF"})
+
+	h := help.New()
+	h.ShortSeparator = " · "
+
 	return Model{
 		loading: true,
 		spinner: s,
+		keys:    newKeyMap(),
+		help:    h,
 	}
 }
 
@@ -94,74 +105,134 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and updates the model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Ensure sub-models are initialised (handles direct Model{} in tests).
+	m.ensureInit()
+
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		newM, cmd := m.handleKeyMsg(msg)
+		newM.syncViewport()
 		return newM, cmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.ready = true
+
+		// Reserve space for header (title + subtitle) and footer (help line).
+		headerHeight := lipgloss.Height(m.renderHeader())
+		footerHeight := lipgloss.Height(m.renderFooter())
+		vpHeight := msg.Height - headerHeight - footerHeight
+		if vpHeight < 1 {
+			vpHeight = 1
+		}
+
+		if !m.ready {
+			m.viewport = viewport.New(msg.Width, vpHeight)
+			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width
+			m.viewport.Height = vpHeight
+		}
+
+		m.help.Width = msg.Width
+		m.syncViewport()
 		return m, nil
 
 	case configLoadedMsg:
-		return m.handleConfigLoaded(msg)
+		newM, cmd := m.handleConfigLoaded(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case vmInfoMsg:
-		return m.handleVMInfo(msg)
+		newM, cmd := m.handleVMInfo(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case vmDetailsMsg:
-		return m.handleVMDetails(msg)
+		newM, cmd := m.handleVMDetails(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case agentsMsg:
-		return m.handleAgents(msg)
+		newM, cmd := m.handleAgents(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case refreshTickMsg:
 		return m.handleRefreshTick()
 
 	case vmStartMsg:
-		return m.handleVMStart(msg)
+		newM, cmd := m.handleVMStart(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case vmStopMsg:
-		return m.handleVMStop(msg)
+		newM, cmd := m.handleVMStop(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case vmCreateMsg:
-		return m.handleVMCreate(msg)
+		newM, cmd := m.handleVMCreate(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case vmDeleteMsg:
-		return m.handleVMDelete(msg)
+		newM, cmd := m.handleVMDelete(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case agentAddedMsg:
-		return m.handleAgentAdded(msg)
+		newM, cmd := m.handleAgentAdded(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case agentKilledMsg:
-		return m.handleAgentKilled(msg)
+		newM, cmd := m.handleAgentKilled(msg)
+		newM.syncViewport()
+		return newM, cmd
+
+	case connectReadyMsg:
+		return m, tea.ExecProcess(msg.cmd, func(err error) tea.Msg {
+			return connectFinishedMsg{err: err}
+		})
 
 	case connectFinishedMsg:
-		return m.handleConnectFinished(msg)
+		newM, cmd := m.handleConnectFinished(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	case firewallCheckedMsg:
-		// Firewall check is fire-and-forget; log errors but don't update UI
 		if msg.err != nil {
 			log.Debug("firewall check failed (non-fatal)", "error", msg.err)
 		}
 		return m, nil
 
 	case sshKeyCheckedMsg:
-		// SSH key check is fire-and-forget; log errors but don't update UI
 		if msg.err != nil {
 			log.Debug("SSH key check failed (non-fatal)", "error", msg.err)
 		}
 		return m, nil
 
 	case syncMsg:
-		return m.handleSync(msg)
+		newM, cmd := m.handleSync(msg)
+		newM.syncViewport()
+		return newM, cmd
 
 	default:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		// Update spinner animation (tick messages).
+		var spinCmd tea.Cmd
+		m.spinner, spinCmd = m.spinner.Update(msg)
+		cmds = append(cmds, spinCmd)
+
+		// Forward to viewport for scroll handling.
+		var vpCmd tea.Cmd
+		m.viewport, vpCmd = m.viewport.Update(msg)
+		cmds = append(cmds, vpCmd)
+
+		m.syncViewport()
+		return m, tea.Batch(cmds...)
 	}
 }
 

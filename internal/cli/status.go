@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
-	"github.com/cloud-coop/cloudcoop/internal/cloud/gcp"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
 
@@ -32,15 +31,14 @@ This shows:
 
 // providerFactory creates a cloud provider from configuration.
 // This is a package-level variable to allow test injection.
-var providerFactory func(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) = createProviderImpl
+var providerFactory func(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) = ops.NewProvider
 
 // configLoader loads the application configuration.
 // This is a package-level variable to allow test injection.
 var configLoader func() (*config.Config, error) = config.LoadMerged
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}
@@ -50,7 +48,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create provider
-	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutVMStatus)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)
@@ -74,20 +72,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 // createProvider creates a cloud provider using the configured factory.
 func createProvider(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
 	return providerFactory(ctx, cfg)
-}
-
-// createProviderImpl is the default provider factory implementation.
-func createProviderImpl(ctx context.Context, cfg *config.Config) (cloud.Provider, func(), error) {
-	switch cfg.Cloud.Provider {
-	case "gcp":
-		p, err := gcp.New(ctx, cfg.Cloud.GCP.Project, cfg.Cloud.GCP.Zone)
-		if err != nil {
-			return nil, nil, err
-		}
-		return p, func() { _ = p.Close() }, nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported provider: %s", cfg.Cloud.Provider)
-	}
 }
 
 func handleConfigError(err error) error {

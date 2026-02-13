@@ -5,45 +5,106 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+
 	"github.com/cloud-coop/cloudcoop/internal/agent"
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/version"
 )
 
+// renderHeader returns the title and subtitle lines.
+func (m Model) renderHeader() string {
+	title := titleStyle.Render("cloudcoop") + " " + versionStyle.Render(version.Short())
+	subtitle := subtitleStyle.Render("Manage sandboxed AI coding agents on cloud VMs")
+	return fmt.Sprintf("\n%s\n%s\n", title, subtitle)
+}
+
+// renderFooter returns the help line using the help bubble.
+func (m Model) renderFooter() string {
+	return "\n" + m.help.View(m.keys) + "\n"
+}
+
+// ensureInit lazily initialises key bindings and help model for
+// Models created without calling New() (e.g., in tests).
+func (m *Model) ensureInit() {
+	if m.keys.Quit.Keys() == nil {
+		m.keys = newKeyMap()
+		m.help = help.New()
+		m.help.ShortSeparator = " · "
+	}
+}
+
+// renderHelp returns the contextual help text for the current state.
+func (m *Model) renderHelp() string {
+	m.ensureInit()
+	m.updateKeyStates()
+	if m.selectingSize || m.confirmingDelete || m.confirmingKill {
+		return m.dialogueHelp()
+	}
+	return m.help.View(m.keys)
+}
+
+// buildContent returns the main content for the current model state.
+func (m Model) buildContent() string {
+	if m.showHelp {
+		return m.renderHelpOverlay()
+	}
+
+	switch {
+	case m.cfgErr != nil:
+		return m.renderConfigError()
+	case m.selectingSize:
+		return m.renderSizeSelection()
+	case m.confirmingDelete:
+		return m.renderDeleteConfirmation()
+	case m.confirmingKill:
+		return m.renderKillConfirmation()
+	case m.operation != "":
+		return m.renderOperation()
+	case m.loading && m.vmInfo == nil:
+		return boxStyle.Render(m.spinner.View() + " Loading VM status...")
+	case m.vmErr != nil:
+		return boxStyle.Render(errorStyle.Render(fmt.Sprintf("Error: %v", m.vmErr)))
+	default:
+		return m.renderVMStatus()
+	}
+}
+
+// syncViewport updates the viewport content from current model state.
+func (m *Model) syncViewport() {
+	m.ensureInit()
+	m.updateKeyStates()
+	m.viewport.SetContent(m.buildContent())
+}
+
 func (m Model) renderView() string {
 	if !m.ready {
 		return "Loading..."
 	}
 
-	title := titleStyle.Render("cloudcoop") + " " + versionStyle.Render(version.Short())
-	subtitle := subtitleStyle.Render("Manage sandboxed AI coding agents on cloud VMs")
+	header := m.renderHeader()
+	content := m.buildContent()
 
-	if m.showHelp {
-		return fmt.Sprintf("\n%s\n%s\n\n%s\n", title, subtitle, m.renderHelpOverlay())
+	// Use viewport when sized (production); render directly otherwise (tests).
+	if m.viewport.Width > 0 {
+		content = m.viewport.View()
 	}
 
-	var content string
-	switch {
-	case m.cfgErr != nil:
-		content = m.renderConfigError()
-	case m.selectingSize:
-		content = m.renderSizeSelection()
-	case m.confirmingDelete:
-		content = m.renderDeleteConfirmation()
-	case m.confirmingKill:
-		content = m.renderKillConfirmation()
-	case m.operation != "":
-		content = m.renderOperation()
-	case m.loading && m.vmInfo == nil:
-		content = boxStyle.Render(m.spinner.View() + " Loading VM status...")
-	case m.vmErr != nil:
-		content = boxStyle.Render(errorStyle.Render(fmt.Sprintf("Error: %v", m.vmErr)))
-	default:
-		content = m.renderVMStatus()
+	if m.selectingSize || m.confirmingDelete || m.confirmingKill {
+		footer := "\n" + helpStyle.Render(m.dialogueHelp()) + "\n"
+		return header + "\n" + content + footer
 	}
 
-	return fmt.Sprintf("\n%s\n%s\n\n%s\n\n%s\n", title, subtitle, content, m.renderHelp())
+	return header + "\n" + content + m.renderFooter()
+}
+
+// dialogueHelp returns context-specific help text for dialogue modes.
+func (m Model) dialogueHelp() string {
+	if m.selectingSize {
+		return "↑/↓: select · Enter: create · Esc: cancel"
+	}
+	return "y: confirm · n: cancel"
 }
 
 func (m Model) renderOperation() string {
@@ -220,42 +281,6 @@ func (m Model) renderSizeSelection() string {
 func (m Model) renderDeleteConfirmation() string {
 	return boxStyle.Render(fmt.Sprintf("Delete VM %q?\n\nThis will permanently delete the VM and its boot disk.\n\nPress y to confirm, n to cancel.",
 		m.cfg.VM.Name))
-}
-
-func (m Model) renderHelp() string {
-	if m.selectingSize {
-		return helpStyle.Render("↑/↓: select • Enter: create • Esc: cancel")
-	}
-	if m.confirmingDelete || m.confirmingKill {
-		return helpStyle.Render("y: confirm • n: cancel")
-	}
-
-	actions := []string{"?: help", "q: quit", "r: refresh"}
-	if m.autoRefreshPaused {
-		actions = append(actions, "a: resume auto")
-	} else {
-		actions = append(actions, "a: pause auto")
-	}
-	if m.vmInfo != nil && m.operation == "" {
-		switch m.vmInfo.Status {
-		case cloud.VMStatusNotFound:
-			actions = append(actions, "n: new VM")
-		case cloud.VMStatusStopped:
-			actions = append(actions, "s: start", "d: delete")
-		case cloud.VMStatusRunning:
-			actions = append(actions, "t: stop")
-			if m.canModifyAgents() && m.workspaceInfo != nil {
-				actions = append(actions, "w: sync")
-			}
-			if m.canModifyAgents() {
-				actions = append(actions, "+: add agent")
-				if m.agents != nil && len(m.agents.Sessions) > 0 {
-					actions = append(actions, "Enter/c/1-9: connect", "-: kill agent", "↑/↓: select")
-				}
-			}
-		}
-	}
-	return helpStyle.Render(strings.Join(actions, " • "))
 }
 
 func (m Model) renderHelpOverlay() string {

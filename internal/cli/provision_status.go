@@ -3,12 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/log"
+	"github.com/cloud-coop/cloudcoop/internal/ops"
 	"github.com/cloud-coop/cloudcoop/internal/provisioning"
 	"github.com/cloud-coop/cloudcoop/internal/ssh"
 )
@@ -26,8 +26,7 @@ This shows:
 }
 
 func runProvisionStatus(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}
@@ -37,7 +36,7 @@ func runProvisionStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create provider
-	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), ops.TimeoutProvision)
 	defer cancel()
 
 	provider, cleanup, err := createProvider(ctx, cfg)

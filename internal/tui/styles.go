@@ -2,39 +2,40 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Styles for the TUI.
+// Styles for the TUI. Adaptive colours ensure readability on both light and
+// dark terminal backgrounds.
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("205")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#D7005F", Dark: "#FF87AF"}).
 			MarginBottom(1)
 
 	subtitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#585858", Dark: "#626262"}).
 			MarginBottom(2)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#585858", Dark: "#626262"}).
 			MarginTop(2)
 
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#5F5FD7", Dark: "#5F5FD7"}).
 			Padding(1, 2)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF0000"})
 
 	runningStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("46"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#00875F", Dark: "#00FF87"})
 
 	stoppedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#585858", Dark: "#626262"})
 
 	labelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#585858", Dark: "#808080"}).
 			Width(14)
 
 	versionStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#585858", Dark: "#626262"})
 )

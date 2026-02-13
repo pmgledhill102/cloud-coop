@@ -87,6 +87,13 @@ func Init() {
 	InitWithConfig(DefaultConfig())
 }
 
+// SetVerbose reinitialises the logger at debug level, preserving other settings.
+func SetVerbose() {
+	cfg := DefaultConfig()
+	cfg.Level = slog.LevelDebug
+	InitWithConfig(cfg)
+}
+
 // InitWithConfig initialises the default logger with the given configuration.
 func InitWithConfig(cfg Config) {
 	mu.Lock()

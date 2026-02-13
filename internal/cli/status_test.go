@@ -10,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/cloud-coop/cloudcoop/internal/ops"
+
 	"github.com/cloud-coop/cloudcoop/internal/cloud"
 	"github.com/cloud-coop/cloudcoop/internal/config"
 )
@@ -183,12 +185,12 @@ func TestCreateProvider(t *testing.T) {
 				},
 			}
 
-			_, _, err := createProviderImpl(context.Background(), cfg)
+			_, _, err := ops.NewProvider(context.Background(), cfg)
 			if tt.wantErr && err == nil {
-				t.Error("createProviderImpl() expected error, got nil")
+				t.Error("ops.NewProvider() expected error, got nil")
 			}
 			if !tt.wantErr && err != nil {
-				t.Errorf("createProviderImpl() unexpected error: %v", err)
+				t.Errorf("ops.NewProvider() unexpected error: %v", err)
 			}
 		})
 	}

@@ -42,8 +42,9 @@ Examples:
 }
 
 var configSetCmd = &cobra.Command{
-	Use:   "set <key> <value>",
-	Short: "Set a configuration value",
+	Use:         "set <key> <value>",
+	Short:       "Set a configuration value",
+	Annotations: map[string]string{"skip-config": "true"},
 	Long: `Set a configuration value and save to the config file.
 
 Available keys:
@@ -65,8 +66,9 @@ Examples:
 }
 
 var configInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialise configuration with setup wizard",
+	Use:         "init",
+	Short:       "Initialise configuration with setup wizard",
+	Annotations: map[string]string{"skip-config": "true"},
 	Long: `Run the interactive setup wizard to create a new configuration file.
 
 This will prompt you for:
@@ -91,7 +93,7 @@ func init() {
 }
 
 func runConfigShow(cmd *cobra.Command, args []string) error {
-	cfg, err := configLoader()
+	cfg, err := configFromCmd(cmd)
 	if err != nil {
 		return handleConfigError(err)
 	}
