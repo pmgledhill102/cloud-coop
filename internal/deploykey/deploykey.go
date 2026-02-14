@@ -336,7 +336,7 @@ func SetupVM(runner ssh.Runner, fs FileSystem, keyPair KeyPair, opts Options) (*
 
 	// Configure SSH host alias for this repo
 	hostAlias := "github-" + opts.Slug
-	configBlock := fmt.Sprintf("\nHost %s\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/cloudcoop-deploy-%s\n  IdentitiesOnly yes\n",
+	configBlock := fmt.Sprintf("\nHost %s\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/cloudcoop-deploy-%s\n  IdentitiesOnly yes\n  StrictHostKeyChecking accept-new\n",
 		hostAlias, opts.Slug)
 
 	// Check if config already contains this host alias (idempotent)
@@ -352,6 +352,9 @@ func SetupVM(runner ssh.Runner, fs FileSystem, keyPair KeyPair, opts Options) (*
 		}
 	}
 	result.ConfigWritten = true
+
+	// Ensure GitHub's SSH host key is in known_hosts (idempotent; needed on fresh VMs).
+	_, _ = runner.Run(`ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null`)
 
 	// Preflight: verify git access via the host alias
 	verifyCmd := fmt.Sprintf("git ls-remote %s:%s/%s.git HEAD",
