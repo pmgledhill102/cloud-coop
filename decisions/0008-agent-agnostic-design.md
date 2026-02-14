@@ -11,7 +11,7 @@ The sandbox infrastructure was initially designed for Claude Code, but the core 
 | Component | Claude-Specific? | Notes |
 |-----------|------------------|-------|
 | GCP VM (Compute Engine) | No | Any agent can run here |
-| Spot instance + persistent disk | No | Cost optimization is universal |
+| Spot instance + persistent disk | No | Cost optimisation is universal |
 | Service account + IAM | No | Least-privilege applies to any agent |
 | Docker installation | No | Any agent may need to build containers |
 | Development tooling | No | Go, Python, Node, etc. are universal |
@@ -27,7 +27,7 @@ Only ~5% of the system is agent-specific. The infrastructure should be designed 
 
 Design the sandbox as an **agent-agnostic platform** with pluggable agent configurations.
 
-Agent-specific behavior is isolated to a configuration file that defines:
+Agent-specific behaviour is isolated to a configuration file that defines:
 
 - Agent command and flags
 - Session resume mechanism
@@ -43,7 +43,7 @@ Hardcode Claude Code throughout the implementation.
 
 - Simpler initial implementation
 - No abstraction overhead
-- Optimized for one tool
+- Optimised for one tool
 
 **Cons:**
 

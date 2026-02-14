@@ -74,7 +74,7 @@ cloudcoop creates and manages its own service account.
 
 - Requires cloudcoop to have IAM permissions
 - Violates separation of concerns
-- Harder to audit/customize permissions
+- Harder to audit/customise permissions
 
 ## Consequences
 
@@ -83,7 +83,7 @@ cloudcoop creates and manages its own service account.
 - VMs run with least-privilege by default
 - Users explicitly choose what permissions to grant
 - Aligns implementation with security documentation
-- Defense in depth for AI agent containment
+- Defence in depth for AI agent containment
 
 ### Negative
 

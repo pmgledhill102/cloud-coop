@@ -80,10 +80,10 @@ The command chain is:
 2. Append repo-specific `agents.repos.<slug>.pre_commands` (if defined)
 3. Both lists are concatenated (global first, then repo-specific)
 
-**Default behavior:**
+**Default behaviour:**
 
 With no configuration, the command is `cd <worktree> && claude` — backwards compatible
-with the current behavior, plus the implicit beads configuration.
+with the current behaviour, plus the implicit beads configuration.
 
 ## Options Considered
 

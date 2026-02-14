@@ -195,7 +195,7 @@ User with valid GCP credentials sees real VM status.
 - `cloudcoop stop` stops a running VM, waits for STOPPED state
 - TUI keybindings: `S` to start, `T` to stop
 - Progress indicator during long-running operations
-- Idempotent behavior (start when running = no-op with message)
+- Idempotent behaviour (start when running = no-op with message)
 
 ### Proves
 

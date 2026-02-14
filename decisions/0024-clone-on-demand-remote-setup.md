@@ -19,7 +19,7 @@ machine to the VM?
 - Mirror the user's local worktree structure on the VM
 - Support incremental updates (add new worktrees, detect removed ones)
 - Handle first-time setup and reconnect scenarios
-- Minimize manual steps — users shouldn't SSH in to set things up
+- Minimise manual steps — users shouldn't SSH in to set things up
 - Work across repositories (user may have multiple repos)
 
 **Inputs available locally:**
@@ -47,7 +47,7 @@ local git state and executing remote commands via SSH.
 8. **Detect removals**: If remote worktrees exist that don't match any local worktree,
    prompt the user before cleanup
 
-**Incremental behavior:**
+**Incremental behaviour:**
 
 - Running `sync` again only creates what's missing — existing worktrees and running agents
   are left untouched

@@ -13,7 +13,7 @@ Cost efficiency is important, but so is preserving state across sessions.
 
 ## Decision
 
-Use spot instances with `--instance-termination-action=STOP` and default disk auto-delete behavior (`--boot-disk-auto-delete=yes`).
+Use spot instances with `--instance-termination-action=STOP` and default disk auto-delete behaviour (`--boot-disk-auto-delete=yes`).
 
 This provides ~70% cost savings while running, with automatic state preservation when preempted or manually stopped.
 
@@ -69,14 +69,14 @@ Spot pricing with instance deletion on preemption.
 ### Option 3: Spot Instances with STOP on Preemption (Chosen)
 
 Spot pricing with instance stop (not delete) on preemption. Boot disk uses default auto-delete
-behavior (deleted with instance), which is safe because STOP action doesn't trigger auto-delete.
+behaviour (deleted with instance), which is safe because STOP action doesn't trigger auto-delete.
 
 **Pros:**
 
 - ~70% cost savings while running
 - Instance stops on preemption (not deleted)
 - Boot disk survives stops/preemption (auto-delete only triggers on DELETE, not STOP)
-- Same behavior as manual stop
+- Same behaviour as manual stop
 - Simple restart: `gcloud compute instances start`
 - No orphaned disks on explicit VM deletion
 
@@ -118,7 +118,7 @@ Older preemptible VM model (max 24-hour lifetime).
 
 ### Neutral
 
-- Preemption behavior identical to manual stop from state perspective
+- Preemption behaviour identical to manual stop from state perspective
 - Shutdown hook can cleanly save git state within 25-second window
 - Typical preemption frequency is low (hours to days between events)
 

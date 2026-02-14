@@ -15,7 +15,7 @@ Code, Aider, Gemini CLI, etc.) in tmux sessions.
 - Cloud-agnostic: GCP first, AWS and Azure planned
 - Agent-agnostic: supports Claude Code, Aider, Gemini CLI
 - Automatic IP-based firewall rules
-- Cost-optimized with spot instances
+- Cost-optimised with spot instances
 
 ## Architecture Summary
 

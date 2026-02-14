@@ -70,7 +70,7 @@ Latest ARM instances using Google's custom Axion processors.
 
 ### Option 4: C3 (Intel Sapphire Rapids)
 
-Latest Intel-based compute-optimized instances.
+Latest Intel-based compute-optimised instances.
 
 **Pros:**
 

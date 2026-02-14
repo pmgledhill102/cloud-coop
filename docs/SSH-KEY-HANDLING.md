@@ -167,7 +167,7 @@ For this application, probably not, for several reasons:
    this means compromising the user's network or the cloud provider's network -- both of
    which imply much larger problems than SSH key verification.
 
-The pinned-key model provides meaningful defense-in-depth without adding user friction.
+The pinned-key model provides meaningful defence-in-depth without adding user friction.
 
 ## Recommendations
 

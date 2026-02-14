@@ -412,7 +412,7 @@ Previous session detected (stopped 15 minutes ago):
 > **Note:** This feature is out of scope for MVP. The core workflow uses tmux window navigation
 > directly (`Ctrl-B 1-9`, `Ctrl-B w` for picker). See `cloud-coop-40i` for future tracking.
 
-Generate optimized terminal emulator configuration for multi-agent viewing. Would create config
+Generate optimised terminal emulator configuration for multi-agent viewing. Would create config
 files or shell scripts to launch terminal with pre-configured panes, each connected to a
 different agent session.
 

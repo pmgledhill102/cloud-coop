@@ -327,7 +327,7 @@ Addressing Priority 0 and Priority 1 items will significantly improve production
 
 ---
 
-## Appendix: Files Analyzed
+## Appendix: Files Analysed
 
 **Security Scans:**
 

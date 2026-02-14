@@ -9,7 +9,7 @@ Accepted
 The current design targets GCP exclusively. Users may prefer or require AWS or Azure due to:
 
 - Existing cloud credits or enterprise agreements
-- Organizational cloud standards
+- Organisational cloud standards
 - Regional availability or compliance requirements
 - Familiarity with a specific cloud's tooling
 
@@ -45,7 +45,7 @@ add AWS and Azure support later.
 | Resize VM | Low | Stop → change type → start (universal) |
 | Create VM | Medium | Different flags, but mappable |
 | Machine types | Medium | Naming differs, need mapping table |
-| Spot behavior | Medium | Different preemption semantics |
+| Spot behaviour | Medium | Different preemption semantics |
 | IAM/Permissions | High | Fundamentally different models |
 | Secrets | Medium | Similar concepts, different APIs |
 | Networking/Firewall | High | Very different models |
@@ -72,7 +72,7 @@ Keep the current GCP-only implementation.
 
 - Simplest implementation
 - No abstraction overhead
-- Optimized for one platform
+- Optimised for one platform
 - Faster initial delivery
 
 **Cons:**

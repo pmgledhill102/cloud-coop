@@ -35,7 +35,7 @@ scoped access. This asymmetry is intentional and central to the security model.
 
 ### Why this is acceptable
 
-The local binary is **deterministic and reviewable**. Its behavior is defined by open-source
+The local binary is **deterministic and reviewable**. Its behaviour is defined by open-source
 code that can be audited before execution. It does not make autonomous decisions or generate
 novel actions.
 
@@ -195,7 +195,7 @@ GCP project, GitHub account, and SSH keys?
 - **Auditability.** Users can read the source code and verify exactly what API calls the
   binary makes before running it.
 - **Community review.** Vulnerabilities are found faster when anyone can inspect the code.
-- **No hidden behavior.** There are no obfuscated network calls, telemetry, or data
+- **No hidden behaviour.** There are no obfuscated network calls, telemetry, or data
   exfiltration paths. The binary's network interactions are limited to GCP APIs, SSH
   connections, and `gh` CLI invocations.
 - **Reproducible builds.** Go produces deterministic binaries from source. Users can build

@@ -121,7 +121,7 @@ assigning each client a "home" window.
 
 - Complex hook logic
 - Fragile — hooks can fail or have timing issues
-- Non-standard tmux behavior confuses users
+- Non-standard tmux behaviour confuses users
 - Detach/reattach causes visible flicker
 - Difficult to debug
 

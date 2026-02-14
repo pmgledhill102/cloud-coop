@@ -22,7 +22,7 @@ autonomously. However, the security risk of running this on a personal machine i
 - Agents can execute arbitrary commands without approval
 - Agents can modify or delete any accessible files
 - Agents can access credentials and sensitive data
-- Mistakes or unexpected behavior have no safety net
+- Mistakes or unexpected behaviour have no safety net
 
 The agents also need Docker access to:
 
@@ -151,7 +151,7 @@ Use managed cloud development environments.
 - Higher cost than raw VM
 - Less control over environment
 - May have restrictions on long-running processes
-- Not optimized for running multiple autonomous agents
+- Not optimised for running multiple autonomous agents
 
 ## Security Analysis
 

@@ -1,4 +1,4 @@
-# Cost Optimization Guide
+# Cost Optimisation Guide
 
 Strategies to reduce costs while maintaining sandbox effectiveness.
 
@@ -6,14 +6,14 @@ Strategies to reduce costs while maintaining sandbox effectiveness.
 
 Typical monthly costs (us-central1):
 
-| Component | On-Demand | With Optimization |
+| Component | On-Demand | With Optimisation |
 |-----------|-----------|-------------------|
 | e2-standard-16 VM | ~$400 | ~$120 (spot) |
 | 200GB SSD disk | ~$34 | ~$34 |
 | Network egress | ~$20 | ~$20 |
 | **Total** | **~$454** | **~$174** |
 
-## Optimization Strategies
+## Optimisation Strategies
 
 ### 1. Use Spot/Preemptible Instances (60-70% savings)
 
@@ -81,7 +81,7 @@ Match VM size to actual usage.
 **Monitor and adjust:**
 
 ```bash
-# Check CPU/memory utilization
+# Check CPU/memory utilisation
 gcloud monitoring metrics list --filter="metric.type=compute.googleapis.com/instance"
 
 # Resize if underutilized
@@ -150,7 +150,7 @@ Some regions are 10-20% cheaper:
 | europe-west1 | ~10% higher |
 | asia-east1 | ~15% higher |
 
-### 8. Network Optimization
+### 8. Network Optimisation
 
 **Reduce egress costs:**
 

@@ -9,7 +9,7 @@ provisioning, agent operations, and firewall management against live cloud infra
 Unit tests cover ~45% of the codebase with mocks for cloud providers, SSH, and config. Integration
 tests catch what mocks cannot:
 
-- GCP API behavior changes and deprecations
+- GCP API behaviour changes and deprecations
 - SSH connectivity and host key handling against real VMs
 - Provisioning script reliability (all 16 steps)
 - Firewall rule creation and idempotency
@@ -317,7 +317,7 @@ This approach is recommended for TUI logic because:
 
 - Tests run in milliseconds
 - No terminal or pty required
-- Mock providers isolate cloud behavior
+- Mock providers isolate cloud behaviour
 - The same code paths tested by integration tests (provider, SSH, agent) are called by the TUI
 
 ### Golden File Testing with `teatest`
