@@ -93,7 +93,7 @@ Use Go SSH library for programmatic commands, shell out to `ssh` for interactive
 
 - Best of both worlds
 - Programmatic commands are fast and reliable
-- Interactive sessions use familiar SSH behavior
+- Interactive sessions use familiar SSH behaviour
 - Single binary for TUI, ssh binary only for connect
 
 **Cons:**

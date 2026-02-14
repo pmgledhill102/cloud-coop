@@ -60,7 +60,7 @@ func (s *stubSSHClient) Run(cmd string) (string, error) {
 
 - Simple to understand
 - No additional dependencies
-- Full control over behavior
+- Full control over behaviour
 
 **Cons:**
 

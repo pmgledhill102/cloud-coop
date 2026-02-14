@@ -158,20 +158,20 @@ Use a mock SSH server for unit tests, accept that integration tests require manu
 
 - Doesn't solve integration testing problem
 - SSH-related features remain difficult to test end-to-end
-- Mocks may drift from real behavior
+- Mocks may drift from real behaviour
 
 **Verdict:** Useful complement but doesn't solve the core problem.
 
 ## Extended Analysis: Non-Standard Port for All VMs?
 
-Should cloudcoop standardize on a non-standard SSH port (e.g., 2222) for ALL VMs, not just test VMs?
+Should cloudcoop standardise on a non-standard SSH port (e.g., 2222) for ALL VMs, not just test VMs?
 
 ### Arguments For
 
 1. **Security through obscurity**: Automated scanners and bots target port 22. Using a non-standard
    port reduces noise and opportunistic attacks.
 
-2. **Consistent behavior**: Same configuration for dev, test, and production simplifies operations.
+2. **Consistent behaviour**: Same configuration for dev, test, and production simplifies operations.
 
 3. **Testing parity**: Production VMs can be tested the same way as development VMs.
 

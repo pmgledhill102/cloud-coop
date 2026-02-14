@@ -77,7 +77,7 @@ For users who need direct SSH access or have constraints with IAP.
 
 **Modes:**
 
-| Mode | Behavior |
+| Mode | Behaviour |
 |------|----------|
 | `auto` | Detect public IP on startup, update firewall rule |
 | `manual` | User specifies IP/CIDR in config, TUI applies it |

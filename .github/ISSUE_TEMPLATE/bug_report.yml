@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-description: Report a bug or unexpected behavior in cloudcoop
+description: Report a bug or unexpected behaviour in cloudcoop
 labels: ["bug", "triage"]
 body:
   - type: markdown
@@ -20,7 +20,7 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: Expected Behavior
+      label: Expected Behaviour
       description: What did you expect to happen?
       placeholder: What should have happened?
     validations:
@@ -30,7 +30,7 @@ body:
     id: steps
     attributes:
       label: Steps to Reproduce
-      description: Steps to reproduce the behavior
+      description: Steps to reproduce the behaviour
       placeholder: |
         1. Run cloudcoop with '...'
         2. Select '...'

@@ -42,7 +42,7 @@ tmux sessions:
     1: redesign         # Window: agent on redesign worktree
 ```
 
-**CLI behavior:**
+**CLI behaviour:**
 
 - `cloudcoop agents list` — lists agents for the current repo (detected from cwd git remote)
 - `cloudcoop agents list --all` — lists agents across all repos/sessions

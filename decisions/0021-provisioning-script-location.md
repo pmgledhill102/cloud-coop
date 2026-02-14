@@ -123,7 +123,7 @@ The script **must** be idempotent - safe to run multiple times without side effe
 # Check before install
 command -v node &> /dev/null || apt-get install -y nodejs
 
-# Use package manager's idempotent behavior
+# Use package manager's idempotent behaviour
 apt-get install -y nodejs  # Already installed = no-op
 
 # Guard file creation
@@ -378,7 +378,7 @@ extra_scripts = [
 
 **Cons:**
 
-- Users can't remove/change core behavior
+- Users can't remove/change core behaviour
 - Multiple scripts increase complexity
 - Ordering and error handling between scripts
 - Still need to decide where core script lives

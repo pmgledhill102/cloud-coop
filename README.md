@@ -22,7 +22,7 @@ full development tooling.
 - Agent-agnostic: supports Claude Code, Aider, Gemini CLI, and others
 - Cloud-agnostic: GCP first, AWS and Azure planned
 - Automatic IP-based firewall rules (optional)
-- Cost-optimized: spot instances, stop when idle
+- Cost-optimised: spot instances, stop when idle
 
 ## Architecture
 

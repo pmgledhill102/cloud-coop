@@ -85,7 +85,7 @@ The key should be at `~/.ssh/id_ed25519` or `~/.ssh/id_rsa`.
 
 ### Recommended Configuration
 
-Create a VM optimized for cloudcoop with spot pricing and persistent boot disk:
+Create a VM optimised for cloudcoop with spot pricing and persistent boot disk:
 
 ```bash
 gcloud compute instances create claude-sandbox \
@@ -324,7 +324,7 @@ For c4a-highcpu-16 in europe-north2 (Stockholm):
 | Spot 8h/day (workdays) | ~$30 |
 | Stopped (disk only) | ~$5 |
 
-See [COST-OPTIMIZATION.md](./COST-OPTIMIZATION.md) for more strategies.
+See [COST-OPTIMISATION.md](./COST-OPTIMISATION.md) for more strategies.
 
 ## Troubleshooting
 
