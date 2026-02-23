@@ -14,7 +14,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.48.0
 	golang.org/x/term v0.40.0
-	google.golang.org/api v0.266.0
+	google.golang.org/api v0.268.0
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 )
