@@ -222,6 +222,8 @@ sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     mysql-client \
     redis \
     mongosh \
+    dolt \
+    beads \
     golangci-lint \
     actionlint \
     hadolint \
@@ -446,6 +448,8 @@ echo "  - Terraform  : $(terraform --version 2>/dev/null | head -1 | awk '{print
 echo "  - kubectl    : $(kubectl version --client -o json 2>/dev/null | jq -r '.clientVersion.gitVersion' || echo 'N/A')"
 echo "  - AWS CLI    : $(aws --version 2>/dev/null | awk '{print $1}' || echo 'N/A')"
 echo "  - Azure CLI  : $(az --version 2>/dev/null | head -1 | awk '{print $2}' || echo 'N/A')"
+echo "  - Dolt       : $(dolt version 2>/dev/null | head -1 | awk '{print $3}' || echo 'N/A')"
+echo "  - Beads      : $(bd --version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
 echo "  - Gemini CLI : $(gemini --version 2>/dev/null || echo 'N/A')"
 echo ""
