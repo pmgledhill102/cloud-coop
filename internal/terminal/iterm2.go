@@ -75,7 +75,7 @@ func generateITerm2(cfg Config) string {
 			fmt.Fprintf(&b, "        -- Row %d\n", row+1)
 			for col := 0; col < cfg.Grid.Cols; col++ {
 				paneIdx := col // The pane to split is at index col (from first row)
-				b.WriteString(fmt.Sprintf("        tell item %d of allPanes\n", paneIdx+1))
+				fmt.Fprintf(&b, "        tell item %d of allPanes\n", paneIdx+1)
 				b.WriteString("            set newPane to (split horizontally with default profile)\n")
 				b.WriteString("        end tell\n")
 				b.WriteString("        set end of allPanes to newPane\n")
@@ -104,13 +104,13 @@ func generateITerm2(cfg Config) string {
 	for i, cmd := range commands {
 		if sessionIdx >= len(cfg.Sessions) && i >= len(cfg.Sessions) {
 			// This pane has no agent
-			b.WriteString(fmt.Sprintf("        tell item %d of allPanes\n", i+1))
-			b.WriteString(fmt.Sprintf("            write text %q\n", cmd))
+			fmt.Fprintf(&b, "        tell item %d of allPanes\n", i+1)
+			fmt.Fprintf(&b, "            write text %q\n", cmd)
 			b.WriteString("        end tell\n")
 		} else if i < len(cfg.Sessions) {
-			b.WriteString(fmt.Sprintf("        -- %s (index %d)\n", cfg.Sessions[i].Name, cfg.Sessions[i].Index))
-			b.WriteString(fmt.Sprintf("        tell item %d of allPanes\n", i+1))
-			b.WriteString(fmt.Sprintf("            write text %q\n", cmd))
+			fmt.Fprintf(&b, "        -- %s (index %d)\n", cfg.Sessions[i].Name, cfg.Sessions[i].Index)
+			fmt.Fprintf(&b, "        tell item %d of allPanes\n", i+1)
+			fmt.Fprintf(&b, "            write text %q\n", cmd)
 			b.WriteString("        end tell\n")
 			sessionIdx++
 		}
