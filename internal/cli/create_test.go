@@ -68,6 +68,7 @@ func TestRunCreate_PassesProvisionScriptURL(t *testing.T) {
 
 	if createCall == nil {
 		t.Fatal("CreateVM was not called")
+		return // unreachable; helps staticcheck see nil safety
 	}
 
 	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
@@ -111,6 +112,7 @@ func TestRunCreate_MaxUptimeFromConfig(t *testing.T) {
 
 	if createCall == nil {
 		t.Fatal("CreateVM was not called")
+		return // unreachable; helps staticcheck see nil safety
 	}
 
 	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
@@ -158,6 +160,7 @@ func TestRunCreate_MaxUptimeFlagOverridesConfig(t *testing.T) {
 
 	if createCall == nil {
 		t.Fatal("CreateVM was not called")
+		return // unreachable; helps staticcheck see nil safety
 	}
 
 	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
@@ -201,6 +204,7 @@ func TestRunCreate_PassesServiceAccount(t *testing.T) {
 
 	if createCall == nil {
 		t.Fatal("CreateVM was not called")
+		return // unreachable; helps staticcheck see nil safety
 	}
 
 	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
