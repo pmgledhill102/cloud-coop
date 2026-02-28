@@ -23,7 +23,7 @@ func DetectPublicIP(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // G704: URL is from hardcoded package var, not user input
 	if err != nil {
 		return "", fmt.Errorf("detect public IP: %w", err)
 	}

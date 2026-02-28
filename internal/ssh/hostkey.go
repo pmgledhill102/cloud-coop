@@ -189,7 +189,7 @@ func removeHostEntry(khPath, host string, port int) error {
 	}
 
 	// Write back
-	return os.WriteFile(khPath, []byte(strings.Join(newLines, "\n")+"\n"), 0600)
+	return os.WriteFile(khPath, []byte(strings.Join(newLines, "\n")+"\n"), 0600) //nolint:gosec // G703: path is from CloudcoopKnownHostsPath(), not user input
 }
 
 // ClearHostKey removes a host's key from cloudcoop's known_hosts file.

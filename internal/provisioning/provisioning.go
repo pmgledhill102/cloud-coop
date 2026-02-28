@@ -53,7 +53,7 @@ func FetchScript(ctx context.Context, url string) (string, error) {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: URL is from trusted config, not user input
 	if err != nil {
 		return "", fmt.Errorf("fetch script: %w", err)
 	}
