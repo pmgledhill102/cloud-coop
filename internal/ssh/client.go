@@ -122,7 +122,7 @@ func discoverAuthMethods() []ssh.AuthMethod {
 	// consumes the server's publickey attempt and prevents file-based
 	// keys from being tried).
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		if conn, err := net.Dial("unix", sock); err == nil {
+		if conn, err := net.Dial("unix", sock); err == nil { //nolint:gosec // G704: path is from SSH_AUTH_SOCK env var, not user input
 			agentClient := agent.NewClient(conn)
 			if signers, err := agentClient.Signers(); err == nil && len(signers) > 0 {
 				methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))

@@ -86,6 +86,7 @@ func TestConnectToVM(t *testing.T) {
 			}
 			if conn == nil {
 				t.Fatal("expected non-nil conn")
+				return // unreachable; helps staticcheck see nil safety
 			}
 			defer conn.Close()
 

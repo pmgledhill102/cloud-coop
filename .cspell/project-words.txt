@@ -122,6 +122,7 @@ misspell
 mutex
 mypy
 myrepo
+nolint
 noreply
 nonexistent
 openssh
