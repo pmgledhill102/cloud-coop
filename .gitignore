@@ -51,3 +51,5 @@ Thumbs.db
 # Generated configs (created by setup-ghostty.sh)
 config/ghostty-sandbox.conf
 config/launch-*.sh
+
+.claude/settings.local.json
