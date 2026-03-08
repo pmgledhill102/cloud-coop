@@ -55,7 +55,7 @@ jobs:
           go build -ldflags="-s -w" -o dist/cloudcoop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/cloudcoop
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: cloudcoop-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/cloudcoop-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
@@ -67,7 +67,7 @@ jobs:
     needs: build
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
