@@ -23,11 +23,27 @@ type APIStatus struct {
 	Enabled bool
 }
 
+// NetworkInfo describes a VPC network.
+type NetworkInfo struct {
+	Name string
+}
+
+// SubnetInfo describes a VPC subnet.
+type SubnetInfo struct {
+	Name string
+}
+
 // SetupProvider defines the interface for cloud setup operations.
 // GCP implements it; AWS/Azure can implement it later.
 type SetupProvider interface {
 	// ListProjects returns available cloud projects.
 	ListProjects(ctx context.Context) ([]ProjectInfo, error)
+
+	// ListNetworks returns available VPC networks in the project.
+	ListNetworks(ctx context.Context, project string) ([]NetworkInfo, error)
+
+	// ListSubnets returns available subnets in the given network and region.
+	ListSubnets(ctx context.Context, project, region, network string) ([]SubnetInfo, error)
 
 	// CheckAPIs checks which of the given APIs are enabled in the project.
 	CheckAPIs(ctx context.Context, project string, apis []string) ([]APIStatus, error)

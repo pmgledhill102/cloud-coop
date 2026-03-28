@@ -61,7 +61,12 @@ Examples:
   cloudcoop config set cloud.gcp.zone us-central1-a
   cloudcoop config set vm.name claude-sandbox
   cloudcoop config set ssh.port 2222`,
-	Args: cobra.ExactArgs(2),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 2 {
+			return fmt.Errorf("requires key and value, e.g.: cloudcoop config set cloud.gcp.zone us-central1-a")
+		}
+		return cobra.ExactArgs(2)(cmd, args)
+	},
 	RunE: runConfigSet,
 }
 

@@ -196,7 +196,7 @@ func LoadMerged() (*Config, error) {
 // SaveInstance writes instance-specific fields to .cloudcoop/local.toml.
 // It creates the .cloudcoop/ directory if needed and ensures local.toml
 // is listed in .cloudcoop/.gitignore.
-func SaveInstance(dir string, project, zone, serviceAccount, vmName string) error {
+func SaveInstance(dir string, project, zone, serviceAccount, vmName, network, subnet string) error {
 	cfg := &Config{
 		Cloud: CloudConfig{
 			GCP: GCPConfig{
@@ -206,7 +206,9 @@ func SaveInstance(dir string, project, zone, serviceAccount, vmName string) erro
 			},
 		},
 		VM: VMConfig{
-			Name: vmName,
+			Name:    vmName,
+			Network: network,
+			Subnet:  subnet,
 		},
 	}
 
@@ -219,8 +221,8 @@ func SaveInstance(dir string, project, zone, serviceAccount, vmName string) erro
 
 // SaveProject is deprecated: use SaveInstance instead.
 // It delegates to SaveInstance which writes to .cloudcoop/local.toml.
-func SaveProject(dir string, project, zone, serviceAccount, vmName string) error {
-	return SaveInstance(dir, project, zone, serviceAccount, vmName)
+func SaveProject(dir string, project, zone, serviceAccount, vmName, network, subnet string) error {
+	return SaveInstance(dir, project, zone, serviceAccount, vmName, network, subnet)
 }
 
 // ensureGitignore adds "local.toml" to .cloudcoop/.gitignore if not already present.

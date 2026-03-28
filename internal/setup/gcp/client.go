@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"fmt"
 
 	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -51,6 +52,18 @@ type iamClient interface {
 type iamPolicyClient interface {
 	GetIAMPolicy(ctx context.Context, project string) (*cloudresourcemanager.Policy, error)
 	SetIAMPolicy(ctx context.Context, project string, policy *cloudresourcemanager.Policy) error
+	Close() error
+}
+
+// networksClient lists VPC networks.
+type networksClient interface {
+	List(ctx context.Context, project string) ([]string, error)
+	Close() error
+}
+
+// subnetworksClient lists VPC subnets.
+type subnetworksClient interface {
+	List(ctx context.Context, project, region, network string) ([]string, error)
 	Close() error
 }
 
@@ -211,6 +224,85 @@ func (r *realIAMPolicyClient) SetIAMPolicy(ctx context.Context, project string, 
 
 func (r *realIAMPolicyClient) Close() error {
 	return nil // REST client, no Close needed
+}
+
+// realNetworksClient wraps the GCP Compute networks client.
+type realNetworksClient struct {
+	client *compute.NetworksClient
+}
+
+func newRealNetworksClient(ctx context.Context) (*realNetworksClient, error) {
+	c, err := compute.NewNetworksRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &realNetworksClient{client: c}, nil
+}
+
+func (r *realNetworksClient) List(ctx context.Context, project string) ([]string, error) {
+	it := r.client.List(ctx, &computepb.ListNetworksRequest{
+		Project: project,
+	})
+	var names []string
+	for {
+		net, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if net.Name != nil {
+			names = append(names, *net.Name)
+		}
+	}
+	return names, nil
+}
+
+func (r *realNetworksClient) Close() error {
+	return r.client.Close()
+}
+
+// realSubnetworksClient wraps the GCP Compute subnetworks client for setup.
+type realSubnetworksClient struct {
+	client *compute.SubnetworksClient
+}
+
+func newRealSubnetworksClient(ctx context.Context) (*realSubnetworksClient, error) {
+	c, err := compute.NewSubnetworksRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &realSubnetworksClient{client: c}, nil
+}
+
+func (r *realSubnetworksClient) List(ctx context.Context, project, region, network string) ([]string, error) {
+	networkURL := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/global/networks/%s", project, network)
+	it := r.client.List(ctx, &computepb.ListSubnetworksRequest{
+		Project: project,
+		Region:  region,
+	})
+	var names []string
+	for {
+		sub, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if sub.Network != nil && *sub.Network != networkURL {
+			continue
+		}
+		if sub.Name != nil {
+			names = append(names, *sub.Name)
+		}
+	}
+	return names, nil
+}
+
+func (r *realSubnetworksClient) Close() error {
+	return r.client.Close()
 }
 
 // realFirewallsClient wraps the GCP Compute firewalls client.

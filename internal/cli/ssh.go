@@ -22,7 +22,12 @@ var sshCmd = &cobra.Command{
 Examples:
   cloudcoop ssh hostname
   cloudcoop ssh "cat /etc/os-release"`,
-	Args: cobra.MinimumNArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("specify a command, e.g.: cloudcoop ssh hostname")
+		}
+		return nil
+	},
 	RunE: runSSH,
 }
 

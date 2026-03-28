@@ -42,6 +42,12 @@ type mockSetupProvider struct {
 	createdSA     bool
 	createdFW     bool
 
+	// Network fields
+	networks    []setup.NetworkInfo
+	networksErr error
+	subnets     []setup.SubnetInfo
+	subnetsErr  error
+
 	// Direct SSH firewall fields
 	directFWExists      bool
 	directFWExistsErr   error
@@ -56,6 +62,24 @@ type mockSetupProvider struct {
 
 func (m *mockSetupProvider) ListProjects(ctx context.Context) ([]setup.ProjectInfo, error) {
 	return m.projects, m.projectsErr
+}
+
+func (m *mockSetupProvider) ListNetworks(ctx context.Context, project string) ([]setup.NetworkInfo, error) {
+	if m.networksErr != nil {
+		return nil, m.networksErr
+	}
+	if m.networks != nil {
+		return m.networks, nil
+	}
+	// Default: single "default" network
+	return []setup.NetworkInfo{{Name: "default"}}, nil
+}
+
+func (m *mockSetupProvider) ListSubnets(ctx context.Context, project, region, network string) ([]setup.SubnetInfo, error) {
+	if m.subnetsErr != nil {
+		return nil, m.subnetsErr
+	}
+	return m.subnets, nil
 }
 
 func (m *mockSetupProvider) CheckAPIs(ctx context.Context, project string, apis []string) ([]setup.APIStatus, error) {

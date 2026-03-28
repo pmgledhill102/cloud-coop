@@ -23,6 +23,8 @@ type Provider struct {
 	serviceUsage serviceUsageClient
 	iam          iamClient
 	iamPolicy    iamPolicyClient
+	networks     networksClient
+	subnets      subnetworksClient
 	firewalls    firewallsClient
 }
 
@@ -54,12 +56,33 @@ func New(ctx context.Context) (*Provider, error) {
 		return nil, fmt.Errorf("create IAM policy client: %w", err)
 	}
 
+	nets, err := newRealNetworksClient(ctx)
+	if err != nil {
+		_ = projects.Close()
+		_ = su.Close()
+		_ = iamC.Close()
+		_ = iamP.Close()
+		return nil, fmt.Errorf("create networks client: %w", err)
+	}
+
+	subs, err := newRealSubnetworksClient(ctx)
+	if err != nil {
+		_ = projects.Close()
+		_ = su.Close()
+		_ = iamC.Close()
+		_ = iamP.Close()
+		_ = nets.Close()
+		return nil, fmt.Errorf("create subnetworks client: %w", err)
+	}
+
 	fw, err := newRealFirewallsClient(ctx)
 	if err != nil {
 		_ = projects.Close()
 		_ = su.Close()
 		_ = iamC.Close()
 		_ = iamP.Close()
+		_ = nets.Close()
+		_ = subs.Close()
 		return nil, fmt.Errorf("create firewalls client: %w", err)
 	}
 
@@ -68,6 +91,8 @@ func New(ctx context.Context) (*Provider, error) {
 		serviceUsage: su,
 		iam:          iamC,
 		iamPolicy:    iamP,
+		networks:     nets,
+		subnets:      subs,
 		firewalls:    fw,
 	}, nil
 }
@@ -78,6 +103,8 @@ func newWithClients(
 	su serviceUsageClient,
 	iamC iamClient,
 	iamP iamPolicyClient,
+	nets networksClient,
+	subs subnetworksClient,
 	fw firewallsClient,
 ) *Provider {
 	return &Provider{
@@ -85,6 +112,8 @@ func newWithClients(
 		serviceUsage: su,
 		iam:          iamC,
 		iamPolicy:    iamP,
+		networks:     nets,
+		subnets:      subs,
 		firewalls:    fw,
 	}
 }
@@ -107,6 +136,32 @@ func (p *Provider) ListProjects(ctx context.Context) ([]setup.ProjectInfo, error
 		}
 	}
 	return projects, nil
+}
+
+// ListNetworks returns available VPC networks in the project.
+func (p *Provider) ListNetworks(ctx context.Context, project string) ([]setup.NetworkInfo, error) {
+	names, err := p.networks.List(ctx, project)
+	if err != nil {
+		return nil, fmt.Errorf("list networks: %w", err)
+	}
+	nets := make([]setup.NetworkInfo, len(names))
+	for i, name := range names {
+		nets[i] = setup.NetworkInfo{Name: name}
+	}
+	return nets, nil
+}
+
+// ListSubnets returns available subnets in the given network and region.
+func (p *Provider) ListSubnets(ctx context.Context, project, region, network string) ([]setup.SubnetInfo, error) {
+	names, err := p.subnets.List(ctx, project, region, network)
+	if err != nil {
+		return nil, fmt.Errorf("list subnets: %w", err)
+	}
+	result := make([]setup.SubnetInfo, len(names))
+	for i, name := range names {
+		result[i] = setup.SubnetInfo{Name: name}
+	}
+	return result, nil
 }
 
 // CheckAPIs checks which of the given APIs are enabled.
@@ -453,6 +508,12 @@ func (p *Provider) Close() error {
 	}
 	if p.iamPolicy != nil {
 		errs = append(errs, p.iamPolicy.Close())
+	}
+	if p.networks != nil {
+		errs = append(errs, p.networks.Close())
+	}
+	if p.subnets != nil {
+		errs = append(errs, p.subnets.Close())
 	}
 	if p.firewalls != nil {
 		errs = append(errs, p.firewalls.Close())

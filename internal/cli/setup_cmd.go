@@ -168,15 +168,48 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		projectID = projects[idx-1].ID
 	}
 
-	// Resolve network name: flag → merged config (global + project) → "default"
+	// Resolve network name: flag → explicit config → prompt from available networks
+	// Note: LoadMerged() applies a "default" fallback via applyDefaults, so we
+	// check whether the user explicitly configured a non-default network.
 	network := flagNetwork
 	if network == "" {
-		if merged, mergeErr := config.LoadMerged(); mergeErr == nil {
+		if merged, mergeErr := config.LoadMerged(); mergeErr == nil && merged.VM.Network != "" && merged.VM.Network != "default" {
 			network = merged.VM.Network
 		}
 	}
 	if network == "" {
-		network = "default"
+		nets, listErr := provider.ListNetworks(ctx, projectID)
+		if listErr != nil {
+			return fmt.Errorf("list VPC networks: %w", listErr)
+		}
+		switch len(nets) {
+		case 0:
+			return fmt.Errorf("no VPC networks found in project %s; create one in the Cloud Console first", projectID)
+		case 1:
+			network = nets[0].Name
+			fmt.Printf("Using VPC network: %s\n", network)
+		default:
+			fmt.Println("Available VPC networks:")
+			for i, n := range nets {
+				fmt.Printf("  %d) %s\n", i+1, n.Name)
+			}
+			fmt.Println()
+
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Printf("Select network [1]: ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			idx := 1
+			if input != "" {
+				parsed, parseErr := strconv.Atoi(input)
+				if parseErr != nil || parsed < 1 || parsed > len(nets) {
+					return fmt.Errorf("invalid selection: %s", input)
+				}
+				idx = parsed
+			}
+			network = nets[idx-1].Name
+		}
 	}
 
 	// Resolve SSH port from merged config (default: 22)
@@ -437,7 +470,21 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		if len(rolesToGrant) > 0 {
 			fmt.Print("Granting IAM roles...")
 			for _, role := range rolesToGrant {
-				if grantErr := provider.GrantIAMRole(ctx, projectID, saMember, role); grantErr != nil {
+				var grantErr error
+				// Newly created service accounts may take a few seconds to propagate.
+				// Retry with backoff when we just created one.
+				const maxAttempts = 5
+				for attempt := range maxAttempts {
+					grantErr = provider.GrantIAMRole(ctx, projectID, saMember, role)
+					if grantErr == nil {
+						break
+					}
+					if !needsSA || attempt == maxAttempts-1 {
+						break
+					}
+					time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+				}
+				if grantErr != nil {
 					fmt.Println(" failed")
 					return fmt.Errorf("grant IAM role %s: %w", role, grantErr)
 				}
@@ -515,6 +562,50 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Resolve subnet: explicit config → prompt (required for custom-mode VPCs)
+	subnet := ""
+	if mergedForPhase2 != nil && mergedForPhase2.VM.Subnet != "" {
+		subnet = mergedForPhase2.VM.Subnet
+	}
+	if subnet == "" {
+		region := zone
+		if i := strings.LastIndex(zone, "-"); i >= 0 {
+			region = zone[:i]
+		}
+		subs, listErr := provider.ListSubnets(ctx, projectID, region, network)
+		if listErr != nil {
+			return fmt.Errorf("list subnets: %w", listErr)
+		}
+		switch len(subs) {
+		case 0:
+			// Auto-mode VPC — subnets are implicit, no selection needed
+		case 1:
+			subnet = subs[0].Name
+			fmt.Printf("Using subnet: %s\n", subnet)
+		default:
+			fmt.Printf("Available subnets in %s (%s):\n", network, region)
+			for i, s := range subs {
+				fmt.Printf("  %d) %s\n", i+1, s.Name)
+			}
+			fmt.Println()
+
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Printf("Select subnet [1]: ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			idx := 1
+			if input != "" {
+				parsed, parseErr := strconv.Atoi(input)
+				if parseErr != nil || parsed < 1 || parsed > len(subs) {
+					return fmt.Errorf("invalid selection: %s", input)
+				}
+				idx = parsed
+			}
+			subnet = subs[idx-1].Name
+		}
+	}
+
 	if dryRun {
 		fmt.Println()
 		fmt.Println("Dry run - would save config to .cloudcoop/local.toml:")
@@ -522,11 +613,15 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  cloud.gcp.zone = %q\n", zone)
 		fmt.Printf("  cloud.gcp.service_account = %q\n", saEmail)
 		fmt.Printf("  vm.name = %q\n", vmName)
+		fmt.Printf("  vm.network = %q\n", network)
+		if subnet != "" {
+			fmt.Printf("  vm.subnet = %q\n", subnet)
+		}
 		return nil
 	}
 
 	// Save instance config (per-developer, gitignored)
-	if err := config.SaveInstance(".", projectID, zone, saEmail, vmName); err != nil {
+	if err := config.SaveInstance(".", projectID, zone, saEmail, vmName, network, subnet); err != nil {
 		return fmt.Errorf("save instance config: %w", err)
 	}
 

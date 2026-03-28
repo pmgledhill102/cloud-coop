@@ -116,32 +116,37 @@ func (c *Client) Close() error {
 // discoverAuthMethods finds available SSH authentication methods.
 // It checks for SSH agent first (preferred), then falls back to key files.
 func discoverAuthMethods() []ssh.AuthMethod {
-	var methods []ssh.AuthMethod
+	// Collect all signers into a single PublicKeys method so they are
+	// offered in one authentication attempt. Separate AuthMethods each
+	// consume a server auth attempt, which can exhaust MaxAuthTries when
+	// an SSH agent (e.g., a password manager) holds unrelated keys.
+	var signers []ssh.Signer
 
-	// SSH agent (preferred, but only if it has keys — an empty agent
-	// consumes the server's publickey attempt and prevents file-based
-	// keys from being tried).
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		if conn, err := net.Dial("unix", sock); err == nil { //nolint:gosec // G704: path is from SSH_AUTH_SOCK env var, not user input
-			agentClient := agent.NewClient(conn)
-			if signers, err := agentClient.Signers(); err == nil && len(signers) > 0 {
-				methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
-			}
-		}
-	}
-
-	// Key files fallback
+	// File-based keys first (most likely to match for cloudcoop VMs).
 	home, _ := os.UserHomeDir()
 	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa", "google_compute_engine"} {
 		path := filepath.Join(home, ".ssh", name)
 		if key, err := os.ReadFile(path); err == nil {
 			if signer, err := ssh.ParsePrivateKey(key); err == nil {
-				methods = append(methods, ssh.PublicKeys(upgradeRSASigner(signer)))
+				signers = append(signers, upgradeRSASigner(signer))
 			}
 		}
 	}
 
-	return methods
+	// SSH agent keys after file keys.
+	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+		if conn, err := net.Dial("unix", sock); err == nil { //nolint:gosec // G704: path is from SSH_AUTH_SOCK env var, not user input
+			agentClient := agent.NewClient(conn)
+			if agentSigners, err := agentClient.Signers(); err == nil {
+				signers = append(signers, agentSigners...)
+			}
+		}
+	}
+
+	if len(signers) == 0 {
+		return nil
+	}
+	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}
 }
 
 // upgradeRSASigner upgrades an RSA signer to prefer rsa-sha2-512 and

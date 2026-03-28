@@ -28,7 +28,12 @@ To exit the agent completely, type: exit
 Examples:
   cloudcoop connect 0           # Connect to agent at index 0
   cloudcoop connect 2           # Connect to agent at index 2`,
-	Args: cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("specify an agent index, e.g.: cloudcoop connect 0")
+		}
+		return cobra.ExactArgs(1)(cmd, args)
+	},
 	RunE: runConnect,
 }
 
