@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -39,8 +40,16 @@ PowerShell:
   # To load completions for every new session, add the output to your profile.`,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
-	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
-	Annotations:           map[string]string{"skip-config": "true"},
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("specify a shell: bash, zsh, fish, or powershell")
+		}
+		return cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs)(cmd, args)
+	},
+	Example: `  cloudcoop completion bash
+  cloudcoop completion zsh
+  source <(cloudcoop completion zsh)`,
+	Annotations: map[string]string{"skip-config": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch args[0] {
 		case "bash":

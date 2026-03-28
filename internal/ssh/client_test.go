@@ -60,9 +60,9 @@ func TestDiscoverAuthMethods_KeyFiles(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "discovers multiple keys",
+			name:      "discovers multiple keys (combined into single method)",
 			files:     []string{"id_ed25519", "id_ecdsa", "google_compute_engine"},
-			wantCount: 3,
+			wantCount: 1,
 		},
 		{
 			name:      "no keys present returns empty",

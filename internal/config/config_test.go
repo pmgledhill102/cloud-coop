@@ -585,7 +585,7 @@ func TestInstanceConfigPath(t *testing.T) {
 func TestSaveInstance(t *testing.T) {
 	dir := t.TempDir()
 
-	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm", "my-vpc", "my-subnet")
 	if err != nil {
 		t.Fatalf("SaveInstance() error = %v", err)
 	}
@@ -609,6 +609,12 @@ func TestSaveInstance(t *testing.T) {
 	if cfg.VM.Name != "my-vm" {
 		t.Errorf("vm.name = %q, want %q", cfg.VM.Name, "my-vm")
 	}
+	if cfg.VM.Network != "my-vpc" {
+		t.Errorf("vm.network = %q, want %q", cfg.VM.Network, "my-vpc")
+	}
+	if cfg.VM.Subnet != "my-subnet" {
+		t.Errorf("vm.subnet = %q, want %q", cfg.VM.Subnet, "my-subnet")
+	}
 
 	// Verify config.toml was NOT created
 	projectPath := ProjectConfigPath(dir)
@@ -630,7 +636,7 @@ func TestSaveInstance(t *testing.T) {
 func TestSaveProject_DelegatesToSaveInstance(t *testing.T) {
 	dir := t.TempDir()
 
-	err := SaveProject(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	err := SaveProject(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm", "default", "")
 	if err != nil {
 		t.Fatalf("SaveProject() error = %v", err)
 	}
@@ -795,7 +801,7 @@ func TestMergeConfig_EmptySrc(t *testing.T) {
 func TestSaveInstance_CleanOutput(t *testing.T) {
 	dir := t.TempDir()
 
-	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm")
+	err := SaveInstance(dir, "my-project", "us-central1-a", "sa@my-project.iam.gserviceaccount.com", "my-vm", "default", "")
 	if err != nil {
 		t.Fatalf("SaveInstance() error = %v", err)
 	}

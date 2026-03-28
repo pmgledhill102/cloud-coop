@@ -100,6 +100,34 @@ func (m *mockIAMPolicyClient) SetIAMPolicy(ctx context.Context, project string, 
 
 func (m *mockIAMPolicyClient) Close() error { return nil }
 
+type mockNetworksClient struct {
+	names []string
+	err   error
+}
+
+func (m *mockNetworksClient) List(ctx context.Context, project string) ([]string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.names, nil
+}
+
+func (m *mockNetworksClient) Close() error { return nil }
+
+type mockSubnetworksClient struct {
+	names []string
+	err   error
+}
+
+func (m *mockSubnetworksClient) List(ctx context.Context, project, region, network string) ([]string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.names, nil
+}
+
+func (m *mockSubnetworksClient) Close() error { return nil }
+
 type mockFirewallsClient struct {
 	exists        bool
 	rule          *computepb.Firewall
@@ -161,6 +189,8 @@ func TestListProjects(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -182,6 +212,8 @@ func TestListProjects_Error(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -202,6 +234,8 @@ func TestCheckAPIs(t *testing.T) {
 		},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -238,6 +272,8 @@ func TestEnableAPI(t *testing.T) {
 		su,
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -279,6 +315,8 @@ func TestServiceAccountExists(t *testing.T) {
 				&mockServiceUsageClient{services: map[string]serviceState{}},
 				&mockIAMClient{exists: tt.exists, getErr: tt.getErr},
 				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockNetworksClient{},
+				&mockSubnetworksClient{},
 				&mockFirewallsClient{},
 			)
 
@@ -299,6 +337,8 @@ func TestCreateServiceAccount(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{createOK: true},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -363,6 +403,8 @@ func TestCheckIAMBinding(t *testing.T) {
 				&mockServiceUsageClient{services: map[string]serviceState{}},
 				&mockIAMClient{},
 				&mockIAMPolicyClient{policy: tt.policy},
+				&mockNetworksClient{},
+				&mockSubnetworksClient{},
 				&mockFirewallsClient{},
 			)
 
@@ -386,6 +428,8 @@ func TestGrantIAMRole(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		policyClient,
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -429,6 +473,8 @@ func TestFirewallRuleExists(t *testing.T) {
 				&mockServiceUsageClient{services: map[string]serviceState{}},
 				&mockIAMClient{},
 				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockNetworksClient{},
+				&mockSubnetworksClient{},
 				&mockFirewallsClient{exists: tt.exists},
 			)
 
@@ -449,6 +495,8 @@ func TestCreateIAPFirewallRule(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -465,6 +513,8 @@ func TestCreateIAPFirewallRule_CustomPort(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		mock,
 	)
 
@@ -494,6 +544,8 @@ func TestCreateIAPFirewallRule_InsertError(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{insertErr: errors.New("insert failed")},
 	)
 
@@ -509,6 +561,8 @@ func TestClose(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -524,6 +578,8 @@ func TestCheckADCCredentials(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -582,6 +638,8 @@ func TestCheckADCCredentials_Error(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{},
 	)
 
@@ -647,6 +705,8 @@ func TestGetFirewallRulePort(t *testing.T) {
 				&mockServiceUsageClient{services: map[string]serviceState{}},
 				&mockIAMClient{},
 				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockNetworksClient{},
+				&mockSubnetworksClient{},
 				&mockFirewallsClient{exists: true, rule: tt.rule, getErr: tt.getErr},
 			)
 
@@ -668,6 +728,8 @@ func TestUpdateIAPFirewallRule(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		mock,
 	)
 
@@ -696,6 +758,8 @@ func TestUpdateIAPFirewallRule_PatchError(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{patchErr: errors.New("patch failed")},
 	)
 
@@ -712,6 +776,8 @@ func TestCreateDirectSSHFirewallRule(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		mock,
 	)
 
@@ -744,6 +810,8 @@ func TestCreateDirectSSHFirewallRule_InsertError(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{insertErr: errors.New("insert failed")},
 	)
 
@@ -799,6 +867,8 @@ func TestGetFirewallRuleSourceIP(t *testing.T) {
 				&mockServiceUsageClient{services: map[string]serviceState{}},
 				&mockIAMClient{},
 				&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+				&mockNetworksClient{},
+				&mockSubnetworksClient{},
 				&mockFirewallsClient{exists: true, rule: tt.rule, getErr: tt.getErr},
 			)
 
@@ -825,6 +895,8 @@ func TestUpdateDirectSSHFirewallRule(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		mock,
 	)
 
@@ -857,6 +929,8 @@ func TestUpdateDirectSSHFirewallRule_PatchError(t *testing.T) {
 		&mockServiceUsageClient{services: map[string]serviceState{}},
 		&mockIAMClient{},
 		&mockIAMPolicyClient{policy: &cloudresourcemanager.Policy{}},
+		&mockNetworksClient{},
+		&mockSubnetworksClient{},
 		&mockFirewallsClient{patchErr: errors.New("patch failed")},
 	)
 

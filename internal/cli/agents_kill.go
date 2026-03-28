@@ -25,7 +25,12 @@ protection.
 Examples:
   cloudcoop agents kill 0           # Kill agent at index 0
   cloudcoop agents kill 2 --force   # Force kill even if process is running`,
-	Args: cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return fmt.Errorf("specify an agent index, e.g.: cloudcoop agents kill 0")
+		}
+		return cobra.ExactArgs(1)(cmd, args)
+	},
 	RunE: runAgentsKill,
 }
 
