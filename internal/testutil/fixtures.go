@@ -191,7 +191,7 @@ func (f *Fixtures) TempFixtureDir(names ...string) string {
 
 	for _, name := range names {
 		src := filepath.Join(f.baseDir, name)
-		dst := filepath.Join(tempDir, name)
+		dst := filepath.Clean(filepath.Join(tempDir, name))
 
 		// Create parent directories if needed
 		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
@@ -203,7 +203,7 @@ func (f *Fixtures) TempFixtureDir(names ...string) string {
 			f.t.Fatalf("failed to read fixture %s: %v", name, err)
 		}
 
-		if err := os.WriteFile(dst, data, 0o600); err != nil {
+		if err := os.WriteFile(dst, data, 0o600); err != nil { //nolint:gosec // G703: dst is filepath.Join(tempDir, name) in test fixtures — no user input
 			f.t.Fatalf("failed to write fixture copy %s: %v", name, err)
 		}
 	}
