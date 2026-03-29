@@ -92,7 +92,7 @@ func setupEnv() *testEnv {
 		VM: config.VMConfig{
 			Name:             vmName,
 			DiskSizeGB:       30,
-			Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64",
+			Image:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
 			Spot:             true,
 			MaxUptimeMinutes: 60,
 			Network:          network,
