@@ -173,6 +173,54 @@ func TestRunCreate_MaxUptimeFlagOverridesConfig(t *testing.T) {
 	}
 }
 
+func TestRunCreate_PassesDotfilesURL(t *testing.T) {
+	cfg := testConfig()
+	cfg.VM.MachineSizes = map[string]string{
+		"small": "c4a-highcpu-4",
+	}
+	cfg.Provisioning = config.ProvisioningConfig{
+		ScriptURL:   "https://example.com/provision.sh",
+		DotfilesURL: "https://example.com/dotfiles/install.sh",
+	}
+	mock := cloud.NewMockProvider().WithVMStatus(cloud.VMStatusNotFound)
+	cleanup := withMocks(cfg, mock)
+	defer cleanup()
+
+	createSize = "small"
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := runCreate(cmd, []string{})
+	if err != nil {
+		t.Fatalf("runCreate() error: %v", err)
+	}
+
+	// Verify CreateVM was called with the dotfiles URL
+	calls := mock.GetCalls()
+	var createCall *cloud.MockCall
+	for i, call := range calls {
+		if call.Method == "CreateVM" {
+			createCall = &calls[i]
+			break
+		}
+	}
+
+	if createCall == nil {
+		t.Fatal("CreateVM was not called")
+		return // unreachable; helps staticcheck see nil safety
+	}
+
+	createCfg, ok := createCall.Args[0].(cloud.VMCreateConfig)
+	if !ok {
+		t.Fatal("CreateVM arg is not VMCreateConfig")
+	}
+
+	if createCfg.DotfilesURL != "https://example.com/dotfiles/install.sh" {
+		t.Errorf("DotfilesURL = %q, want %q", createCfg.DotfilesURL, "https://example.com/dotfiles/install.sh")
+	}
+}
+
 func TestRunCreate_PassesServiceAccount(t *testing.T) {
 	cfg := testConfig()
 	cfg.VM.MachineSizes = map[string]string{

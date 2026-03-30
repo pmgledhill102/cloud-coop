@@ -350,10 +350,10 @@ systemctl restart ssh.socket
 
 	// Build cloudcoop metadata for VM identification and upgrade detection
 	configHash := version.ConfigHash(fmt.Sprintf(
-		"%s|%s|%d|%s|%v|%s|%v|%d|%s|%s",
+		"%s|%s|%d|%s|%v|%s|%v|%d|%s|%s|%s",
 		config.Name, config.MachineType, config.DiskSizeGB, config.Image,
 		config.Spot, config.Network, config.Tags, config.SSHPort,
-		config.ServiceAccount, config.ProvisionScriptURL,
+		config.ServiceAccount, config.ProvisionScriptURL, config.DotfilesURL,
 	))
 
 	metadataItems := []*computepb.Items{
@@ -373,6 +373,15 @@ systemctl restart ssh.socket
 			Key:   ptr(metadataKeyConfigHash),
 			Value: ptr(configHash),
 		},
+	}
+
+	// Include dotfiles install script URL in metadata so the provisioning
+	// script can apply user dotfiles after base setup completes.
+	if config.DotfilesURL != "" {
+		metadataItems = append(metadataItems, &computepb.Items{
+			Key:   ptr("cloudcoop-dotfiles-url"),
+			Value: ptr(config.DotfilesURL),
+		})
 	}
 
 	// Include SSH public key in metadata so the GCP guest agent provisions
