@@ -314,6 +314,12 @@ func TestConfig_SetValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			key:     "provisioning.dotfiles_url",
+			value:   "https://example.com/install.sh",
+			check:   func(c *Config) bool { return c.Provisioning.DotfilesURL == "https://example.com/install.sh" },
+			wantErr: false,
+		},
+		{
 			key:     "unknown.key",
 			value:   "value",
 			check:   func(c *Config) bool { return true },
@@ -370,6 +376,9 @@ func TestConfig_GetValue(t *testing.T) {
 		Agents: AgentsConfig{
 			DefaultCommand: "claude",
 		},
+		Provisioning: ProvisioningConfig{
+			DotfilesURL: "https://example.com/install.sh",
+		},
 	}
 
 	tests := []struct {
@@ -388,6 +397,7 @@ func TestConfig_GetValue(t *testing.T) {
 		{"ssh.port", "2222", false},
 		{"ssh.user", "ubuntu", false},
 		{"agents.default_command", "claude", false},
+		{"provisioning.dotfiles_url", "https://example.com/install.sh", false},
 		{"unknown.key", "", true},
 	}
 

@@ -11,7 +11,7 @@ gcloud compute instances create claude-sandbox \
   --boot-disk-size=50GB \
   --boot-disk-type=pd-ssd \
   --boot-disk-auto-delete=no \
-  --image-family=ubuntu-2504-arm64 \
+  --image-family=ubuntu-2404-lts-arm64 \
   --image-project=ubuntu-os-cloud \
   --provisioning-model=SPOT \
   --instance-termination-action=STOP

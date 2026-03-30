@@ -77,7 +77,8 @@ func (a *AgentsConfig) ResolvePreCommands(slug string) []string {
 
 // ProvisioningConfig contains settings for VM provisioning.
 type ProvisioningConfig struct {
-	ScriptURL string `toml:"script_url,omitempty"` // URL to fetch provisioning script from
+	ScriptURL   string `toml:"script_url,omitempty"`   // URL to fetch provisioning script from
+	DotfilesURL string `toml:"dotfiles_url,omitempty"` // URL to a dotfiles install script (run as sandbox user after provisioning)
 }
 
 // SSHConfig contains SSH connection settings.
@@ -346,6 +347,9 @@ func mergeConfig(dst, src *Config) {
 	if src.Provisioning.ScriptURL != "" {
 		dst.Provisioning.ScriptURL = src.Provisioning.ScriptURL
 	}
+	if src.Provisioning.DotfilesURL != "" {
+		dst.Provisioning.DotfilesURL = src.Provisioning.DotfilesURL
+	}
 	if src.TUI.RefreshIntervalSec != 0 {
 		dst.TUI.RefreshIntervalSec = src.TUI.RefreshIntervalSec
 	}
@@ -382,7 +386,7 @@ func applyDefaults(cfg *Config) {
 		cfg.VM.DiskSizeGB = 50
 	}
 	if cfg.VM.Image == "" {
-		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64"
+		cfg.VM.Image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64"
 	}
 	if cfg.VM.Network == "" {
 		cfg.VM.Network = "default"
@@ -479,6 +483,8 @@ func (c *Config) SetValue(key, value string) error {
 		c.Agents.DefaultCommand = value
 	case "provisioning.script_url":
 		c.Provisioning.ScriptURL = value
+	case "provisioning.dotfiles_url":
+		c.Provisioning.DotfilesURL = value
 	case "tui.refresh_interval_sec":
 		interval, err := strconv.Atoi(value)
 		if err != nil {
@@ -521,6 +527,8 @@ func (c *Config) GetValue(key string) (string, error) {
 		return c.Agents.DefaultCommand, nil
 	case "provisioning.script_url":
 		return c.Provisioning.ScriptURL, nil
+	case "provisioning.dotfiles_url":
+		return c.Provisioning.DotfilesURL, nil
 	case "tui.refresh_interval_sec":
 		return strconv.Itoa(c.TUI.RefreshIntervalSec), nil
 	default:
@@ -543,6 +551,7 @@ func AllKeys() []string {
 		"ssh.user",
 		"agents.default_command",
 		"provisioning.script_url",
+		"provisioning.dotfiles_url",
 		"tui.refresh_interval_sec",
 	}
 }

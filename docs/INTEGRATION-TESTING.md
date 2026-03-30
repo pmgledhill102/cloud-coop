@@ -170,7 +170,7 @@ func TestVM_Create(t *testing.T) {
         Name:               env.vmName,
         MachineType:        "c4a-highcpu-4",  // Smallest/cheapest
         DiskSizeGB:         30,                // Minimal for tests
-        Image:              "projects/ubuntu-os-cloud/global/images/family/ubuntu-2510-arm64",
+        Image:              "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-arm64",
         Spot:               true,
         MaxUptimeMinutes:   60,                // Safety net: GCP auto-stops after 1 hour
         Network:            "inttest",

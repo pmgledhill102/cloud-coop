@@ -24,7 +24,7 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-TOTAL_STEPS=16
+TOTAL_STEPS=19
 CURRENT_STEP=0
 
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
@@ -86,7 +86,7 @@ if [ -n "$GCP_REGION" ]; then
     GCE_MIRROR="${GCP_REGION}.gce.ports.ubuntu.com"
     if curl -sI "http://${GCE_MIRROR}/" >/dev/null 2>&1; then
         echo "Using GCE mirror: $GCE_MIRROR"
-        # Ubuntu 25.04+ uses deb822 format in /etc/apt/sources.list.d/ubuntu.sources
+        # Ubuntu 24.04+ uses deb822 format in /etc/apt/sources.list.d/ubuntu.sources
         SOURCES_FILE="/etc/apt/sources.list.d/ubuntu.sources"
         if [ -f "$SOURCES_FILE" ] && ! grep -q "gce.ports.ubuntu.com" "$SOURCES_FILE"; then
             sed -i "s|ports.ubuntu.com|${GCE_MIRROR}|g" "$SOURCES_FILE"
@@ -235,7 +235,9 @@ sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     fzf \
     yq \
     gh \
-    btop
+    btop \
+    just \
+    gastown
 
 # ============================================
 # Docker (using Ubuntu system packages)
@@ -261,7 +263,23 @@ systemctl restart docker
 # ============================================
 report_progress "Installing Node.js packages"
 # Run npm as sandbox user with brew in PATH (npm's shebang uses /usr/bin/env node)
-sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && npm config set cafile /etc/ssl/certs/ca-certificates.crt && npm install -g @anthropic-ai/claude-code yarn pnpm typescript ts-node eslint prettier cspell markdownlint-cli2'
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && npm config set cafile /etc/ssl/certs/ca-certificates.crt && npm install -g @anthropic-ai/claude-code yarn pnpm typescript ts-node eslint prettier cspell markdownlint-cli2 playwright'
+
+# ============================================
+# Playwright browsers & system deps (Ubuntu 24.04)
+# ============================================
+report_progress "Installing Playwright browsers and system deps"
+# System deps for Chromium, Firefox, WebKit on Ubuntu 24.04 (libasound2 works cleanly here, unlike 25.04+)
+apt-get install -y \
+    libglib2.0-0 libnss3 libnspr4 libatk1.0-0 \
+    libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 \
+    libxkbcommon0 libatspi2.0-0 libxcomposite1 \
+    libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libx11-6 libxext6 libxfixes3 \
+    xvfb
+
+# Install Playwright browsers (as sandbox user with brew node)
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && npx playwright install --with-deps'
 
 # ============================================
 # Python tools via uv
@@ -287,6 +305,55 @@ uv tool install checkov
 report_progress "Installing Ruby gems"
 # Run gem as sandbox user with brew in PATH (gem may invoke ruby via env)
 sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && gem install bundler rubocop'
+
+# ============================================
+# Testing tools
+# ============================================
+report_progress "Installing testing tools"
+
+# CLI testing
+apt-get install -y bats shunit2 expect
+
+# TUI testing
+apt-get install -y asciinema
+
+# E2E browser testing system deps (Cypress)
+apt-get install -y \
+    libgtk2.0-0 libgtk-3-0 libnotify-dev \
+    libgconf-2-4 libxss1 libxtst6 xauth
+
+# npm testing tools: E2E, unit testing, a11y
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && npm install -g cypress puppeteer jest vitest tsx @axe-core/cli pa11y'
+
+# Python testing tools
+uv tool install pexpect
+uv tool install hypothesis
+uv tool install pytest-cov
+uv tool install pytest-xdist
+uv tool install pytest-asyncio
+uv tool install textual-dev
+
+# Go testing tools
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && go install gotest.tools/gotestsum@latest && go install github.com/charmbracelet/vhs@latest'
+
+# Rust testing tools
+sudo -u sandbox bash -c 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" && cargo install cargo-nextest cargo-tarpaulin'
+
+# API testing: k6
+sudo gpg -k
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+    --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+    | tee /etc/apt/sources.list.d/k6.list
+apt-get update && apt-get install -y k6
+
+# API testing: hurl
+curl -LO https://github.com/Orange-OpenSource/hurl/releases/latest/download/hurl_amd64.deb
+dpkg -i hurl_amd64.deb || apt-get install -f -y
+rm -f hurl_amd64.deb
+
+# CI testing: act (run GitHub Actions locally)
+curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/nektos/act/master/install.sh | bash
 
 # ============================================
 # Google Cloud CLI (apt required for Linux)
@@ -422,6 +489,33 @@ apt-get autoremove -y
 apt-get clean
 
 # ============================================
+# Dotfiles (optional, from VM metadata)
+# ============================================
+DOTFILES_URL=$(curl -s -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cloudcoop-dotfiles-url" 2>/dev/null || true)
+
+if [ -n "$DOTFILES_URL" ]; then
+    report_progress "Applying dotfiles"
+    echo "Dotfiles install script: $DOTFILES_URL"
+
+    # Pre-seed chezmoi config for non-interactive init (headless VM = minimal)
+    CHEZMOI_CONFIG_DIR="/home/sandbox/.config/chezmoi"
+    mkdir -p "$CHEZMOI_CONFIG_DIR"
+    cat > "$CHEZMOI_CONFIG_DIR/chezmoi.toml" <<'CHEZMOI_EOF'
+[data]
+    machine_type = "minimal"
+CHEZMOI_EOF
+    chown -R sandbox:sandbox "/home/sandbox/.config"
+
+    # Run the dotfiles install script as the sandbox user
+    su - sandbox -c "sh -c \"\$(curl -fsSL '$DOTFILES_URL')\"" || {
+        echo "WARNING: Dotfiles install failed (non-fatal), continuing..."
+    }
+else
+    report_progress "Dotfiles (skipped, no URL configured)"
+fi
+
+# ============================================
 # Done
 # ============================================
 echo "completed" > "$STATUS_FILE"
@@ -452,6 +546,9 @@ echo "  - Dolt       : $(dolt version 2>/dev/null | head -1 | awk '{print $3}' |
 echo "  - Beads      : $(bd --version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
 echo "  - Gemini CLI : $(gemini --version 2>/dev/null || echo 'N/A')"
+echo "  - Gastown    : $(gastown --version 2>/dev/null || echo 'N/A')"
+echo "  - Playwright : $(npx playwright --version 2>/dev/null || echo 'N/A')"
+echo "  - k6         : $(k6 version 2>/dev/null || echo 'N/A')"
 echo ""
 echo "Quick start:"
 echo "  1. SSH: gcloud compute ssh $(hostname) --zone=ZONE --tunnel-through-iap"
