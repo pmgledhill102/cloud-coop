@@ -106,6 +106,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		SSHPublicKey:       pubKey,
 		ServiceAccount:     cfg.Cloud.GCP.ServiceAccount,
 		ProvisionScriptURL: cfg.Provisioning.ScriptURL,
+		DotfilesURL:        cfg.Provisioning.DotfilesURL,
 		MaxUptimeMinutes:   maxUptime,
 	}
 

@@ -97,6 +97,9 @@ type VMCreateConfig struct {
 	// ProvisionScriptURL is the URL to fetch the provisioning script from.
 	// If empty, no additional provisioning is performed.
 	ProvisionScriptURL string
+	// DotfilesURL is the URL to a dotfiles install script.
+	// If set, it is passed as VM metadata and run as the sandbox user after provisioning.
+	DotfilesURL string
 	// MaxUptimeMinutes sets GCP's maxRunDuration to auto-stop the VM after N minutes.
 	// 0 means disabled.
 	MaxUptimeMinutes int
