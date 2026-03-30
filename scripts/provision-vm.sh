@@ -24,7 +24,7 @@ PROGRESS_FILE="$STATUS_DIR/provision-progress"
 LOG_DIR="/var/log/cloudcoop"
 LOG_FILE="$LOG_DIR/provision.log"
 
-TOTAL_STEPS=18
+TOTAL_STEPS=19
 CURRENT_STEP=0
 
 mkdir -p "$STATUS_DIR" "$LOG_DIR"
@@ -487,6 +487,33 @@ chmod +x /usr/local/bin/start-agents.sh
 report_progress "Cleaning up"
 apt-get autoremove -y
 apt-get clean
+
+# ============================================
+# Dotfiles (optional, from VM metadata)
+# ============================================
+DOTFILES_URL=$(curl -s -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/cloudcoop-dotfiles-url" 2>/dev/null || true)
+
+if [ -n "$DOTFILES_URL" ]; then
+    report_progress "Applying dotfiles"
+    echo "Dotfiles install script: $DOTFILES_URL"
+
+    # Pre-seed chezmoi config for non-interactive init (headless VM = minimal)
+    CHEZMOI_CONFIG_DIR="/home/sandbox/.config/chezmoi"
+    mkdir -p "$CHEZMOI_CONFIG_DIR"
+    cat > "$CHEZMOI_CONFIG_DIR/chezmoi.toml" <<'CHEZMOI_EOF'
+[data]
+    machine_type = "minimal"
+CHEZMOI_EOF
+    chown -R sandbox:sandbox "/home/sandbox/.config"
+
+    # Run the dotfiles install script as the sandbox user
+    su - sandbox -c "sh -c \"\$(curl -fsSL '$DOTFILES_URL')\"" || {
+        echo "WARNING: Dotfiles install failed (non-fatal), continuing..."
+    }
+else
+    report_progress "Dotfiles (skipped, no URL configured)"
+fi
 
 # ============================================
 # Done
