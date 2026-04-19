@@ -53,3 +53,11 @@ config/ghostty-sandbox.conf
 config/launch-*.sh
 
 .claude/settings.local.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# Beads exports — source of truth is Dolt + refs/dolt/data on origin.
+.beads/issues.jsonl

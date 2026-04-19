@@ -60,7 +60,7 @@ repos:
           - --strict
           - -d
           - "{extends: default, rules: {line-length: {max: 120}, truthy: disable}}"
-        exclude: ^\.github/workflows/
+        exclude: ^(\.github/workflows/|\.beads/)
 
   # GitHub Actions linting
   - repo: https://github.com/rhysd/actionlint
@@ -95,6 +95,7 @@ repos:
     hooks:
       - id: markdownlint-cli2
         args: [--fix]
+        exclude: ^\.beads/
 
   # Spell checking with cspell
   - repo: https://github.com/streetsidesoftware/cspell-cli
@@ -103,3 +104,4 @@ repos:
       - id: cspell
         args: [--no-progress, --no-summary]
         types_or: [markdown, go, yaml, json, toml]
+        exclude: ^\.beads/
