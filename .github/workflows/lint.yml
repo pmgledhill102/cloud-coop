@@ -113,6 +113,7 @@ jobs:
           find . -type f \( -name "*.yml" -o -name "*.yaml" \) \
             ! -path "./.git/*" \
             ! -path "./.github/workflows/*" \
+            ! -path "./.beads/*" \
             ! -path "./node_modules/*" \
             ! -path "./vendor/*" \
             -print0 | xargs -0 yamllint --strict \
@@ -135,7 +136,7 @@ jobs:
         run: npm install -g markdownlint-cli2
 
       - name: Run markdownlint
-        run: markdownlint-cli2 "**/*.md"
+        run: markdownlint-cli2 "**/*.md" "!.beads/**"
 
   # GitHub Actions linting with actionlint
   actions-lint:
@@ -197,6 +198,7 @@ jobs:
             --exclude "node_modules/**" \
             --exclude "vendor/**" \
             --exclude ".git/**" \
+            --exclude ".beads/**" \
             --exclude "go.sum"
 
   # TOML formatting and linting with taplo
