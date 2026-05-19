@@ -3,7 +3,7 @@ module github.com/cloud-coop/cloudcoop
 go 1.25.8
 
 require (
-	cloud.google.com/go/compute v1.62.0
+	cloud.google.com/go/compute v1.63.0
 	cloud.google.com/go/iam v1.11.0
 	cloud.google.com/go/resourcemanager v1.15.0
 	cloud.google.com/go/serviceusage v1.14.0
@@ -14,8 +14,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.51.0
 	golang.org/x/term v0.43.0
-	google.golang.org/api v0.278.0
-	google.golang.org/grpc v1.81.0
+	google.golang.org/api v0.279.0
+	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.11
 )
 
