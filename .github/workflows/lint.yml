@@ -41,7 +41,7 @@ jobs:
       spell: ${{ steps.filter.outputs.spell }}
       toml: ${{ steps.filter.outputs.toml }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: dorny/paths-filter@v4
         id: filter
@@ -83,7 +83,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.go == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -103,7 +103,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.yaml == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install yamllint
         run: pip install yamllint
@@ -126,7 +126,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.markdown == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -145,7 +145,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.actions == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Run actionlint
         uses: reviewdog/action-actionlint@v1
@@ -160,7 +160,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Run shellcheck
         uses: ludeeus/action-shellcheck@master
@@ -176,7 +176,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.spell == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -208,7 +208,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.toml == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install taplo
         run: |
