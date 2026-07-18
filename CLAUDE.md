@@ -124,12 +124,12 @@ cloudcoop setup   # Automated GCP project provisioning + config
 
 ## Issue Tracking
 
-This project uses beads (bd) for git-backed issue tracking. See AGENTS.md for workflow.
+This project uses GitHub Issues. See AGENTS.md for workflow and
+`agentic-coding-config` `docs/github-issues-workflow.md` for conventions.
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
+gh issue list --search "is:open -is:blocked"   # Find available work
+gh issue view <n>                              # View issue details
+gh issue edit <n> --add-assignee @me           # Claim work
+gh issue close <n> --comment "Shipped in #<pr>"  # Complete work
 ```
