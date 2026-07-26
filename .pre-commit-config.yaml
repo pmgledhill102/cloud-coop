@@ -88,6 +88,12 @@ repos:
     hooks:
       - id: taplo-format
       - id: taplo-lint
+        # Override the hook's default args, which are
+        # [--default-schema-catalogs]. taplo 0.9.3 (the latest release of this
+        # mirror) cannot decode schemastore's current catalog format, so that
+        # flag makes the hook fail unconditionally. Our only schema association
+        # is a local file in taplo.toml, so the online catalog is not needed.
+        args: []
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
