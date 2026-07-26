@@ -1,5 +1,13 @@
 # Taplo TOML formatter/linter configuration
-# https://taplo.tamasfe.dev/configuration/
+# https://taplo.tamasfe.dev/configuration/file.html
+#
+# Note on structure: `rule` is an ARRAY of tables (`[[rule]]`), and the `schema`
+# inside a rule is a single TABLE (`[rule.schema]`), not an array. Global file
+# selection lives at the top level, not inside a rule.
+
+# Global file selection
+include = ["**/*.toml"]
+exclude = ["vendor/**", "node_modules/**"]
 
 [formatting]
 # Use 2-space indentation
@@ -11,19 +19,9 @@ reorder_keys = false
 # Max line width
 column_width = 100
 
-[rule]
-# Include all TOML files
-include = ["**/*.toml"]
-# Exclude generated files
-exclude = ["vendor/**", "node_modules/**"]
+# Associate cloudcoop.toml (at the root or nested) with our local schema
+[[rule]]
+include = ["cloudcoop.toml", "**/cloudcoop.toml"]
 
-# Schema associations
-[[rule.schema]]
-# Associate cloudcoop.toml with our schema
-path = "cloudcoop.toml"
-url = "file://schemas/cloudcoop.schema.json"
-
-[[rule.schema]]
-# Also validate example configs
-path = "**/cloudcoop.toml"
-url = "file://schemas/cloudcoop.schema.json"
+[rule.schema]
+path = "schemas/cloudcoop.schema.json"

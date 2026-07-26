@@ -26,6 +26,7 @@
 # Testing
 actionlint
 adminpb
+agentic
 amd64
 anthropics
 apiv
@@ -119,6 +120,7 @@ ludeeus
 macos
 markdownlint
 misspell
+mockups
 mutex
 mypy
 myrepo
@@ -196,6 +198,7 @@ tomlq
 tview
 unittests
 unmarshals
+vars
 VMIP
 vulns
 waitgroup
