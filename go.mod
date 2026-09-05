@@ -1,6 +1,6 @@
 module github.com/cloud-coop/cloudcoop
 
-go 1.25.12
+go 1.26.0
 
 require (
 	cloud.google.com/go/compute v1.67.0
@@ -14,7 +14,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.55.0
 	golang.org/x/term v0.45.0
-	google.golang.org/api v0.295.0
+	google.golang.org/api v0.297.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
