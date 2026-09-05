@@ -1,6 +1,18 @@
 ---
 version: 2
 updates:
+# Dependabot pull requests are authored by app/dependabot, so they match none of
+# the GitHub mobile app's filters -- not "Created by me", not "Review
+# requested". Assigning them puts them in "Assigned to me", a near-default view
+# rather than a search string the app does not save.
+#
+# `reviewers` would have been the more natural key and no longer exists: GitHub
+# removed it from the Dependabot options reference. `assignees` remains, and
+# covers security updates as well as version updates.
+#
+# This does not gate auto-merge. Assignment is metadata, so patch and minor
+# bumps still land themselves and disappear; what stays visible is whatever did
+# NOT merge, which is the case worth seeing (paul-context#160).
   # Go modules
   - package-ecosystem: "gomod"
     directory: "/"
@@ -19,6 +31,9 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # GitHub Actions
+    assignees:
+      - "pmgledhill102"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -29,3 +44,5 @@ updates:
       github-actions:
         patterns:
           - "*"
+    assignees:
+      - "pmgledhill102"
