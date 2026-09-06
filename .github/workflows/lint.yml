@@ -26,7 +26,6 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.8.0
-  GO_VERSION: "1.25.12"
 
 jobs:
   # Detect which files changed to enable path filtering
@@ -87,7 +86,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
           cache: true
 
       - name: Run golangci-lint
