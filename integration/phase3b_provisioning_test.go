@@ -87,7 +87,7 @@ func TestPhase3b_Provisioning(t *testing.T) {
 		defer func() { _ = client.Close() }()
 
 		// Read the last few lines of the provision log
-		output, err := client.Run("tail -20 /var/log/cloudcoop-provision.log 2>/dev/null || echo 'no log'")
+		output, err := client.Run("tail -20 /var/log/cloudcoop/provision.log 2>/dev/null || echo 'no log'")
 		if err != nil {
 			t.Logf("Read provision log: %v", err)
 		} else {
