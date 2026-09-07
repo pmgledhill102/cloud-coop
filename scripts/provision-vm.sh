@@ -236,8 +236,7 @@ sudo -u sandbox /home/linuxbrew/.linuxbrew/bin/brew install \
     yq \
     gh \
     btop \
-    just \
-    gastown
+    just
 
 # ============================================
 # Docker (using Ubuntu system packages)
@@ -546,7 +545,6 @@ echo "  - Dolt       : $(dolt version 2>/dev/null | head -1 | awk '{print $3}' |
 echo "  - Beads      : $(bd --version 2>/dev/null | awk '{print $3}' || echo 'N/A')"
 echo "  - Claude Code: $(claude --version 2>/dev/null || echo 'N/A')"
 echo "  - Gemini CLI : $(gemini --version 2>/dev/null || echo 'N/A')"
-echo "  - Gastown    : $(gastown --version 2>/dev/null || echo 'N/A')"
 echo "  - Playwright : $(npx playwright --version 2>/dev/null || echo 'N/A')"
 echo "  - k6         : $(k6 version 2>/dev/null || echo 'N/A')"
 echo ""
