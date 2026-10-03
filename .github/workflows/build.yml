@@ -62,7 +62,19 @@ jobs:
     name: Verify artifacts
     runs-on: ubuntu-latest
     needs: build
+    # always(), so a failed build leg fails this job instead of skipping it.
+    # A skipped job reports "Success" to a required check, so without this a
+    # broken platform build would pass the one context that stands for the
+    # whole matrix (#170).
+    if: always()
     steps:
+      - name: Require every build leg to have passed
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::build matrix: ${{ needs.build.result }}"
+            exit 1
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
