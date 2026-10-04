@@ -32,6 +32,9 @@ jobs:
           GOOGLE_CLOUD_ZONE: europe-north2-a
           GOOGLE_CLOUD_NETWORK: inttest
           GOOGLE_CLOUD_SUBNET: inttest-europe-north2
+          # Provision from the commit under test, not main, so a branch run
+          # validates that branch's provision-vm.sh (#163)
+          PROVISION_SCRIPT_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/provision-vm.sh
         run: go test -v -tags=integration -timeout 30m ./integration/...
 
       - name: Cleanup orphaned VMs
