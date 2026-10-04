@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
@@ -53,6 +54,9 @@ func TestPhase0_CredentialValidation(t *testing.T) {
 		t.Logf("Spot:        %v", env.cfg.VM.Spot)
 		t.Logf("MaxUptime:   %d min", env.cfg.VM.MaxUptimeMinutes)
 		t.Logf("Provisioning: %s", env.cfg.Provisioning.ScriptURL)
+		if sha := os.Getenv("GITHUB_SHA"); sha != "" {
+			t.Logf("Ref:         %s@%s", os.Getenv("GITHUB_REF_NAME"), sha)
+		}
 		fmt.Println() // visual separator in test output
 	})
 }
